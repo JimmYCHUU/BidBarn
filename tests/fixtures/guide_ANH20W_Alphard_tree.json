@@ -1,0 +1,1807 @@
+{
+ "id": 178,
+ "catalogModelCodeId": 316,
+ "make": "Toyota",
+ "model": "Alphard",
+ "modelCode": "ANH20W",
+ "catalogImage": "https://example.com/catalog-images/toyota-alphard-anh20-20260225205722.png",
+ "eligibilitySummary": "Eligible with 2.4L 2AZ-FE - 3.5L 2GR-FE - or 2.4L 2AZ-FXE hybrid engines, 2WD and 4WD variants eligible, 7 seats",
+ "costingVolumeM3": 16.844,
+ "targetUnit": 0,
+ "overTargetAfterPercent": 0,
+ "minGrade": 4.0,
+ "odoBandKm": 10000,
+ "notes": "White Minimum 4|Other Colours: Minimum Grade 4.5|Captain Seat, Leather, Black Color Seat",
+ "updatedBy": "editor",
+ "active": true,
+ "createdAt": "2026-08-18T20:30:08.248337",
+ "updatedAt": "2026-08-24T19:56:02.011646",
+ "variants": [
+  {
+   "id": 196,
+   "biddingGuideId": 178,
+   "name": null,
+   "soldVariantValues": [],
+   "soldModelCode": null,
+   "sortOrder": 0,
+   "active": true,
+   "bandTemplate": [
+    {
+     "odoFrom": 0,
+     "odoTo": 10000
+    },
+    {
+     "odoFrom": 10000,
+     "odoTo": 20000
+    },
+    {
+     "odoFrom": 20000,
+     "odoTo": 30000
+    },
+    {
+     "odoFrom": 30000,
+     "odoTo": 40000
+    },
+    {
+     "odoFrom": 40000,
+     "odoTo": 50000
+    },
+    {
+     "odoFrom": 50000,
+     "odoTo": 60000
+    },
+    {
+     "odoFrom": 60000,
+     "odoTo": 70000
+    },
+    {
+     "odoFrom": 70000,
+     "odoTo": 80000
+    },
+    {
+     "odoFrom": 80000,
+     "odoTo": 90000
+    },
+    {
+     "odoFrom": 90000,
+     "odoTo": 100000
+    },
+    {
+     "odoFrom": 100000,
+     "odoTo": 110000
+    },
+    {
+     "odoFrom": 110000,
+     "odoTo": 120000
+    },
+    {
+     "odoFrom": 120000,
+     "odoTo": 130000
+    },
+    {
+     "odoFrom": 130000,
+     "odoTo": 140000
+    },
+    {
+     "odoFrom": 140000,
+     "odoTo": 150000
+    },
+    {
+     "odoFrom": 150000,
+     "odoTo": 160000
+    }
+   ],
+   "blocks": [
+    {
+     "active": true,
+     "mreId": 895,
+     "sevId": 186,
+     "sevNumber": "SEV-000759",
+     "mreNumber": "MRE-000928",
+     "mreRoverApprovalId": "3258c4cd-462d-f111-88b4-6045bde659a3",
+     "sevRoverApprovalId": "e97f83a2-81d8-ef11-8eea-00224896cff8",
+     "sevBuildFromYm": 200801,
+     "sevBuildToYm": 201512,
+     "mreBuildFromYm": 200801,
+     "mreBuildToYm": 201512,
+     "expiryDate": "2028-01-21",
+     "mreNotes": "TOYOTA ALPHARD/VELLFIRE 20 SERIES CAMPERVAN - 2AZ-FE 2.4LT, 2GR-FE 3.5LT & 2AZ-FXE 2.4LT HYBRID ENGINES - 2WD & 4WD",
+     "mreSpecialNotes": null,
+     "mreHolderName": "SHUI MIR PTY LTD",
+     "sevVariantDetails": "ANH20 Model 2.4L I4 2AZ-FE 2WD",
+     "sevNotes": null,
+     "sevModelCodes": "ANH20",
+     "sevVariant": "Alphard / Vellfire ANH20",
+     "sevCriterion": "Campervans and Motorhomes Criterion",
+     "sevVehicleCategory": "MA - Passenger Vehicle",
+     "mreMake": "Toyota",
+     "mreModel": "Alphard / Vellfire",
+     "mreSourceMarket": "Japan",
+     "mreComplianceLevel": "Substantially Complies - Minor and Inconsequential non-compliance",
+     "mreModificationCategory": "MA",
+     "mreContactName": "Taylor Quinn",
+     "mrePhone": "0255504005",
+     "mreWebsite": "https://www.mdlreports.com.au",
+     "lastScrapedAt": "2026-07-02T10:25:47.559994Z",
+     "selected": false,
+     "changedSinceReview": false,
+     "years": [
+      {
+       "year": 2008,
+       "eligible": true,
+       "lines": [],
+       "missingOdoBands": [],
+       "rowNoBid": true
+      },
+      {
+       "year": 2009,
+       "eligible": true,
+       "lines": [],
+       "missingOdoBands": [],
+       "rowNoBid": true
+      },
+      {
+       "year": 2010,
+       "eligible": true,
+       "lines": [],
+       "missingOdoBands": [],
+       "rowNoBid": true
+      },
+      {
+       "year": 2011,
+       "eligible": true,
+       "lines": [],
+       "missingOdoBands": [],
+       "rowNoBid": true
+      },
+      {
+       "year": 2012,
+       "eligible": true,
+       "lines": [
+        {
+         "id": 7369,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2012,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 0,
+         "odoTo": 10000,
+         "biddingJpyK": 790,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 727,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:54:48.653978",
+         "updatedAt": "2026-08-24T19:54:48.654031"
+        },
+        {
+         "id": 7370,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2012,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 10000,
+         "odoTo": 20000,
+         "biddingJpyK": 790,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 727,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:54:50.380533",
+         "updatedAt": "2026-08-24T19:54:50.380589"
+        },
+        {
+         "id": 7371,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2012,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 20000,
+         "odoTo": 30000,
+         "biddingJpyK": 790,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 727,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:54:52.551761",
+         "updatedAt": "2026-08-24T19:54:52.551819"
+        },
+        {
+         "id": 7372,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2012,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 30000,
+         "odoTo": 40000,
+         "biddingJpyK": 740,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 681,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:54:55.638068",
+         "updatedAt": "2026-08-24T19:54:55.638123"
+        },
+        {
+         "id": 7373,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2012,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 40000,
+         "odoTo": 50000,
+         "biddingJpyK": 710,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 653,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:54:58.232018",
+         "updatedAt": "2026-08-24T19:54:58.23208"
+        },
+        {
+         "id": 7374,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2012,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 50000,
+         "odoTo": 60000,
+         "biddingJpyK": 660,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 607,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:55:01.101858",
+         "updatedAt": "2026-08-24T19:55:01.101917"
+        },
+        {
+         "id": 7375,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2012,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 60000,
+         "odoTo": 70000,
+         "biddingJpyK": 660,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 607,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:55:03.501842",
+         "updatedAt": "2026-08-24T19:55:03.502001"
+        },
+        {
+         "id": 7376,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2012,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 70000,
+         "odoTo": 80000,
+         "biddingJpyK": 570,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 524,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:55:07.510126",
+         "updatedAt": "2026-08-24T19:55:07.510181"
+        }
+       ],
+       "missingOdoBands": [
+        {
+         "odoFrom": 80000,
+         "odoTo": 90000
+        },
+        {
+         "odoFrom": 90000,
+         "odoTo": 100000
+        },
+        {
+         "odoFrom": 100000,
+         "odoTo": 110000
+        },
+        {
+         "odoFrom": 110000,
+         "odoTo": 120000
+        },
+        {
+         "odoFrom": 120000,
+         "odoTo": 130000
+        },
+        {
+         "odoFrom": 130000,
+         "odoTo": 140000
+        },
+        {
+         "odoFrom": 140000,
+         "odoTo": 150000
+        },
+        {
+         "odoFrom": 150000,
+         "odoTo": 160000
+        }
+       ],
+       "rowNoBid": false
+      },
+      {
+       "year": 2013,
+       "eligible": true,
+       "lines": [
+        {
+         "id": 7377,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2013,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 0,
+         "odoTo": 10000,
+         "biddingJpyK": 1040,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 957,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:55:11.519451",
+         "updatedAt": "2026-08-24T19:55:11.51951"
+        },
+        {
+         "id": 7378,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2013,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 10000,
+         "odoTo": 20000,
+         "biddingJpyK": 980,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 902,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:55:14.438238",
+         "updatedAt": "2026-08-24T19:55:14.438296"
+        },
+        {
+         "id": 7379,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2013,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 20000,
+         "odoTo": 30000,
+         "biddingJpyK": 960,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 883,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:55:17.026155",
+         "updatedAt": "2026-08-24T19:55:17.026212"
+        },
+        {
+         "id": 7380,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2013,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 30000,
+         "odoTo": 40000,
+         "biddingJpyK": 890,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 819,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:55:19.605115",
+         "updatedAt": "2026-08-24T19:55:19.605186"
+        },
+        {
+         "id": 7381,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2013,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 40000,
+         "odoTo": 50000,
+         "biddingJpyK": 860,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 791,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:55:22.441116",
+         "updatedAt": "2026-08-24T19:55:22.441168"
+        },
+        {
+         "id": 7382,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2013,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 50000,
+         "odoTo": 60000,
+         "biddingJpyK": 820,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 754,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:55:25.530367",
+         "updatedAt": "2026-08-24T19:55:25.530474"
+        },
+        {
+         "id": 7383,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2013,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 60000,
+         "odoTo": 70000,
+         "biddingJpyK": 730,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 672,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:55:28.124915",
+         "updatedAt": "2026-08-24T19:55:28.124991"
+        },
+        {
+         "id": 7384,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2013,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 70000,
+         "odoTo": 80000,
+         "biddingJpyK": 640,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 589,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:55:30.896596",
+         "updatedAt": "2026-08-24T19:55:30.89667"
+        }
+       ],
+       "missingOdoBands": [
+        {
+         "odoFrom": 80000,
+         "odoTo": 90000
+        },
+        {
+         "odoFrom": 90000,
+         "odoTo": 100000
+        },
+        {
+         "odoFrom": 100000,
+         "odoTo": 110000
+        },
+        {
+         "odoFrom": 110000,
+         "odoTo": 120000
+        },
+        {
+         "odoFrom": 120000,
+         "odoTo": 130000
+        },
+        {
+         "odoFrom": 130000,
+         "odoTo": 140000
+        },
+        {
+         "odoFrom": 140000,
+         "odoTo": 150000
+        },
+        {
+         "odoFrom": 150000,
+         "odoTo": 160000
+        }
+       ],
+       "rowNoBid": false
+      },
+      {
+       "year": 2014,
+       "eligible": true,
+       "lines": [
+        {
+         "id": 7385,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2014,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 0,
+         "odoTo": 10000,
+         "biddingJpyK": 1210,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1113,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:55:37.369921",
+         "updatedAt": "2026-08-24T19:55:37.369977"
+        },
+        {
+         "id": 7386,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2014,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 10000,
+         "odoTo": 20000,
+         "biddingJpyK": 1180,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1086,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:55:40.284641",
+         "updatedAt": "2026-08-24T19:55:40.284712"
+        },
+        {
+         "id": 7387,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2014,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 20000,
+         "odoTo": 30000,
+         "biddingJpyK": 1120,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1030,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:55:43.079977",
+         "updatedAt": "2026-08-24T19:55:43.080037"
+        },
+        {
+         "id": 7388,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2014,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 30000,
+         "odoTo": 40000,
+         "biddingJpyK": 1070,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 984,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:55:46.087495",
+         "updatedAt": "2026-08-24T19:55:46.087575"
+        },
+        {
+         "id": 7389,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2014,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 40000,
+         "odoTo": 50000,
+         "biddingJpyK": 1040,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 957,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:55:49.750485",
+         "updatedAt": "2026-08-24T19:55:49.750546"
+        },
+        {
+         "id": 7390,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2014,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 50000,
+         "odoTo": 60000,
+         "biddingJpyK": 1020,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 938,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:55:53.056972",
+         "updatedAt": "2026-08-24T19:55:53.057038"
+        },
+        {
+         "id": 7391,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2014,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 60000,
+         "odoTo": 70000,
+         "biddingJpyK": 910,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 837,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:55:56.197931",
+         "updatedAt": "2026-08-24T19:55:56.197997"
+        },
+        {
+         "id": 7392,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2014,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 70000,
+         "odoTo": 80000,
+         "biddingJpyK": 820,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 754,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:56:00.522906",
+         "updatedAt": "2026-08-24T19:56:00.522967"
+        }
+       ],
+       "missingOdoBands": [
+        {
+         "odoFrom": 80000,
+         "odoTo": 90000
+        },
+        {
+         "odoFrom": 90000,
+         "odoTo": 100000
+        },
+        {
+         "odoFrom": 100000,
+         "odoTo": 110000
+        },
+        {
+         "odoFrom": 110000,
+         "odoTo": 120000
+        },
+        {
+         "odoFrom": 120000,
+         "odoTo": 130000
+        },
+        {
+         "odoFrom": 130000,
+         "odoTo": 140000
+        },
+        {
+         "odoFrom": 140000,
+         "odoTo": 150000
+        },
+        {
+         "odoFrom": 150000,
+         "odoTo": 160000
+        }
+       ],
+       "rowNoBid": false
+      },
+      {
+       "year": 2015,
+       "eligible": true,
+       "lines": [],
+       "missingOdoBands": [],
+       "rowNoBid": true
+      }
+     ]
+    },
+    {
+     "active": true,
+     "mreId": 178,
+     "sevId": 186,
+     "sevNumber": "SEV-000759",
+     "mreNumber": "MRE-000854",
+     "mreRoverApprovalId": "e48b4948-ea91-f011-b4cb-000d3ad15a20",
+     "sevRoverApprovalId": "e97f83a2-81d8-ef11-8eea-00224896cff8",
+     "sevBuildFromYm": 200801,
+     "sevBuildToYm": 201512,
+     "mreBuildFromYm": 200801,
+     "mreBuildToYm": 201512,
+     "expiryDate": "2028-01-21",
+     "mreNotes": "Toyota Alphard or Vellfire 20 series suitable for conversion to campervan",
+     "mreSpecialNotes": "-This vehicle Substantially Complies with ADR 79/02 - Emission Control for Light Vehicles using Japanese emissions as the basis of compliance. -This vehicle Substantially complies with the Schedule 4, Access to living space requirements as the door is under the minimum 1400mm height.",
+     "mreHolderName": "SYDNEY AVV PTY LTD",
+     "sevVariantDetails": "ANH20 Model 2.4L I4 2AZ-FE 2WD",
+     "sevNotes": null,
+     "sevModelCodes": "ANH20",
+     "sevVariant": "Alphard / Vellfire ANH20",
+     "sevCriterion": "Campervans and Motorhomes Criterion",
+     "sevVehicleCategory": "MA - Passenger Vehicle",
+     "mreMake": "Toyota",
+     "mreModel": "Alphard / Vellfire",
+     "mreSourceMarket": "Japan",
+     "mreComplianceLevel": "Substantially Complies - Minor and Inconsequential non-compliance",
+     "mreModificationCategory": "MA",
+     "mreContactName": "Alex Morgan",
+     "mrePhone": "0255504000",
+     "mreWebsite": "https://app.comptune.com.au",
+     "lastScrapedAt": "2026-07-02T10:25:47.559994Z",
+     "selected": true,
+     "changedSinceReview": false,
+     "years": [
+      {
+       "year": 2008,
+       "eligible": true,
+       "lines": [],
+       "missingOdoBands": [],
+       "rowNoBid": true
+      },
+      {
+       "year": 2009,
+       "eligible": true,
+       "lines": [],
+       "missingOdoBands": [],
+       "rowNoBid": true
+      },
+      {
+       "year": 2010,
+       "eligible": true,
+       "lines": [],
+       "missingOdoBands": [],
+       "rowNoBid": true
+      },
+      {
+       "year": 2011,
+       "eligible": true,
+       "lines": [],
+       "missingOdoBands": [],
+       "rowNoBid": true
+      },
+      {
+       "year": 2012,
+       "eligible": true,
+       "lines": [
+        {
+         "id": 7369,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2012,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 0,
+         "odoTo": 10000,
+         "biddingJpyK": 790,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 727,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:54:48.653978",
+         "updatedAt": "2026-08-24T19:54:48.654031"
+        },
+        {
+         "id": 7370,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2012,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 10000,
+         "odoTo": 20000,
+         "biddingJpyK": 790,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 727,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:54:50.380533",
+         "updatedAt": "2026-08-24T19:54:50.380589"
+        },
+        {
+         "id": 7371,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2012,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 20000,
+         "odoTo": 30000,
+         "biddingJpyK": 790,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 727,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:54:52.551761",
+         "updatedAt": "2026-08-24T19:54:52.551819"
+        },
+        {
+         "id": 7372,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2012,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 30000,
+         "odoTo": 40000,
+         "biddingJpyK": 740,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 681,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:54:55.638068",
+         "updatedAt": "2026-08-24T19:54:55.638123"
+        },
+        {
+         "id": 7373,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2012,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 40000,
+         "odoTo": 50000,
+         "biddingJpyK": 710,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 653,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:54:58.232018",
+         "updatedAt": "2026-08-24T19:54:58.23208"
+        },
+        {
+         "id": 7374,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2012,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 50000,
+         "odoTo": 60000,
+         "biddingJpyK": 660,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 607,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:55:01.101858",
+         "updatedAt": "2026-08-24T19:55:01.101917"
+        },
+        {
+         "id": 7375,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2012,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 60000,
+         "odoTo": 70000,
+         "biddingJpyK": 660,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 607,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:55:03.501842",
+         "updatedAt": "2026-08-24T19:55:03.502001"
+        },
+        {
+         "id": 7376,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2012,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 70000,
+         "odoTo": 80000,
+         "biddingJpyK": 570,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 524,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:55:07.510126",
+         "updatedAt": "2026-08-24T19:55:07.510181"
+        }
+       ],
+       "missingOdoBands": [
+        {
+         "odoFrom": 80000,
+         "odoTo": 90000
+        },
+        {
+         "odoFrom": 90000,
+         "odoTo": 100000
+        },
+        {
+         "odoFrom": 100000,
+         "odoTo": 110000
+        },
+        {
+         "odoFrom": 110000,
+         "odoTo": 120000
+        },
+        {
+         "odoFrom": 120000,
+         "odoTo": 130000
+        },
+        {
+         "odoFrom": 130000,
+         "odoTo": 140000
+        },
+        {
+         "odoFrom": 140000,
+         "odoTo": 150000
+        },
+        {
+         "odoFrom": 150000,
+         "odoTo": 160000
+        }
+       ],
+       "rowNoBid": false
+      },
+      {
+       "year": 2013,
+       "eligible": true,
+       "lines": [
+        {
+         "id": 7377,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2013,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 0,
+         "odoTo": 10000,
+         "biddingJpyK": 1040,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 957,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:55:11.519451",
+         "updatedAt": "2026-08-24T19:55:11.51951"
+        },
+        {
+         "id": 7378,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2013,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 10000,
+         "odoTo": 20000,
+         "biddingJpyK": 980,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 902,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:55:14.438238",
+         "updatedAt": "2026-08-24T19:55:14.438296"
+        },
+        {
+         "id": 7379,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2013,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 20000,
+         "odoTo": 30000,
+         "biddingJpyK": 960,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 883,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:55:17.026155",
+         "updatedAt": "2026-08-24T19:55:17.026212"
+        },
+        {
+         "id": 7380,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2013,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 30000,
+         "odoTo": 40000,
+         "biddingJpyK": 890,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 819,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:55:19.605115",
+         "updatedAt": "2026-08-24T19:55:19.605186"
+        },
+        {
+         "id": 7381,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2013,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 40000,
+         "odoTo": 50000,
+         "biddingJpyK": 860,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 791,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:55:22.441116",
+         "updatedAt": "2026-08-24T19:55:22.441168"
+        },
+        {
+         "id": 7382,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2013,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 50000,
+         "odoTo": 60000,
+         "biddingJpyK": 820,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 754,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:55:25.530367",
+         "updatedAt": "2026-08-24T19:55:25.530474"
+        },
+        {
+         "id": 7383,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2013,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 60000,
+         "odoTo": 70000,
+         "biddingJpyK": 730,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 672,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:55:28.124915",
+         "updatedAt": "2026-08-24T19:55:28.124991"
+        },
+        {
+         "id": 7384,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2013,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 70000,
+         "odoTo": 80000,
+         "biddingJpyK": 640,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 589,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:55:30.896596",
+         "updatedAt": "2026-08-24T19:55:30.89667"
+        }
+       ],
+       "missingOdoBands": [
+        {
+         "odoFrom": 80000,
+         "odoTo": 90000
+        },
+        {
+         "odoFrom": 90000,
+         "odoTo": 100000
+        },
+        {
+         "odoFrom": 100000,
+         "odoTo": 110000
+        },
+        {
+         "odoFrom": 110000,
+         "odoTo": 120000
+        },
+        {
+         "odoFrom": 120000,
+         "odoTo": 130000
+        },
+        {
+         "odoFrom": 130000,
+         "odoTo": 140000
+        },
+        {
+         "odoFrom": 140000,
+         "odoTo": 150000
+        },
+        {
+         "odoFrom": 150000,
+         "odoTo": 160000
+        }
+       ],
+       "rowNoBid": false
+      },
+      {
+       "year": 2014,
+       "eligible": true,
+       "lines": [
+        {
+         "id": 7385,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2014,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 0,
+         "odoTo": 10000,
+         "biddingJpyK": 1210,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1113,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:55:37.369921",
+         "updatedAt": "2026-08-24T19:55:37.369977"
+        },
+        {
+         "id": 7386,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2014,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 10000,
+         "odoTo": 20000,
+         "biddingJpyK": 1180,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1086,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:55:40.284641",
+         "updatedAt": "2026-08-24T19:55:40.284712"
+        },
+        {
+         "id": 7387,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2014,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 20000,
+         "odoTo": 30000,
+         "biddingJpyK": 1120,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1030,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:55:43.079977",
+         "updatedAt": "2026-08-24T19:55:43.080037"
+        },
+        {
+         "id": 7388,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2014,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 30000,
+         "odoTo": 40000,
+         "biddingJpyK": 1070,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 984,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:55:46.087495",
+         "updatedAt": "2026-08-24T19:55:46.087575"
+        },
+        {
+         "id": 7389,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2014,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 40000,
+         "odoTo": 50000,
+         "biddingJpyK": 1040,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 957,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:55:49.750485",
+         "updatedAt": "2026-08-24T19:55:49.750546"
+        },
+        {
+         "id": 7390,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2014,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 50000,
+         "odoTo": 60000,
+         "biddingJpyK": 1020,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 938,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:55:53.056972",
+         "updatedAt": "2026-08-24T19:55:53.057038"
+        },
+        {
+         "id": 7391,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2014,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 60000,
+         "odoTo": 70000,
+         "biddingJpyK": 910,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 837,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:55:56.197931",
+         "updatedAt": "2026-08-24T19:55:56.197997"
+        },
+        {
+         "id": 7392,
+         "biddingGuideVariantId": 196,
+         "biddingGuideId": 178,
+         "year": 2014,
+         "grade": "4",
+         "seats": 7,
+         "odoFrom": 70000,
+         "odoTo": 80000,
+         "biddingJpyK": 820,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 754,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          657
+         ],
+         "createdAt": "2026-08-24T19:56:00.522906",
+         "updatedAt": "2026-08-24T19:56:00.522967"
+        }
+       ],
+       "missingOdoBands": [
+        {
+         "odoFrom": 80000,
+         "odoTo": 90000
+        },
+        {
+         "odoFrom": 90000,
+         "odoTo": 100000
+        },
+        {
+         "odoFrom": 100000,
+         "odoTo": 110000
+        },
+        {
+         "odoFrom": 110000,
+         "odoTo": 120000
+        },
+        {
+         "odoFrom": 120000,
+         "odoTo": 130000
+        },
+        {
+         "odoFrom": 130000,
+         "odoTo": 140000
+        },
+        {
+         "odoFrom": 140000,
+         "odoTo": 150000
+        },
+        {
+         "odoFrom": 150000,
+         "odoTo": 160000
+        }
+       ],
+       "rowNoBid": false
+      },
+      {
+       "year": 2015,
+       "eligible": true,
+       "lines": [],
+       "missingOdoBands": [],
+       "rowNoBid": true
+      }
+     ]
+    }
+   ],
+   "createdAt": "2026-08-18T20:30:08.732344",
+   "updatedAt": "2026-08-18T20:30:08.732371"
+  }
+ ],
+ "missingBidRows": 3,
+ "bandTemplate": [
+  {
+   "odoFrom": 0,
+   "odoTo": 10000
+  },
+  {
+   "odoFrom": 10000,
+   "odoTo": 20000
+  },
+  {
+   "odoFrom": 20000,
+   "odoTo": 30000
+  },
+  {
+   "odoFrom": 30000,
+   "odoTo": 40000
+  },
+  {
+   "odoFrom": 40000,
+   "odoTo": 50000
+  },
+  {
+   "odoFrom": 50000,
+   "odoTo": 60000
+  },
+  {
+   "odoFrom": 60000,
+   "odoTo": 70000
+  },
+  {
+   "odoFrom": 70000,
+   "odoTo": 80000
+  },
+  {
+   "odoFrom": 80000,
+   "odoTo": 90000
+  },
+  {
+   "odoFrom": 90000,
+   "odoTo": 100000
+  },
+  {
+   "odoFrom": 100000,
+   "odoTo": 110000
+  },
+  {
+   "odoFrom": 110000,
+   "odoTo": 120000
+  },
+  {
+   "odoFrom": 120000,
+   "odoTo": 130000
+  },
+  {
+   "odoFrom": 130000,
+   "odoTo": 140000
+  },
+  {
+   "odoFrom": 140000,
+   "odoTo": 150000
+  },
+  {
+   "odoFrom": 150000,
+   "odoTo": 160000
+  }
+ ],
+ "modifiers": [
+  {
+   "id": 577,
+   "biddingGuideId": 178,
+   "variantId": 196,
+   "mreId": null,
+   "sevId": null,
+   "mreNumber": null,
+   "sevNumber": null,
+   "yearFrom": 2008,
+   "yearTo": 2008,
+   "resolvedYearFrom": 2008,
+   "resolvedYearTo": 2008,
+   "odoFrom": null,
+   "odoTo": null,
+   "effectiveFrom": null,
+   "effectiveUntil": null,
+   "conditions": null,
+   "amountJpyK": null,
+   "percent": null,
+   "noBid": true,
+   "strict": false,
+   "label": null,
+   "note": "Row off \u2014 2008",
+   "active": true,
+   "stale": false,
+   "orphanPair": false,
+   "updatedBy": null,
+   "createdAt": "2026-08-24T19:51:36.093486",
+   "updatedAt": "2026-08-24T19:51:36.093486"
+  },
+  {
+   "id": 578,
+   "biddingGuideId": 178,
+   "variantId": 196,
+   "mreId": null,
+   "sevId": null,
+   "mreNumber": null,
+   "sevNumber": null,
+   "yearFrom": 2009,
+   "yearTo": 2009,
+   "resolvedYearFrom": 2009,
+   "resolvedYearTo": 2009,
+   "odoFrom": null,
+   "odoTo": null,
+   "effectiveFrom": null,
+   "effectiveUntil": null,
+   "conditions": null,
+   "amountJpyK": null,
+   "percent": null,
+   "noBid": true,
+   "strict": false,
+   "label": null,
+   "note": "Row off \u2014 2009",
+   "active": true,
+   "stale": false,
+   "orphanPair": false,
+   "updatedBy": null,
+   "createdAt": "2026-08-24T19:51:36.093486",
+   "updatedAt": "2026-08-24T19:51:36.093486"
+  },
+  {
+   "id": 579,
+   "biddingGuideId": 178,
+   "variantId": 196,
+   "mreId": null,
+   "sevId": null,
+   "mreNumber": null,
+   "sevNumber": null,
+   "yearFrom": 2010,
+   "yearTo": 2010,
+   "resolvedYearFrom": 2010,
+   "resolvedYearTo": 2010,
+   "odoFrom": null,
+   "odoTo": null,
+   "effectiveFrom": null,
+   "effectiveUntil": null,
+   "conditions": null,
+   "amountJpyK": null,
+   "percent": null,
+   "noBid": true,
+   "strict": false,
+   "label": null,
+   "note": "Row off \u2014 2010",
+   "active": true,
+   "stale": false,
+   "orphanPair": false,
+   "updatedBy": null,
+   "createdAt": "2026-08-24T19:51:36.093486",
+   "updatedAt": "2026-08-24T19:51:36.093486"
+  },
+  {
+   "id": 580,
+   "biddingGuideId": 178,
+   "variantId": 196,
+   "mreId": null,
+   "sevId": null,
+   "mreNumber": null,
+   "sevNumber": null,
+   "yearFrom": 2011,
+   "yearTo": 2011,
+   "resolvedYearFrom": 2011,
+   "resolvedYearTo": 2011,
+   "odoFrom": null,
+   "odoTo": null,
+   "effectiveFrom": null,
+   "effectiveUntil": null,
+   "conditions": null,
+   "amountJpyK": null,
+   "percent": null,
+   "noBid": true,
+   "strict": false,
+   "label": null,
+   "note": "Row off \u2014 2011",
+   "active": true,
+   "stale": false,
+   "orphanPair": false,
+   "updatedBy": null,
+   "createdAt": "2026-08-24T19:51:36.093486",
+   "updatedAt": "2026-08-24T19:51:36.093486"
+  },
+  {
+   "id": 584,
+   "biddingGuideId": 178,
+   "variantId": 196,
+   "mreId": null,
+   "sevId": null,
+   "mreNumber": null,
+   "sevNumber": null,
+   "yearFrom": 2015,
+   "yearTo": 2015,
+   "resolvedYearFrom": 2015,
+   "resolvedYearTo": 2015,
+   "odoFrom": null,
+   "odoTo": null,
+   "effectiveFrom": null,
+   "effectiveUntil": null,
+   "conditions": null,
+   "amountJpyK": null,
+   "percent": null,
+   "noBid": true,
+   "strict": false,
+   "label": null,
+   "note": "Row off \u2014 2015",
+   "active": true,
+   "stale": false,
+   "orphanPair": false,
+   "updatedBy": null,
+   "createdAt": "2026-08-24T19:51:36.093486",
+   "updatedAt": "2026-08-24T19:51:36.093486"
+  },
+  {
+   "id": 657,
+   "biddingGuideId": 178,
+   "variantId": 196,
+   "mreId": null,
+   "sevId": null,
+   "mreNumber": null,
+   "sevNumber": null,
+   "yearFrom": null,
+   "yearTo": null,
+   "resolvedYearFrom": null,
+   "resolvedYearTo": null,
+   "odoFrom": null,
+   "odoTo": null,
+   "effectiveFrom": null,
+   "effectiveUntil": null,
+   "conditions": null,
+   "amountJpyK": null,
+   "percent": 92,
+   "noBid": false,
+   "strict": false,
+   "label": null,
+   "note": "Bid at 92%",
+   "active": true,
+   "stale": false,
+   "orphanPair": false,
+   "updatedBy": "editor",
+   "createdAt": "2026-08-24T20:34:07.935775",
+   "updatedAt": "2026-08-24T20:34:07.935775"
+  }
+ ],
+ "selectedPairKeys": [
+  "178:186"
+ ],
+ "selectedPairsChanged": false,
+ "missingSelectedPairKeys": [],
+ "otherPairsChanged": false,
+ "expiryState": "OK",
+ "expiryDaysRemaining": null,
+ "expiryPairKey": null,
+ "expiryPairLabel": null,
+ "expiryDate": null,
+ "validAlternatives": 1,
+ "eligibilityReviewedAt": "2026-08-24T19:51:36.120449",
+ "eligibilityReviewedBy": "editor"
+}

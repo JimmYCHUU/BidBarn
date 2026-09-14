@@ -1,0 +1,56 @@
+# Endpoints learned from the HAR captures (2026-09-14)
+
+## Carbarn dashboard (rules source)
+
+The bot signs in by hand like a person (`login.cmd`) and calls the API host (`carbarn.api_base` in
+`config.yaml`) from that signed-in browser context (Playwright `context.request`). It stores no credentials.
+Only the requests below are used.
+
+| Purpose | Request |
+|---|---|
+| Guide list | `GET /core/api/admin/bidding-guides?page=0&size=2000` -> Spring page `{content:[guide]}` |
+| Guide tree | `GET /core/api/admin/bidding-guides/{id}/tree` -> full grid |
+
+Guide (list item): `id, make, model, modelCode, minGrade, notes` (pipe-separated text rules),
+`bossBid` (false = Team Bid), `dialPercent` (null = x100%, already baked into values),
+`variants[] {id, name, active}`, `active`, `updatedAt`, `avgBidJpyK`, `missingBidRows`.
+
+Tree: `variants[] { name, active, bandTemplate[{odoFrom,odoTo}], blocks[] }`.
+Each block is one MRE/SEV approval pair; the one with `selected: true` is the live grid.
+`block.years[] { year, eligible, rowNoBid, lines[], missingOdoBands[] }`.
+`line { year, odoFrom, odoTo, biddingJpyK, effectiveBiddingJpyK, effectiveNoBid, effectiveReason, active, grade, seats }`.
+`modifiers[] { variantId, yearFrom, yearTo, resolvedYearFrom, resolvedYearTo, odoFrom, odoTo,
+conditions[{attr, op, value}] | null, amountJpyK, percent, noBid, strict, note, active, stale }`.
+Observed: `noBid` rows labelled "Row off - <year>"; a grade bonus is stored as
+`conditions=[{attr:"GRADE", op:"eq", value:"4"}], amountJpyK=80, years 2018-2021` (the test fixture's invented amount).
+
+## Nichibo AutoSearch
+
+Auth: browser session cookie (login form at /login). Bot reuses the persistent profile.
+
+| Purpose | Request |
+|---|---|
+| Search | `GET /auction?Make=All&Model[]=All&search-type=global&YearFrom=&YearTo=&KMMin=&KMMax=&Grade=&Engine=0+-+99999&Chassis=GDH206&AuctionPlace[]=All&sortGridSize=6&includeStock=Y&sort=Make,+Model,+Year&order=ASC&perPage=1000&page=1` -> HTML |
+| Detail | `GET /auction/{refno}` -> HTML |
+| Cart toggle | `GET /auction/cart/{refno}` -> `{"result":"added"|"removed"}` |
+| Sheet translator | `GET /auction/jsonAuctionSheetData?AuctionSheet=<url>&AuctionHall=&ExhibitNo=&AuctionDate=YYYYMMDD` -> `{Type, AuctionSheetURL, WordsEN{SalesPoint, VehicleCondition, ModelNo, Chassis, Variant, Comments}}` |
+| Suggested range | `GET /auction/jsonSuggested?Grade=&Shift=&Chassis=&km=&Year=&variant=&make=&model=&vid=&Engine=` |
+| Sold comparables | `GET /auction/jsonMaketPrice/?<same params>` -> `{data:[{Model,Variant,Year,KM,Grade,SoldPrice}]}` |
+| Place bid | `GET /auction/bid?v={refno}&b={yen}&ba={thousands}&cr=false&c={comment}&u=false&bidCurrencyCode=JPY&sa=0` -> `{"type":"success"}`; the page button `#btnPlaceBid` does exactly this. The bot clicks the button instead of calling the URL. |
+
+Search result card (`div.card-item-listings`):
+- `a.preview[href]` = detail URL (refno is the last path segment), `data-auction` = sheet image
+- `.car-title-h` "2018 Toyota Hiace", `.title-desc-listing small` variant, `.transmission-listing small`
+- `p.card-text` "76,000km 2,800cc Grade: 0"
+- `span[id^=bidPanelPrice]` start price
+- `button.cart-button-list[data-refno][data-incart]`
+- Pagination: hidden `#page`, `#perPage` (50/100/200/1000), "N total vehicles"
+
+Detail page:
+- `table.table-new` rows: Year of Registration, Make, Model, Variant, Auction Place, Exhibit #, KM, Grade, Colour, Engine, Chassis, Transmission, Equipment
+- JS vars: `var refno = '...'; var startPrice = '1290000'; var dataParams = '{"Grade":..,"Chassis":"GDH206V","km":..,"Year":..,"vid":..}'`
+- Translator call in page JS has `AuctionSheet`, `AuctionHall`, `ExhibitNo`, `AuctionDate`
+- Photos: `a.gallery-demo[href]`; sheet: `img#auction-sheet-img[src]`
+- Existing bid: `#currentBidRow` visible with `#currentBidAmount`
+- Bid inputs: `#bidAmountDisplay` (thousands, keyup drives `#bidAmount`), `#bidComment`, `#btnPlaceBid`; success shows `#boxBidSuccess`
+- "Request images from Live Support" button `#btn-request-image` appears when images are missing

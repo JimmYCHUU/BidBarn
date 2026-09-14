@@ -1,0 +1,38 @@
+[project]
+name = "bidbarn"
+version = "0.1.0"
+description = "BidBarn: Carbarn's auction bidding assistant for Nichibo. Reads the Carbarn bidding guides, scans Nichibo, reads auction sheets locally, and lets a human approve every bid."
+requires-python = ">=3.12"
+dependencies = [
+  "playwright",
+  "openai>=2,<3",   # optional sheet-check mode only (sheet_check: openai); default mode needs no key
+  "jiter==0.10.0",  # newer jiter DLLs are blocked by Windows App Control on the Carbarn PC
+  "rapidocr-onnxruntime",  # local auction-sheet OCR (needs the Microsoft Visual C++ 2015-2022 x64 runtime)
+  "pydantic>=2",
+  "fastapi",
+  "uvicorn[standard]",
+  "jinja2",
+  "typer",
+  "pyyaml",
+  "beautifulsoup4",
+  "lxml",
+  "python-dotenv",
+  "python-multipart",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+bot = "auction_bot.cli:app"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

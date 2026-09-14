@@ -1,0 +1,24 @@
+# Environments and caches
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Secrets and sessions: never committed
+.env
+*.har
+har/
+
+# Runtime data: browser profile (cookies), SQLite, downloaded sheets/photos, page cache, logs
+data/
+*.sqlite
+*.log
+
+# Fetched bidding guides (full Carbarn bid grids) and standing instructions are operational data
+rules/snapshots/*
+!rules/snapshots/.gitkeep
+rules/overrides/*
+!rules/overrides/.gitkeep
+
+# Build metadata
+*.egg-info/

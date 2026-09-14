@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}{{ p.model_code }} · {{ p.summary }}{% endblock %}
+{% block body %}
+{% set f = p.facts or {} %}
+{% set h = p.hard or {} %}
+{% set s = p.soft or {} %}
+{% set parsed = s.parsed or {} %}
+<div style="display:flex; align-items:center; gap:14px; margin-bottom:10px">
+  <span class="pill {{ p.status }}">{{ p.status }}</span>
+  <h2 style="margin:0; font-size:18px">{{ f.year }} {{ f.make }} {{ f.model }} <span class="muted">{{ f.variant_text }}</span></h2>
+  <span class="pill {{ p.decision }}">{{ p.decision }}</span>
+  <span class="muted">guide: {{ p.guide_name }}</span>
+  <a style="margin-left:auto" href="{{ f.url }}" target="_blank" rel="noopener">Open on Nichibo ↗</a>
+  {% if next_id %}<a href="/p/{{ next_id }}">next ›</a>{% endif %}
+</div>
+
+{% if p.siblings %}
+<div class="banner">Same vehicle is also proposed under {% for sb in p.siblings %}<a href="/p/{{ sb.id }}">{{ sb.guide_name }}</a> ({{ sb.status }}{% if sb.bid_jpy_k %}, {{ '{:,}'.format(sb.bid_jpy_k) }}K{% endif %}, {{ sb.decision }}){% if not loop.last %}; {% endif %}{% endfor %}. Approve it once: only one bid per vehicle is ever placed.</div>
+{% endif %}
+<div class="grid">
+  <div>
+    <div class="card">
+      <h3>Listing facts</h3>
+      <table>
+        <tr><td>Chassis</td><td class="mono"><b>{{ f.chassis }}</b> → variant {{ h.variant_name or '?' }}</td></tr>
+        <tr><td>Year / km / grade</td><td>{{ f.year }} · {{ '{:,}'.format(f.km or 0) }} km · grade <b>{{ f.grade_raw }}</b></td></tr>
+        <tr><td>Start price</td><td>¥{{ '{:,}'.format(f.start_price_jpy or 0) }}</td></tr>
+        <tr><td>Auction</td><td>{{ f.auction_place }} · exhibit {{ f.exhibit_no }} · {{ f.auction_date }}</td></tr>
+        <tr><td>Other</td><td>{{ f.transmission }} · {{ f.colour }} · {{ f.engine_cc }} cc · {{ f.equipment }}</td></tr>
+        {% if f.translator %}<tr><td>Nichibo sheet translation</td><td>{% for k, v in f.translator.items() if k != 'sheet_url' %}<div><b>{{ k }}:</b> {{ v }}</div>{% endfor %}</td></tr>{% endif %}
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>Grid lookup and hard rules</h3>
+      {% if p.bid_jpy_k %}<div class="bigbid">{{ '{:,}'.format(p.bid_jpy_k) }}<span class="muted" style="font-size:14px"> K JPY = ¥{{ '{:,}'.format(p.bid_jpy_k * 1000) }}</span></div>{% endif %}
+      {% if h.base_jpy_k %}<div class="muted">grid cell {{ h.year }} / {{ h.band_label }} = {{ '{:,}'.format(h.base_jpy_k) }}K{% if h.modifiers_applied %}; modifiers: {{ h.modifiers_applied|join(', ') }}{% endif %}</div>{% endif %}
+      {% for c in h.checks or [] %}
+        <div class="check"><span class="dot {{ 'ok' if c.ok else ('unk' if c.review else 'bad') }}"></span><span><b>{{ c.name }}</b> {{ c.detail }}</span></div>
+      {% endfor %}
+      {% if h.deferred_modifiers %}
+        <div class="banner">Modifier you must judge yourself (adjust the amount if it applies): {{ h.deferred_modifiers|join('; ') }}</div>
+      {% endif %}
+    </div>
+
+    {% if s.mode == 'manual' and p.status == 'SKIP' %}
+    <div class="card">
+      <h3>Skipped from the auction sheet</h3>
+      {% for r in s.reasons or [] %}<div class="check"><span class="dot bad"></span><span>{{ r }}</span></div>{% endfor %}
+      {% if s.ocr and s.ocr.available %}<div class="muted">Sheet OCR: seats <b>{{ s.ocr.seats }}</b> · model {{ s.ocr.model_code or '?' }} · {{ '{:,}'.format(s.ocr.km) if s.ocr.km else '?' }} km · grade {{ s.ocr.grade or '?' }}</div>{% endif %}
+      {% for hint in s.hints or [] %}<div class="check"><span class="dot unk"></span><span>{{ hint.message }} <span class="muted">({{ hint.where }})</span></span></div>{% endfor %}
+    </div>
+    {% elif s.mode == 'manual' %}
+    <div class="card">
+      <h3>Your checklist — judge these from the sheet and photos on the right</h3>
+      {% for item in s.checklist or [] %}
+        <label class="check" style="cursor:pointer"><input type="checkbox" style="margin-top:3px"> <span>{{ item }}</span></label>
+      {% else %}
+        <div class="muted">No text rules for this model. Check the sheet for grade, km and accident marks.</div>
+      {% endfor %}
+      {% if s.ocr %}
+        <div class="muted" style="margin-top:8px">Sheet OCR{% if s.ocr.available %}: seats <b>{{ s.ocr.seats if s.ocr.seats is not none else '?' }}</b> · model {{ s.ocr.model_code or '?' }} · {{ '{:,}'.format(s.ocr.km) if s.ocr.km else '?' }} km · grade {{ s.ocr.grade or '?' }} · {{ '4WD' if s.ocr.is_4wd else '4WD not read' }}{% else %} unavailable: {{ s.ocr.error }}{% endif %}</div>
+      {% endif %}
+      {% if s.hints %}
+        <h3 style="margin-top:12px">Keyword hints (from the listing, the translation and the sheet OCR, not decisions)</h3>
+        {% for hint in s.hints %}
+          <div class="check"><span class="dot {{ 'unk' if hint.level == 'warn' else 'ok' }}"></span><span>{{ hint.message }} <span class="muted">({{ hint.where }})</span></span></div>
+        {% endfor %}
+      {% endif %}
+      {% if s.images_pending %}<div class="banner"><b>Images not published yet.</b> Nichibo is still showing placeholder images for this vehicle. Leave it pending; the next scan re-checks it. To bid earlier, use "Request images from Live Support" on Nichibo.</div>{% endif %}
+      {% for r in s.reasons or [] if 'could not be downloaded' in r %}<div class="banner">{{ r }}</div>{% endfor %}
+    </div>
+    {% else %}
+    <div class="card">
+      <h3>Auction sheet and photo check {% if s.model %}<span class="muted">({{ s.model }})</span>{% endif %}</h3>
+      {% if s.reasons %}{% for r in s.reasons %}<div class="check"><span class="dot {{ 'bad' if 'failed' in r else 'unk' }}"></span><span>{{ r }}</span></div>{% endfor %}{% endif %}
+      {% if parsed %}
+        <table>
+          <tr><td>Sheet says</td><td>grade <b>{{ parsed.sheet_grade }}</b> · {{ parsed.sheet_km }} km · first reg {{ parsed.first_registration_year }} · model {{ parsed.model_code_on_sheet }}</td></tr>
+          <tr><td>Seats / drive / roof / wheelbase</td><td><b>{{ parsed.seats }}</b> seats · {{ parsed.drivetrain }} · {{ parsed.roof }} roof · {{ parsed.wheelbase }}</td></tr>
+          <tr><td>Body / interior</td><td>sticker paint: {{ parsed.sticker_paint }} · seats: {{ parsed.seat_material }} {{ parsed.seat_colour }} · captain: {{ parsed.captain_seats }} · hybrid/EV: {{ parsed.hybrid_or_ev }}</td></tr>
+          <tr><td>Issues</td><td>{{ parsed.notable_issues|join('; ') or '—' }}</td></tr>
+          <tr><td>Confidence</td><td>{{ parsed.confidence }} — {{ parsed.notes }}</td></tr>
+        </table>
+        {% for rv in parsed.rule_verdicts %}
+          <div class="check"><span class="dot {{ 'ok' if rv.verdict == 'pass' else ('bad' if rv.verdict == 'fail' else 'unk') }}"></span><span><b>{{ rv.verdict }}</b> {{ rv.rule }} <span class="muted">— {{ rv.evidence }}</span></span></div>
+        {% endfor %}
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {% if p.decision == 'pending' and p.status != 'SKIP' %}
+    <div class="card">
+      <h3>Your decision</h3>
+      <form class="decide" method="post" action="/p/{{ p.id }}/decide">
+        <label>Bid amount (K JPY) <input type="number" name="amount" value="{{ p.bid_jpy_k or '' }}" min="0" step="10"></label>
+        <label>Reason (required to reject; saved as evidence) <textarea name="reason" rows="2" placeholder="e.g. 10 seats on the sheet; the rule allows 2/3/5/6"></textarea></label>
+        <label><input type="checkbox" name="make_rule" value="1"> Also save as a standing instruction for {{ p.model_code }}</label>
+        <input type="text" name="rule_text" placeholder="Standing instruction text (defaults to the reason)">
+        <div style="display:flex; gap:10px">
+          <button class="approve" name="action" value="approve" {% if not p.bid_jpy_k %}disabled{% endif %}>Approve bid</button>
+          <button class="reject" name="action" value="reject">Reject</button>
+        </div>
+        {% if lock_label != 'LIVE PLACEMENT' %}<div class="banner">{{ lock_label }}. Approving here records your decision for testing; nothing is submitted to Nichibo until the testing lock is lifted in config.yaml.</div>{% endif %}
+      </form>
+    </div>
+    {% elif p.decision != 'pending' %}
+    <div class="card"><h3>Decision</h3>{{ p.decision }} at {{ p.decided_at }}{% if p.decision_reason %} — {{ p.decision_reason }}{% endif %}
+      {% if p.approved_bid_jpy_k %}<div>approved amount {{ '{:,}'.format(p.approved_bid_jpy_k) }}K</div>{% endif %}
+      {% if p.placement %}<pre>{{ p.placement }}</pre>{% endif %}</div>
+    {% endif %}
+  </div>
+
+  <div>
+    {% if p.evidence_base and p.sheet_file %}
+    <div class="card sheet"><h3>Auction sheet <span class="muted">(click to open full size)</span></h3><a href="/evidence/{{ p.evidence_base }}/{{ p.sheet_file }}" target="_blank"><img src="/evidence/{{ p.evidence_base }}/{{ p.sheet_file }}" alt="auction sheet"></a></div>
+    {% elif f.sheet_url %}
+    <div class="card sheet"><h3>Auction sheet (not downloaded)</h3><a href="{{ f.sheet_url }}" target="_blank">{{ f.sheet_url }}</a></div>
+    {% endif %}
+    <div class="card"><h3>Photos {% if p.photo_files %}({{ p.photo_files|length }}){% endif %}</h3>
+      <div class="thumbs">
+      {% for ph in p.photo_files %}<a href="/evidence/{{ p.evidence_base }}/{{ ph }}" target="_blank"><img src="/evidence/{{ p.evidence_base }}/{{ ph }}" alt="{{ ph }}"></a>{% endfor %}
+      {% if not p.photo_files %}{% for u in f.photo_urls or [] %}<a href="{{ u }}" target="_blank"><img src="{{ u }}" alt="photo"></a>{% endfor %}{% endif %}
+      </div>
+      {% if p.evidence and p.evidence.failed %}<details><summary>{{ p.evidence.failed|length }} image(s) failed to download</summary><pre>{{ p.evidence.failed }}</pre></details>{% endif %}
+    </div>
+    <details class="card"><summary>Raw data</summary><pre>{{ p.hard_json }}</pre><pre>{{ p.soft_json }}</pre></details>
+  </div>
+</div>
+{% endblock %}

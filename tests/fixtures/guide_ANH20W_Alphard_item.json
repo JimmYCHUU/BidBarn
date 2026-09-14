@@ -1,0 +1,83 @@
+{
+ "id": 178,
+ "catalogModelCodeId": 316,
+ "make": "Toyota",
+ "model": "Alphard",
+ "modelCode": "ANH20W",
+ "catalogImage": "https://example.com/catalog-images/toyota-alphard-anh20-20260225205722.png",
+ "yearFrom": 2008,
+ "yearTo": 2015,
+ "yearRange": "1/2008 to 12/2015",
+ "targetUnit": 0,
+ "overTargetAfterPercent": 0,
+ "minGrade": 4.0,
+ "odoBandKm": 10000,
+ "bossBid": false,
+ "dealerLinks": [
+  {
+   "label": "CarSales",
+   "url": "https://www.carsales.com.au/cars/?q=%28And.%28C.Make.Toyota._.%28C.Model.Alphard._.Series.ANH20W.%29%29_.Year.range%282008..2015%29.%29"
+  }
+ ],
+ "missingBidRows": 3,
+ "notes": "White Minimum 4|Other Colours: Minimum Grade 4.5|Captain Seat, Leather, Black Color Seat",
+ "updatedBy": "editor",
+ "active": true,
+ "createdAt": "2026-08-18T20:30:08.248337",
+ "updatedAt": "2026-08-24T19:56:02.011646",
+ "selectedPairKeys": [
+  "178:186"
+ ],
+ "eligibilityReviewedAt": "2026-08-24T19:51:36.120449",
+ "eligibilityReviewedBy": "editor",
+ "variants": [
+  {
+   "id": 196,
+   "biddingGuideId": 178,
+   "name": null,
+   "soldVariantValues": [],
+   "soldModelCode": null,
+   "sortOrder": 0,
+   "active": true,
+   "createdAt": "2026-08-18T20:30:08.732344",
+   "updatedAt": "2026-08-18T20:30:08.732371"
+  }
+ ],
+ "approvalPairs": [
+  {
+   "mreId": 895,
+   "sevId": 186,
+   "mreNumber": "MRE-000928",
+   "sevNumber": "SEV-000759",
+   "active": true,
+   "expiryDate": "2028-01-21",
+   "yearFrom": 2008,
+   "yearTo": 2015,
+   "selected": false,
+   "changedSinceReview": false
+  },
+  {
+   "mreId": 178,
+   "sevId": 186,
+   "mreNumber": "MRE-000854",
+   "sevNumber": "SEV-000759",
+   "active": true,
+   "expiryDate": "2028-01-21",
+   "yearFrom": 2008,
+   "yearTo": 2015,
+   "selected": true,
+   "changedSinceReview": false
+  }
+ ],
+ "dialPercent": 92,
+ "avgBidJpyK": 804.9583333333334,
+ "selectedPairsChanged": false,
+ "missingSelectedPairKeys": [],
+ "otherPairsChanged": false,
+ "expiryState": "OK",
+ "expiryDaysRemaining": null,
+ "expiryPairKey": null,
+ "expiryPairLabel": null,
+ "expiryDate": null,
+ "validAlternatives": 1
+}

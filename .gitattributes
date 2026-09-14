@@ -1,0 +1,4 @@
+* text=auto
+*.cmd text eol=crlf
+*.html text
+*.json text

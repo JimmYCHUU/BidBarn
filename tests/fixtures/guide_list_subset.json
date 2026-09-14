@@ -1,0 +1,567 @@
+{
+ "content": [
+  {
+   "id": 178,
+   "catalogModelCodeId": 316,
+   "make": "Toyota",
+   "model": "Alphard",
+   "modelCode": "ANH20W",
+   "catalogImage": "https://example.com/catalog-images/toyota-alphard-anh20-20260225205722.png",
+   "yearFrom": 2008,
+   "yearTo": 2015,
+   "yearRange": "1/2008 to 12/2015",
+   "targetUnit": 0,
+   "overTargetAfterPercent": 0,
+   "minGrade": 4.0,
+   "odoBandKm": 10000,
+   "bossBid": false,
+   "dealerLinks": [
+    {
+     "label": "CarSales",
+     "url": "https://www.carsales.com.au/cars/?q=%28And.%28C.Make.Toyota._.%28C.Model.Alphard._.Series.ANH20W.%29%29_.Year.range%282008..2015%29.%29"
+    }
+   ],
+   "missingBidRows": 3,
+   "notes": "White Minimum 4|Other Colours: Minimum Grade 4.5|Captain Seat, Leather, Black Color Seat",
+   "updatedBy": "editor",
+   "active": true,
+   "createdAt": "2026-08-18T20:30:08.248337",
+   "updatedAt": "2026-08-24T19:56:02.011646",
+   "selectedPairKeys": [
+    "178:186"
+   ],
+   "eligibilityReviewedAt": "2026-08-24T19:51:36.120449",
+   "eligibilityReviewedBy": "editor",
+   "variants": [
+    {
+     "id": 196,
+     "biddingGuideId": 178,
+     "name": null,
+     "soldVariantValues": [],
+     "soldModelCode": null,
+     "sortOrder": 0,
+     "active": true,
+     "createdAt": "2026-08-18T20:30:08.732344",
+     "updatedAt": "2026-08-18T20:30:08.732371"
+    }
+   ],
+   "approvalPairs": [
+    {
+     "mreId": 895,
+     "sevId": 186,
+     "mreNumber": "MRE-000928",
+     "sevNumber": "SEV-000759",
+     "active": true,
+     "expiryDate": "2028-01-21",
+     "yearFrom": 2008,
+     "yearTo": 2015,
+     "selected": false,
+     "changedSinceReview": false
+    },
+    {
+     "mreId": 178,
+     "sevId": 186,
+     "mreNumber": "MRE-000854",
+     "sevNumber": "SEV-000759",
+     "active": true,
+     "expiryDate": "2028-01-21",
+     "yearFrom": 2008,
+     "yearTo": 2015,
+     "selected": true,
+     "changedSinceReview": false
+    }
+   ],
+   "dialPercent": 92,
+   "avgBidJpyK": 804.9583333333334,
+   "selectedPairsChanged": false,
+   "missingSelectedPairKeys": [],
+   "otherPairsChanged": false,
+   "expiryState": "OK",
+   "expiryDaysRemaining": null,
+   "expiryPairKey": null,
+   "expiryPairLabel": null,
+   "expiryDate": null,
+   "validAlternatives": 1
+  },
+  {
+   "id": 188,
+   "catalogModelCodeId": 406,
+   "make": "Toyota",
+   "model": "Alphard Welcab",
+   "modelCode": "ANH20W",
+   "catalogImage": "https://example.com/catalog-images/toyota-alphard-welcab-anh20w-20260515163419.png",
+   "yearFrom": 2008,
+   "yearTo": 2014,
+   "yearRange": "5/2008 to 12/2014",
+   "targetUnit": 0,
+   "overTargetAfterPercent": 0,
+   "minGrade": 0.0,
+   "odoBandKm": null,
+   "bossBid": false,
+   "dealerLinks": [
+    {
+     "label": "CarSales",
+     "url": "https://www.carsales.com.au/cars/?q=%28And.%28C.Make.Toyota._.%28C.Model.Alphard._.Series.ANH20W.%29%29_.Year.range%282008..2014%29.%29"
+    }
+   ],
+   "missingBidRows": 0,
+   "notes": null,
+   "updatedBy": null,
+   "active": false,
+   "createdAt": "2026-08-18T20:30:08.266303",
+   "updatedAt": "2026-08-18T20:30:08.266333",
+   "selectedPairKeys": [],
+   "eligibilityReviewedAt": null,
+   "eligibilityReviewedBy": null,
+   "variants": [
+    {
+     "id": 206,
+     "biddingGuideId": 188,
+     "name": null,
+     "soldVariantValues": [],
+     "soldModelCode": null,
+     "sortOrder": 0,
+     "active": true,
+     "createdAt": "2026-08-18T20:30:08.750178",
+     "updatedAt": "2026-08-18T20:30:08.750207"
+    }
+   ],
+   "approvalPairs": [
+    {
+     "mreId": 272,
+     "sevId": 223,
+     "mreNumber": "MRE-000094",
+     "sevNumber": "SEV-000676",
+     "active": true,
+     "expiryDate": "2027-09-30",
+     "yearFrom": 2008,
+     "yearTo": 2014,
+     "selected": false,
+     "changedSinceReview": false
+    },
+    {
+     "mreId": 214,
+     "sevId": 223,
+     "mreNumber": "MRE-000003",
+     "sevNumber": "SEV-000676",
+     "active": true,
+     "expiryDate": "2027-09-30",
+     "yearFrom": 2008,
+     "yearTo": 2014,
+     "selected": false,
+     "changedSinceReview": false
+    }
+   ],
+   "dialPercent": null,
+   "avgBidJpyK": null,
+   "selectedPairsChanged": false,
+   "missingSelectedPairKeys": [],
+   "otherPairsChanged": false,
+   "expiryState": "OK",
+   "expiryDaysRemaining": null,
+   "expiryPairKey": null,
+   "expiryPairLabel": null,
+   "expiryDate": null,
+   "validAlternatives": 2
+  },
+  {
+   "id": 223,
+   "catalogModelCodeId": 116,
+   "make": "Toyota",
+   "model": "Hiace",
+   "modelCode": "GDH206",
+   "catalogImage": "https://example.com/catalog-images/toyota-hiace-campervan-gdh206-20260515203456.png",
+   "yearFrom": 2004,
+   "yearTo": 2026,
+   "yearRange": "1/2004 to 9/2026",
+   "targetUnit": 0,
+   "overTargetAfterPercent": 0,
+   "minGrade": 3.5,
+   "odoBandKm": null,
+   "bossBid": false,
+   "dealerLinks": [
+    {
+     "label": "CarSales",
+     "url": "https://www.carsales.com.au/cars/toyota/hiace/gdh206k-series/"
+    }
+   ],
+   "missingBidRows": 7,
+   "notes": "No sticker paint|2, 3, 5 or 6 seats|4WD, long or super long wheelbase with 2, 3, 5 or 6 seats",
+   "updatedBy": "reviewer",
+   "active": true,
+   "createdAt": "2026-08-18T20:30:08.323396",
+   "updatedAt": "2026-09-01T09:21:11.065309",
+   "selectedPairKeys": [
+    "79:86"
+   ],
+   "eligibilityReviewedAt": "2026-08-20T20:28:09.456992",
+   "eligibilityReviewedBy": "editor",
+   "variants": [
+    {
+     "id": 241,
+     "biddingGuideId": 223,
+     "name": "GDH206V",
+     "soldVariantValues": [],
+     "soldModelCode": null,
+     "sortOrder": 0,
+     "active": true,
+     "createdAt": "2026-08-18T20:30:08.917899",
+     "updatedAt": "2026-08-24T19:08:18.23326"
+    },
+    {
+     "id": 331,
+     "biddingGuideId": 223,
+     "name": "GDH206K",
+     "soldVariantValues": [],
+     "soldModelCode": null,
+     "sortOrder": 1,
+     "active": false,
+     "createdAt": "2026-08-24T19:08:43.979673",
+     "updatedAt": "2026-08-24T19:08:43.979736"
+    }
+   ],
+   "approvalPairs": [
+    {
+     "mreId": 79,
+     "sevId": 86,
+     "mreNumber": "MRE-000233",
+     "sevNumber": "SEV-000813",
+     "active": true,
+     "expiryDate": "2028-03-06",
+     "yearFrom": 2004,
+     "yearTo": 2024,
+     "selected": true,
+     "changedSinceReview": false
+    },
+    {
+     "mreId": 825,
+     "sevId": 163,
+     "mreNumber": "MRE-000829",
+     "sevNumber": "SEV-000719",
+     "active": true,
+     "expiryDate": "2027-11-25",
+     "yearFrom": 2019,
+     "yearTo": 2025,
+     "selected": false,
+     "changedSinceReview": false
+    },
+    {
+     "mreId": 805,
+     "sevId": 163,
+     "mreNumber": "MRE-000796",
+     "sevNumber": "SEV-000719",
+     "active": true,
+     "expiryDate": "2027-11-25",
+     "yearFrom": 2019,
+     "yearTo": 2025,
+     "selected": false,
+     "changedSinceReview": false
+    },
+    {
+     "mreId": 761,
+     "sevId": 163,
+     "mreNumber": "MRE-000741",
+     "sevNumber": "SEV-000719",
+     "active": true,
+     "expiryDate": "2027-11-25",
+     "yearFrom": 2019,
+     "yearTo": 2024,
+     "selected": false,
+     "changedSinceReview": false
+    },
+    {
+     "mreId": 161,
+     "sevId": 163,
+     "mreNumber": "MRE-000716",
+     "sevNumber": "SEV-000719",
+     "active": true,
+     "expiryDate": "2027-11-25",
+     "yearFrom": 2019,
+     "yearTo": 2026,
+     "selected": false,
+     "changedSinceReview": false
+    },
+    {
+     "mreId": 160,
+     "sevId": 163,
+     "mreNumber": "MRE-000793",
+     "sevNumber": "SEV-000719",
+     "active": true,
+     "expiryDate": "2027-11-25",
+     "yearFrom": 2019,
+     "yearTo": 2024,
+     "selected": false,
+     "changedSinceReview": false
+    },
+    {
+     "mreId": 155,
+     "sevId": 163,
+     "mreNumber": "MRE-000777",
+     "sevNumber": "SEV-000719",
+     "active": true,
+     "expiryDate": "2027-11-25",
+     "yearFrom": 2019,
+     "yearTo": 2025,
+     "selected": false,
+     "changedSinceReview": false
+    },
+    {
+     "mreId": 153,
+     "sevId": 163,
+     "mreNumber": "MRE-000772",
+     "sevNumber": "SEV-000719",
+     "active": true,
+     "expiryDate": "2027-11-25",
+     "yearFrom": 2019,
+     "yearTo": 2024,
+     "selected": false,
+     "changedSinceReview": false
+    }
+   ],
+   "dialPercent": null,
+   "avgBidJpyK": 1605.6043956043957,
+   "selectedPairsChanged": false,
+   "missingSelectedPairKeys": [],
+   "otherPairsChanged": false,
+   "expiryState": "OK",
+   "expiryDaysRemaining": null,
+   "expiryPairKey": null,
+   "expiryPairLabel": null,
+   "expiryDate": null,
+   "validAlternatives": 7
+  },
+  {
+   "id": 466,
+   "catalogModelCodeId": 708,
+   "make": "Toyota",
+   "model": "Hiace Welcab",
+   "modelCode": "GDH206",
+   "catalogImage": "https://example.com/catalog-images/toyota-hiace-welcab-gdh206-20260829185947.png",
+   "yearFrom": 2004,
+   "yearTo": 2024,
+   "yearRange": "1/2004 to 10/2024",
+   "targetUnit": 0,
+   "overTargetAfterPercent": 0,
+   "minGrade": 0.0,
+   "odoBandKm": null,
+   "bossBid": false,
+   "dealerLinks": [
+    {
+     "label": "CarSales",
+     "url": "https://www.carsales.com.au/cars/?q=%28And.%28C.Make.Toyota._.%28C.Model.Hiace._.Series.GDH206K.%29%29_.Year.range%28..2024%29.%29"
+    }
+   ],
+   "missingBidRows": 0,
+   "notes": null,
+   "updatedBy": null,
+   "active": false,
+   "createdAt": "2026-08-29T19:21:49.993026",
+   "updatedAt": "2026-08-29T19:21:49.993106",
+   "selectedPairKeys": [],
+   "eligibilityReviewedAt": null,
+   "eligibilityReviewedBy": null,
+   "variants": [
+    {
+     "id": 501,
+     "biddingGuideId": 466,
+     "name": null,
+     "soldVariantValues": [],
+     "soldModelCode": null,
+     "sortOrder": 0,
+     "active": true,
+     "createdAt": "2026-08-29T19:21:51.197406",
+     "updatedAt": "2026-08-29T19:21:51.197455"
+    }
+   ],
+   "approvalPairs": [
+    {
+     "mreId": 237,
+     "sevId": 239,
+     "mreNumber": "MRE-000038",
+     "sevNumber": "SEV-000658",
+     "active": true,
+     "expiryDate": "2027-09-26",
+     "yearFrom": 2004,
+     "yearTo": 2024,
+     "selected": false,
+     "changedSinceReview": false
+    }
+   ],
+   "dialPercent": null,
+   "avgBidJpyK": null,
+   "selectedPairsChanged": false,
+   "missingSelectedPairKeys": [],
+   "otherPairsChanged": false,
+   "expiryState": "OK",
+   "expiryDaysRemaining": null,
+   "expiryPairKey": null,
+   "expiryPairLabel": null,
+   "expiryDate": null,
+   "validAlternatives": 1
+  },
+  {
+   "id": 279,
+   "catalogModelCodeId": 317,
+   "make": "Toyota",
+   "model": "Vellfire",
+   "modelCode": "ANH20W",
+   "catalogImage": "https://example.com/catalog-images/toyota-vellfire-anh20-20260228182928.png",
+   "yearFrom": 2008,
+   "yearTo": 2015,
+   "yearRange": "1/2008 to 12/2015",
+   "targetUnit": 0,
+   "overTargetAfterPercent": 0,
+   "minGrade": 4.0,
+   "odoBandKm": 10000,
+   "bossBid": false,
+   "dealerLinks": [
+    {
+     "label": "CarSales",
+     "url": "https://www.carsales.com.au/cars/?q=%28And.%28C.Make.Toyota._.%28C.Model.Vellfire._.Series.ANH20W.%29%29_.Year.range%282008..2015%29.%29"
+    }
+   ],
+   "missingBidRows": 3,
+   "notes": "White Minimum 4|Other Colours: Minimum Grade 4.5|Captain Seat, Leather, Black Color Seat",
+   "updatedBy": "reviewer",
+   "active": true,
+   "createdAt": "2026-08-18T20:30:08.427515",
+   "updatedAt": "2026-08-28T13:07:22.563631",
+   "selectedPairKeys": [
+    "178:186"
+   ],
+   "eligibilityReviewedAt": "2026-08-24T19:51:44.281498",
+   "eligibilityReviewedBy": "editor",
+   "variants": [
+    {
+     "id": 297,
+     "biddingGuideId": 279,
+     "name": null,
+     "soldVariantValues": [],
+     "soldModelCode": null,
+     "sortOrder": 0,
+     "active": true,
+     "createdAt": "2026-08-18T20:30:09.047586",
+     "updatedAt": "2026-08-18T20:30:09.047613"
+    }
+   ],
+   "approvalPairs": [
+    {
+     "mreId": 895,
+     "sevId": 186,
+     "mreNumber": "MRE-000928",
+     "sevNumber": "SEV-000759",
+     "active": true,
+     "expiryDate": "2028-01-21",
+     "yearFrom": 2008,
+     "yearTo": 2015,
+     "selected": false,
+     "changedSinceReview": false
+    },
+    {
+     "mreId": 178,
+     "sevId": 186,
+     "mreNumber": "MRE-000854",
+     "sevNumber": "SEV-000759",
+     "active": true,
+     "expiryDate": "2028-01-21",
+     "yearFrom": 2008,
+     "yearTo": 2015,
+     "selected": true,
+     "changedSinceReview": false
+    }
+   ],
+   "dialPercent": 92,
+   "avgBidJpyK": 804.9583333333334,
+   "selectedPairsChanged": false,
+   "missingSelectedPairKeys": [],
+   "otherPairsChanged": false,
+   "expiryState": "OK",
+   "expiryDaysRemaining": null,
+   "expiryPairKey": null,
+   "expiryPairLabel": null,
+   "expiryDate": null,
+   "validAlternatives": 1
+  },
+  {
+   "id": 289,
+   "catalogModelCodeId": 407,
+   "make": "Toyota",
+   "model": "Vellfire Welcab",
+   "modelCode": "ANH20W",
+   "catalogImage": "https://example.com/catalog-images/toyota-vellfire-welcab-anh20w-20260515165025.png",
+   "yearFrom": 2008,
+   "yearTo": 2014,
+   "yearRange": "5/2008 to 12/2014",
+   "targetUnit": 0,
+   "overTargetAfterPercent": 0,
+   "minGrade": 0.0,
+   "odoBandKm": null,
+   "bossBid": false,
+   "dealerLinks": [
+    {
+     "label": "CarSales",
+     "url": "https://www.carsales.com.au/cars/?q=%28And.%28C.Make.Toyota._.%28C.Model.Vellfire._.Series.ANH20W.%29%29_.Year.range%282008..2014%29.%29"
+    }
+   ],
+   "missingBidRows": 0,
+   "notes": null,
+   "updatedBy": null,
+   "active": false,
+   "createdAt": "2026-08-18T20:30:08.443452",
+   "updatedAt": "2026-08-18T20:30:08.443479",
+   "selectedPairKeys": [],
+   "eligibilityReviewedAt": null,
+   "eligibilityReviewedBy": null,
+   "variants": [
+    {
+     "id": 307,
+     "biddingGuideId": 289,
+     "name": null,
+     "soldVariantValues": [],
+     "soldModelCode": null,
+     "sortOrder": 0,
+     "active": true,
+     "createdAt": "2026-08-18T20:30:09.066697",
+     "updatedAt": "2026-08-18T20:30:09.066723"
+    }
+   ],
+   "approvalPairs": [
+    {
+     "mreId": 272,
+     "sevId": 223,
+     "mreNumber": "MRE-000094",
+     "sevNumber": "SEV-000676",
+     "active": true,
+     "expiryDate": "2027-09-30",
+     "yearFrom": 2008,
+     "yearTo": 2014,
+     "selected": false,
+     "changedSinceReview": false
+    },
+    {
+     "mreId": 214,
+     "sevId": 223,
+     "mreNumber": "MRE-000003",
+     "sevNumber": "SEV-000676",
+     "active": true,
+     "expiryDate": "2027-09-30",
+     "yearFrom": 2008,
+     "yearTo": 2014,
+     "selected": false,
+     "changedSinceReview": false
+    }
+   ],
+   "dialPercent": null,
+   "avgBidJpyK": null,
+   "selectedPairsChanged": false,
+   "missingSelectedPairKeys": [],
+   "otherPairsChanged": false,
+   "expiryState": "OK",
+   "expiryDaysRemaining": null,
+   "expiryPairKey": null,
+   "expiryPairLabel": null,
+   "expiryDate": null,
+   "validAlternatives": 2
+  }
+ ]
+}

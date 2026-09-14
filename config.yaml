@@ -1,0 +1,53 @@
+# Nichibo bidding assistant configuration
+
+# TESTING LOCK. Bids are never submitted while this is anything other than the exact
+# phrase "The project is finished". Only Jim changes it, after he has said those words.
+project_status: testing
+
+# Safety: while true, `bot place` does everything except the final click.
+dry_run: true
+
+# Auction-sheet check. "none" = you judge the sheet and photos on the review page (no API key).
+# "openai" = an OpenAI-compatible model pre-reads the sheet (needs OPENAI_API_KEY in .env).
+sheet_check: none
+model: gpt-5
+model_reasoning_effort: medium
+max_photos_to_model: 12
+
+# Refuse to propose or place when the rules snapshot is older than this.
+max_rules_age_hours: 12
+
+# Hard cap on bids placed in one `bot place` run.
+max_bids_per_run: 25
+
+# Downloaded Nichibo pages, translator replies and images are reused for this many hours
+# (bot scan --fresh ignores the cache). Rule changes never need a re-download: bot replay --apply.
+cache_hours: 12
+
+# Card-level pre-filter opens detail pages only for cards that could possibly bid.
+open_details_only_for_candidates: true
+
+# Pacing between Nichibo page loads (seconds, uniform random).
+pace_seconds: [1.5, 4.0]
+
+# Where the persistent Chrome profile lives (logged in to Nichibo and Carbarn).
+profile_dir: data/profile
+db_path: data/bot.sqlite
+evidence_dir: data/evidence
+snapshot_dir: rules/snapshots
+override_dir: rules/overrides
+
+carbarn:
+  dashboard_url: https://dashboard.carbarn.com.au/?view=bidding
+  api_base: https://www.cbs.s1.carbarn.com.au
+  # Team Bid = guides with bossBid == false
+  boss_bid: false
+
+nichibo:
+  base_url: https://autosearch.nichibojapan.com
+  # Search always uses the widest year/odo range implied by the bid grid.
+  per_page: 1000
+
+review:
+  host: 127.0.0.1
+  port: 8765

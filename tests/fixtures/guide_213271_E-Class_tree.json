@@ -1,0 +1,3425 @@
+{
+ "id": 119,
+ "catalogModelCodeId": 168,
+ "make": "Mercedes-Benz",
+ "model": "E-Class E400",
+ "modelCode": "213271",
+ "catalogImage": "https://example.com/catalog-images/mercedes-benz-e-class-e400-213271-20260511162842.png",
+ "eligibilitySummary": "Eligible as S213 wagon with M276 3.5L V6 twin-turbo petrol engine and 4WD",
+ "costingVolumeM3": 13.495,
+ "targetUnit": 0,
+ "overTargetAfterPercent": 0,
+ "minGrade": 4.0,
+ "odoBandKm": 15000,
+ "notes": null,
+ "updatedBy": "editor",
+ "active": true,
+ "createdAt": "2026-08-18T20:30:08.129101",
+ "updatedAt": "2026-08-24T16:30:40.713063",
+ "variants": [
+  {
+   "id": 137,
+   "biddingGuideId": 119,
+   "name": "Sedan",
+   "soldVariantValues": [],
+   "soldModelCode": null,
+   "sortOrder": 0,
+   "active": true,
+   "bandTemplate": [
+    {
+     "odoFrom": 0,
+     "odoTo": 15000
+    },
+    {
+     "odoFrom": 15000,
+     "odoTo": 30000
+    },
+    {
+     "odoFrom": 30000,
+     "odoTo": 45000
+    },
+    {
+     "odoFrom": 45000,
+     "odoTo": 60000
+    },
+    {
+     "odoFrom": 60000,
+     "odoTo": 75000
+    },
+    {
+     "odoFrom": 75000,
+     "odoTo": 90000
+    },
+    {
+     "odoFrom": 90000,
+     "odoTo": 105000
+    },
+    {
+     "odoFrom": 105000,
+     "odoTo": 120000
+    },
+    {
+     "odoFrom": 120000,
+     "odoTo": 135000
+    },
+    {
+     "odoFrom": 135000,
+     "odoTo": 150000
+    },
+    {
+     "odoFrom": 150000,
+     "odoTo": 165000
+    }
+   ],
+   "blocks": [
+    {
+     "active": true,
+     "mreId": 689,
+     "sevId": 116,
+     "sevNumber": "SEV-000674",
+     "mreNumber": "MRE-000656",
+     "mreRoverApprovalId": "2c87a96e-2476-ef11-a670-6045bde5ab53",
+     "sevRoverApprovalId": "10ea19f9-bc7f-ef11-ac21-000d3acbed23",
+     "sevBuildFromYm": 201607,
+     "sevBuildToYm": 201804,
+     "mreBuildFromYm": 201607,
+     "mreBuildToYm": 201804,
+     "expiryDate": "2027-09-30",
+     "mreNotes": "MERCEDES BENZ E CLASS E400 4MATIC 213 SERIES WAGON - M276 3.5LT TTC V6 ENGINE - 4WD ONLY",
+     "mreSpecialNotes": null,
+     "mreHolderName": "SHUI MIR PTY LTD",
+     "sevVariantDetails": "S213 Station wagon (model code 213271)",
+     "sevNotes": null,
+     "sevModelCodes": "S213 series",
+     "sevVariant": "E400 S213 WAGON ONLY",
+     "sevCriterion": "Performance Criterion",
+     "sevVehicleCategory": "MA - Passenger Vehicle",
+     "mreMake": "Mercedes-Benz",
+     "mreModel": "213 Series",
+     "mreSourceMarket": "Japan",
+     "mreComplianceLevel": "Complies",
+     "mreModificationCategory": "MA",
+     "mreContactName": "Morgan Ellis",
+     "mrePhone": "0255504005",
+     "mreWebsite": null,
+     "lastScrapedAt": "2026-04-27T05:44:54.574644Z",
+     "selected": true,
+     "changedSinceReview": false,
+     "years": [
+      {
+       "year": 2016,
+       "eligible": true,
+       "lines": [
+        {
+         "id": 6182,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2016,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 0,
+         "odoTo": 15000,
+         "biddingJpyK": 1330,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1330,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:06:53.774257",
+         "updatedAt": "2026-08-24T16:21:25.436629"
+        },
+        {
+         "id": 6183,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2016,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 15000,
+         "odoTo": 30000,
+         "biddingJpyK": 1290,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1290,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:06:57.084951",
+         "updatedAt": "2026-08-24T16:21:30.081574"
+        },
+        {
+         "id": 6184,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2016,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 30000,
+         "odoTo": 45000,
+         "biddingJpyK": 1280,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1280,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:07:00.317035",
+         "updatedAt": "2026-08-24T16:21:34.309336"
+        },
+        {
+         "id": 6185,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2016,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 45000,
+         "odoTo": 60000,
+         "biddingJpyK": 1210,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1210,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:07:03.449621",
+         "updatedAt": "2026-08-24T16:21:38.244354"
+        }
+       ],
+       "missingOdoBands": [
+        {
+         "odoFrom": 60000,
+         "odoTo": 75000
+        },
+        {
+         "odoFrom": 75000,
+         "odoTo": 90000
+        },
+        {
+         "odoFrom": 90000,
+         "odoTo": 105000
+        },
+        {
+         "odoFrom": 105000,
+         "odoTo": 120000
+        },
+        {
+         "odoFrom": 120000,
+         "odoTo": 135000
+        },
+        {
+         "odoFrom": 135000,
+         "odoTo": 150000
+        },
+        {
+         "odoFrom": 150000,
+         "odoTo": 165000
+        }
+       ],
+       "rowNoBid": false
+      },
+      {
+       "year": 2017,
+       "eligible": true,
+       "lines": [
+        {
+         "id": 6186,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2017,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 0,
+         "odoTo": 15000,
+         "biddingJpyK": 1410,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1410,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:08:15.492954",
+         "updatedAt": "2026-08-24T16:21:41.386945"
+        },
+        {
+         "id": 6187,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2017,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 15000,
+         "odoTo": 30000,
+         "biddingJpyK": 1360,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1360,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:08:18.827338",
+         "updatedAt": "2026-08-24T16:21:48.650779"
+        },
+        {
+         "id": 6188,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2017,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 30000,
+         "odoTo": 45000,
+         "biddingJpyK": 1320,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1320,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:08:21.944934",
+         "updatedAt": "2026-08-24T16:21:52.411055"
+        },
+        {
+         "id": 6189,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2017,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 45000,
+         "odoTo": 60000,
+         "biddingJpyK": 1280,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1280,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:08:24.987719",
+         "updatedAt": "2026-08-24T16:21:57.665756"
+        }
+       ],
+       "missingOdoBands": [
+        {
+         "odoFrom": 60000,
+         "odoTo": 75000
+        },
+        {
+         "odoFrom": 75000,
+         "odoTo": 90000
+        },
+        {
+         "odoFrom": 90000,
+         "odoTo": 105000
+        },
+        {
+         "odoFrom": 105000,
+         "odoTo": 120000
+        },
+        {
+         "odoFrom": 120000,
+         "odoTo": 135000
+        },
+        {
+         "odoFrom": 135000,
+         "odoTo": 150000
+        },
+        {
+         "odoFrom": 150000,
+         "odoTo": 165000
+        }
+       ],
+       "rowNoBid": false
+      },
+      {
+       "year": 2018,
+       "eligible": true,
+       "lines": [
+        {
+         "id": 6190,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2018,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 0,
+         "odoTo": 15000,
+         "biddingJpyK": 1460,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1460,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:08:28.749898",
+         "updatedAt": "2026-08-24T16:22:01.308977"
+        },
+        {
+         "id": 6191,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2018,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 15000,
+         "odoTo": 30000,
+         "biddingJpyK": 1410,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1410,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:08:31.814406",
+         "updatedAt": "2026-08-24T16:22:04.615476"
+        },
+        {
+         "id": 6192,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2018,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 30000,
+         "odoTo": 45000,
+         "biddingJpyK": 1360,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1360,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:08:35.684885",
+         "updatedAt": "2026-08-24T16:22:07.785343"
+        },
+        {
+         "id": 6193,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2018,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 45000,
+         "odoTo": 60000,
+         "biddingJpyK": 1320,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1320,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:09:09.172943",
+         "updatedAt": "2026-08-24T16:22:11.755744"
+        }
+       ],
+       "missingOdoBands": [
+        {
+         "odoFrom": 60000,
+         "odoTo": 75000
+        },
+        {
+         "odoFrom": 75000,
+         "odoTo": 90000
+        },
+        {
+         "odoFrom": 90000,
+         "odoTo": 105000
+        },
+        {
+         "odoFrom": 105000,
+         "odoTo": 120000
+        },
+        {
+         "odoFrom": 120000,
+         "odoTo": 135000
+        },
+        {
+         "odoFrom": 135000,
+         "odoTo": 150000
+        },
+        {
+         "odoFrom": 150000,
+         "odoTo": 165000
+        }
+       ],
+       "rowNoBid": false
+      }
+     ]
+    },
+    {
+     "active": true,
+     "mreId": 494,
+     "sevId": 116,
+     "sevNumber": "SEV-000674",
+     "mreNumber": "MRE-000410",
+     "mreRoverApprovalId": "5830cc40-f788-ee11-be36-00224893ba6c",
+     "sevRoverApprovalId": "10ea19f9-bc7f-ef11-ac21-000d3acbed23",
+     "sevBuildFromYm": 201607,
+     "sevBuildToYm": 201804,
+     "mreBuildFromYm": 201607,
+     "mreBuildToYm": 201804,
+     "expiryDate": "2027-09-30",
+     "mreNotes": null,
+     "mreSpecialNotes": null,
+     "mreHolderName": "EXPRESS VEHICLE COMPLIANCE PTY LTD",
+     "sevVariantDetails": "S213 Station wagon (model code 213271)",
+     "sevNotes": null,
+     "sevModelCodes": "S213 series",
+     "sevVariant": "E400 S213 WAGON ONLY",
+     "sevCriterion": "Performance Criterion",
+     "sevVehicleCategory": "MA - Passenger Vehicle",
+     "mreMake": "Mercedes-Benz",
+     "mreModel": "213 Series",
+     "mreSourceMarket": "Japan",
+     "mreComplianceLevel": "Substantially Complies - Minor and Inconsequential non-compliance",
+     "mreModificationCategory": "MA",
+     "mreContactName": "Jamie Park",
+     "mrePhone": "0255504006",
+     "mreWebsite": null,
+     "lastScrapedAt": "2026-04-27T05:44:54.574644Z",
+     "selected": false,
+     "changedSinceReview": false,
+     "years": [
+      {
+       "year": 2016,
+       "eligible": true,
+       "lines": [
+        {
+         "id": 6182,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2016,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 0,
+         "odoTo": 15000,
+         "biddingJpyK": 1330,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1330,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:06:53.774257",
+         "updatedAt": "2026-08-24T16:21:25.436629"
+        },
+        {
+         "id": 6183,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2016,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 15000,
+         "odoTo": 30000,
+         "biddingJpyK": 1290,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1290,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:06:57.084951",
+         "updatedAt": "2026-08-24T16:21:30.081574"
+        },
+        {
+         "id": 6184,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2016,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 30000,
+         "odoTo": 45000,
+         "biddingJpyK": 1280,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1280,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:07:00.317035",
+         "updatedAt": "2026-08-24T16:21:34.309336"
+        },
+        {
+         "id": 6185,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2016,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 45000,
+         "odoTo": 60000,
+         "biddingJpyK": 1210,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1210,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:07:03.449621",
+         "updatedAt": "2026-08-24T16:21:38.244354"
+        }
+       ],
+       "missingOdoBands": [
+        {
+         "odoFrom": 60000,
+         "odoTo": 75000
+        },
+        {
+         "odoFrom": 75000,
+         "odoTo": 90000
+        },
+        {
+         "odoFrom": 90000,
+         "odoTo": 105000
+        },
+        {
+         "odoFrom": 105000,
+         "odoTo": 120000
+        },
+        {
+         "odoFrom": 120000,
+         "odoTo": 135000
+        },
+        {
+         "odoFrom": 135000,
+         "odoTo": 150000
+        },
+        {
+         "odoFrom": 150000,
+         "odoTo": 165000
+        }
+       ],
+       "rowNoBid": false
+      },
+      {
+       "year": 2017,
+       "eligible": true,
+       "lines": [
+        {
+         "id": 6186,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2017,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 0,
+         "odoTo": 15000,
+         "biddingJpyK": 1410,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1410,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:08:15.492954",
+         "updatedAt": "2026-08-24T16:21:41.386945"
+        },
+        {
+         "id": 6187,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2017,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 15000,
+         "odoTo": 30000,
+         "biddingJpyK": 1360,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1360,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:08:18.827338",
+         "updatedAt": "2026-08-24T16:21:48.650779"
+        },
+        {
+         "id": 6188,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2017,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 30000,
+         "odoTo": 45000,
+         "biddingJpyK": 1320,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1320,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:08:21.944934",
+         "updatedAt": "2026-08-24T16:21:52.411055"
+        },
+        {
+         "id": 6189,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2017,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 45000,
+         "odoTo": 60000,
+         "biddingJpyK": 1280,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1280,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:08:24.987719",
+         "updatedAt": "2026-08-24T16:21:57.665756"
+        }
+       ],
+       "missingOdoBands": [
+        {
+         "odoFrom": 60000,
+         "odoTo": 75000
+        },
+        {
+         "odoFrom": 75000,
+         "odoTo": 90000
+        },
+        {
+         "odoFrom": 90000,
+         "odoTo": 105000
+        },
+        {
+         "odoFrom": 105000,
+         "odoTo": 120000
+        },
+        {
+         "odoFrom": 120000,
+         "odoTo": 135000
+        },
+        {
+         "odoFrom": 135000,
+         "odoTo": 150000
+        },
+        {
+         "odoFrom": 150000,
+         "odoTo": 165000
+        }
+       ],
+       "rowNoBid": false
+      },
+      {
+       "year": 2018,
+       "eligible": true,
+       "lines": [
+        {
+         "id": 6190,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2018,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 0,
+         "odoTo": 15000,
+         "biddingJpyK": 1460,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1460,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:08:28.749898",
+         "updatedAt": "2026-08-24T16:22:01.308977"
+        },
+        {
+         "id": 6191,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2018,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 15000,
+         "odoTo": 30000,
+         "biddingJpyK": 1410,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1410,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:08:31.814406",
+         "updatedAt": "2026-08-24T16:22:04.615476"
+        },
+        {
+         "id": 6192,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2018,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 30000,
+         "odoTo": 45000,
+         "biddingJpyK": 1360,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1360,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:08:35.684885",
+         "updatedAt": "2026-08-24T16:22:07.785343"
+        },
+        {
+         "id": 6193,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2018,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 45000,
+         "odoTo": 60000,
+         "biddingJpyK": 1320,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1320,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:09:09.172943",
+         "updatedAt": "2026-08-24T16:22:11.755744"
+        }
+       ],
+       "missingOdoBands": [
+        {
+         "odoFrom": 60000,
+         "odoTo": 75000
+        },
+        {
+         "odoFrom": 75000,
+         "odoTo": 90000
+        },
+        {
+         "odoFrom": 90000,
+         "odoTo": 105000
+        },
+        {
+         "odoFrom": 105000,
+         "odoTo": 120000
+        },
+        {
+         "odoFrom": 120000,
+         "odoTo": 135000
+        },
+        {
+         "odoFrom": 135000,
+         "odoTo": 150000
+        },
+        {
+         "odoFrom": 150000,
+         "odoTo": 165000
+        }
+       ],
+       "rowNoBid": false
+      }
+     ]
+    },
+    {
+     "active": true,
+     "mreId": 493,
+     "sevId": 116,
+     "sevNumber": "SEV-000674",
+     "mreNumber": "MRE-000409",
+     "mreRoverApprovalId": "b629aa28-f788-ee11-be36-00224893ba6c",
+     "sevRoverApprovalId": "10ea19f9-bc7f-ef11-ac21-000d3acbed23",
+     "sevBuildFromYm": 201607,
+     "sevBuildToYm": 201804,
+     "mreBuildFromYm": 201607,
+     "mreBuildToYm": 201804,
+     "expiryDate": "2027-09-30",
+     "mreNotes": null,
+     "mreSpecialNotes": null,
+     "mreHolderName": "Example Compliance Pty Ltd",
+     "sevVariantDetails": "S213 Station wagon (model code 213271)",
+     "sevNotes": null,
+     "sevModelCodes": "S213 series",
+     "sevVariant": "E400 S213 WAGON ONLY",
+     "sevCriterion": "Performance Criterion",
+     "sevVehicleCategory": "MA - Passenger Vehicle",
+     "mreMake": "Mercedes-Benz",
+     "mreModel": "213 Series",
+     "mreSourceMarket": "Japan",
+     "mreComplianceLevel": "Substantially Complies - Minor and Inconsequential non-compliance",
+     "mreModificationCategory": "MA",
+     "mreContactName": "Riley Chen",
+     "mrePhone": "0255504004",
+     "mreWebsite": null,
+     "lastScrapedAt": "2026-04-27T05:44:54.574644Z",
+     "selected": false,
+     "changedSinceReview": false,
+     "years": [
+      {
+       "year": 2016,
+       "eligible": true,
+       "lines": [
+        {
+         "id": 6182,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2016,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 0,
+         "odoTo": 15000,
+         "biddingJpyK": 1330,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1330,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:06:53.774257",
+         "updatedAt": "2026-08-24T16:21:25.436629"
+        },
+        {
+         "id": 6183,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2016,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 15000,
+         "odoTo": 30000,
+         "biddingJpyK": 1290,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1290,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:06:57.084951",
+         "updatedAt": "2026-08-24T16:21:30.081574"
+        },
+        {
+         "id": 6184,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2016,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 30000,
+         "odoTo": 45000,
+         "biddingJpyK": 1280,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1280,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:07:00.317035",
+         "updatedAt": "2026-08-24T16:21:34.309336"
+        },
+        {
+         "id": 6185,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2016,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 45000,
+         "odoTo": 60000,
+         "biddingJpyK": 1210,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1210,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:07:03.449621",
+         "updatedAt": "2026-08-24T16:21:38.244354"
+        }
+       ],
+       "missingOdoBands": [
+        {
+         "odoFrom": 60000,
+         "odoTo": 75000
+        },
+        {
+         "odoFrom": 75000,
+         "odoTo": 90000
+        },
+        {
+         "odoFrom": 90000,
+         "odoTo": 105000
+        },
+        {
+         "odoFrom": 105000,
+         "odoTo": 120000
+        },
+        {
+         "odoFrom": 120000,
+         "odoTo": 135000
+        },
+        {
+         "odoFrom": 135000,
+         "odoTo": 150000
+        },
+        {
+         "odoFrom": 150000,
+         "odoTo": 165000
+        }
+       ],
+       "rowNoBid": false
+      },
+      {
+       "year": 2017,
+       "eligible": true,
+       "lines": [
+        {
+         "id": 6186,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2017,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 0,
+         "odoTo": 15000,
+         "biddingJpyK": 1410,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1410,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:08:15.492954",
+         "updatedAt": "2026-08-24T16:21:41.386945"
+        },
+        {
+         "id": 6187,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2017,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 15000,
+         "odoTo": 30000,
+         "biddingJpyK": 1360,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1360,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:08:18.827338",
+         "updatedAt": "2026-08-24T16:21:48.650779"
+        },
+        {
+         "id": 6188,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2017,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 30000,
+         "odoTo": 45000,
+         "biddingJpyK": 1320,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1320,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:08:21.944934",
+         "updatedAt": "2026-08-24T16:21:52.411055"
+        },
+        {
+         "id": 6189,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2017,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 45000,
+         "odoTo": 60000,
+         "biddingJpyK": 1280,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1280,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:08:24.987719",
+         "updatedAt": "2026-08-24T16:21:57.665756"
+        }
+       ],
+       "missingOdoBands": [
+        {
+         "odoFrom": 60000,
+         "odoTo": 75000
+        },
+        {
+         "odoFrom": 75000,
+         "odoTo": 90000
+        },
+        {
+         "odoFrom": 90000,
+         "odoTo": 105000
+        },
+        {
+         "odoFrom": 105000,
+         "odoTo": 120000
+        },
+        {
+         "odoFrom": 120000,
+         "odoTo": 135000
+        },
+        {
+         "odoFrom": 135000,
+         "odoTo": 150000
+        },
+        {
+         "odoFrom": 150000,
+         "odoTo": 165000
+        }
+       ],
+       "rowNoBid": false
+      },
+      {
+       "year": 2018,
+       "eligible": true,
+       "lines": [
+        {
+         "id": 6190,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2018,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 0,
+         "odoTo": 15000,
+         "biddingJpyK": 1460,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1460,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:08:28.749898",
+         "updatedAt": "2026-08-24T16:22:01.308977"
+        },
+        {
+         "id": 6191,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2018,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 15000,
+         "odoTo": 30000,
+         "biddingJpyK": 1410,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1410,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:08:31.814406",
+         "updatedAt": "2026-08-24T16:22:04.615476"
+        },
+        {
+         "id": 6192,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2018,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 30000,
+         "odoTo": 45000,
+         "biddingJpyK": 1360,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1360,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:08:35.684885",
+         "updatedAt": "2026-08-24T16:22:07.785343"
+        },
+        {
+         "id": 6193,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2018,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 45000,
+         "odoTo": 60000,
+         "biddingJpyK": 1320,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1320,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:09:09.172943",
+         "updatedAt": "2026-08-24T16:22:11.755744"
+        }
+       ],
+       "missingOdoBands": [
+        {
+         "odoFrom": 60000,
+         "odoTo": 75000
+        },
+        {
+         "odoFrom": 75000,
+         "odoTo": 90000
+        },
+        {
+         "odoFrom": 90000,
+         "odoTo": 105000
+        },
+        {
+         "odoFrom": 105000,
+         "odoTo": 120000
+        },
+        {
+         "odoFrom": 120000,
+         "odoTo": 135000
+        },
+        {
+         "odoFrom": 135000,
+         "odoTo": 150000
+        },
+        {
+         "odoFrom": 150000,
+         "odoTo": 165000
+        }
+       ],
+       "rowNoBid": false
+      }
+     ]
+    },
+    {
+     "active": true,
+     "mreId": 111,
+     "sevId": 116,
+     "sevNumber": "SEV-000674",
+     "mreNumber": "MRE-000415",
+     "mreRoverApprovalId": "cd437ba6-b18d-ee11-be36-00224893ba6c",
+     "sevRoverApprovalId": "10ea19f9-bc7f-ef11-ac21-000d3acbed23",
+     "sevBuildFromYm": 201607,
+     "sevBuildToYm": 201804,
+     "mreBuildFromYm": 201607,
+     "mreBuildToYm": 201804,
+     "expiryDate": "2027-09-30",
+     "mreNotes": "Mercedes Benz 213 series with model number 213271. E400 4matic wagon with 3.5 turbo engine.",
+     "mreSpecialNotes": null,
+     "mreHolderName": "SYDNEY AVV PTY LTD",
+     "sevVariantDetails": "S213 Station wagon (model code 213271)",
+     "sevNotes": null,
+     "sevModelCodes": "S213 series",
+     "sevVariant": "E400 S213 WAGON ONLY",
+     "sevCriterion": "Performance Criterion",
+     "sevVehicleCategory": "MA - Passenger Vehicle",
+     "mreMake": "Mercedes-Benz",
+     "mreModel": "213 Series",
+     "mreSourceMarket": "Japan",
+     "mreComplianceLevel": "Complies",
+     "mreModificationCategory": "MA",
+     "mreContactName": "Alex Morgan",
+     "mrePhone": "0255504000",
+     "mreWebsite": null,
+     "lastScrapedAt": "2026-04-27T05:44:54.574644Z",
+     "selected": true,
+     "changedSinceReview": false,
+     "years": [
+      {
+       "year": 2016,
+       "eligible": true,
+       "lines": [
+        {
+         "id": 6182,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2016,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 0,
+         "odoTo": 15000,
+         "biddingJpyK": 1330,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1330,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:06:53.774257",
+         "updatedAt": "2026-08-24T16:21:25.436629"
+        },
+        {
+         "id": 6183,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2016,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 15000,
+         "odoTo": 30000,
+         "biddingJpyK": 1290,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1290,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:06:57.084951",
+         "updatedAt": "2026-08-24T16:21:30.081574"
+        },
+        {
+         "id": 6184,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2016,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 30000,
+         "odoTo": 45000,
+         "biddingJpyK": 1280,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1280,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:07:00.317035",
+         "updatedAt": "2026-08-24T16:21:34.309336"
+        },
+        {
+         "id": 6185,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2016,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 45000,
+         "odoTo": 60000,
+         "biddingJpyK": 1210,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1210,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:07:03.449621",
+         "updatedAt": "2026-08-24T16:21:38.244354"
+        }
+       ],
+       "missingOdoBands": [
+        {
+         "odoFrom": 60000,
+         "odoTo": 75000
+        },
+        {
+         "odoFrom": 75000,
+         "odoTo": 90000
+        },
+        {
+         "odoFrom": 90000,
+         "odoTo": 105000
+        },
+        {
+         "odoFrom": 105000,
+         "odoTo": 120000
+        },
+        {
+         "odoFrom": 120000,
+         "odoTo": 135000
+        },
+        {
+         "odoFrom": 135000,
+         "odoTo": 150000
+        },
+        {
+         "odoFrom": 150000,
+         "odoTo": 165000
+        }
+       ],
+       "rowNoBid": false
+      },
+      {
+       "year": 2017,
+       "eligible": true,
+       "lines": [
+        {
+         "id": 6186,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2017,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 0,
+         "odoTo": 15000,
+         "biddingJpyK": 1410,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1410,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:08:15.492954",
+         "updatedAt": "2026-08-24T16:21:41.386945"
+        },
+        {
+         "id": 6187,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2017,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 15000,
+         "odoTo": 30000,
+         "biddingJpyK": 1360,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1360,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:08:18.827338",
+         "updatedAt": "2026-08-24T16:21:48.650779"
+        },
+        {
+         "id": 6188,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2017,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 30000,
+         "odoTo": 45000,
+         "biddingJpyK": 1320,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1320,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:08:21.944934",
+         "updatedAt": "2026-08-24T16:21:52.411055"
+        },
+        {
+         "id": 6189,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2017,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 45000,
+         "odoTo": 60000,
+         "biddingJpyK": 1280,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1280,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:08:24.987719",
+         "updatedAt": "2026-08-24T16:21:57.665756"
+        }
+       ],
+       "missingOdoBands": [
+        {
+         "odoFrom": 60000,
+         "odoTo": 75000
+        },
+        {
+         "odoFrom": 75000,
+         "odoTo": 90000
+        },
+        {
+         "odoFrom": 90000,
+         "odoTo": 105000
+        },
+        {
+         "odoFrom": 105000,
+         "odoTo": 120000
+        },
+        {
+         "odoFrom": 120000,
+         "odoTo": 135000
+        },
+        {
+         "odoFrom": 135000,
+         "odoTo": 150000
+        },
+        {
+         "odoFrom": 150000,
+         "odoTo": 165000
+        }
+       ],
+       "rowNoBid": false
+      },
+      {
+       "year": 2018,
+       "eligible": true,
+       "lines": [
+        {
+         "id": 6190,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2018,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 0,
+         "odoTo": 15000,
+         "biddingJpyK": 1460,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1460,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:08:28.749898",
+         "updatedAt": "2026-08-24T16:22:01.308977"
+        },
+        {
+         "id": 6191,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2018,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 15000,
+         "odoTo": 30000,
+         "biddingJpyK": 1410,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1410,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:08:31.814406",
+         "updatedAt": "2026-08-24T16:22:04.615476"
+        },
+        {
+         "id": 6192,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2018,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 30000,
+         "odoTo": 45000,
+         "biddingJpyK": 1360,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1360,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:08:35.684885",
+         "updatedAt": "2026-08-24T16:22:07.785343"
+        },
+        {
+         "id": 6193,
+         "biddingGuideVariantId": 137,
+         "biddingGuideId": 119,
+         "year": 2018,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 45000,
+         "odoTo": 60000,
+         "biddingJpyK": 1320,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1320,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [],
+         "createdAt": "2026-08-24T16:09:09.172943",
+         "updatedAt": "2026-08-24T16:22:11.755744"
+        }
+       ],
+       "missingOdoBands": [
+        {
+         "odoFrom": 60000,
+         "odoTo": 75000
+        },
+        {
+         "odoFrom": 75000,
+         "odoTo": 90000
+        },
+        {
+         "odoFrom": 90000,
+         "odoTo": 105000
+        },
+        {
+         "odoFrom": 105000,
+         "odoTo": 120000
+        },
+        {
+         "odoFrom": 120000,
+         "odoTo": 135000
+        },
+        {
+         "odoFrom": 135000,
+         "odoTo": 150000
+        },
+        {
+         "odoFrom": 150000,
+         "odoTo": 165000
+        }
+       ],
+       "rowNoBid": false
+      }
+     ]
+    }
+   ],
+   "createdAt": "2026-08-18T20:30:08.554768",
+   "updatedAt": "2026-08-24T16:28:43.791988"
+  },
+  {
+   "id": 328,
+   "biddingGuideId": 119,
+   "name": "Wagon",
+   "soldVariantValues": [],
+   "soldModelCode": null,
+   "sortOrder": 1,
+   "active": false,
+   "bandTemplate": [
+    {
+     "odoFrom": 0,
+     "odoTo": 15000
+    },
+    {
+     "odoFrom": 15000,
+     "odoTo": 30000
+    },
+    {
+     "odoFrom": 30000,
+     "odoTo": 45000
+    },
+    {
+     "odoFrom": 45000,
+     "odoTo": 60000
+    },
+    {
+     "odoFrom": 60000,
+     "odoTo": 75000
+    },
+    {
+     "odoFrom": 75000,
+     "odoTo": 90000
+    },
+    {
+     "odoFrom": 90000,
+     "odoTo": 105000
+    },
+    {
+     "odoFrom": 105000,
+     "odoTo": 120000
+    },
+    {
+     "odoFrom": 120000,
+     "odoTo": 135000
+    },
+    {
+     "odoFrom": 135000,
+     "odoTo": 150000
+    },
+    {
+     "odoFrom": 150000,
+     "odoTo": 165000
+    }
+   ],
+   "blocks": [
+    {
+     "active": true,
+     "mreId": 689,
+     "sevId": 116,
+     "sevNumber": "SEV-000674",
+     "mreNumber": "MRE-000656",
+     "mreRoverApprovalId": "2c87a96e-2476-ef11-a670-6045bde5ab53",
+     "sevRoverApprovalId": "10ea19f9-bc7f-ef11-ac21-000d3acbed23",
+     "sevBuildFromYm": 201607,
+     "sevBuildToYm": 201804,
+     "mreBuildFromYm": 201607,
+     "mreBuildToYm": 201804,
+     "expiryDate": "2027-09-30",
+     "mreNotes": "MERCEDES BENZ E CLASS E400 4MATIC 213 SERIES WAGON - M276 3.5LT TTC V6 ENGINE - 4WD ONLY",
+     "mreSpecialNotes": null,
+     "mreHolderName": "SHUI MIR PTY LTD",
+     "sevVariantDetails": "S213 Station wagon (model code 213271)",
+     "sevNotes": null,
+     "sevModelCodes": "S213 series",
+     "sevVariant": "E400 S213 WAGON ONLY",
+     "sevCriterion": "Performance Criterion",
+     "sevVehicleCategory": "MA - Passenger Vehicle",
+     "mreMake": "Mercedes-Benz",
+     "mreModel": "213 Series",
+     "mreSourceMarket": "Japan",
+     "mreComplianceLevel": "Complies",
+     "mreModificationCategory": "MA",
+     "mreContactName": "Morgan Ellis",
+     "mrePhone": "0255504005",
+     "mreWebsite": null,
+     "lastScrapedAt": "2026-04-27T05:44:54.574644Z",
+     "selected": true,
+     "changedSinceReview": false,
+     "years": [
+      {
+       "year": 2016,
+       "eligible": true,
+       "lines": [
+        {
+         "id": 6222,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2016,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 0,
+         "odoTo": 15000,
+         "biddingJpyK": 1560,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1435,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:05.677256",
+         "updatedAt": "2026-08-24T16:30:05.677333"
+        },
+        {
+         "id": 6223,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2016,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 15000,
+         "odoTo": 30000,
+         "biddingJpyK": 1470,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1352,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:09.324889",
+         "updatedAt": "2026-08-24T16:30:09.324961"
+        },
+        {
+         "id": 6224,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2016,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 30000,
+         "odoTo": 45000,
+         "biddingJpyK": 1430,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1316,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:12.047181",
+         "updatedAt": "2026-08-24T16:30:12.047322"
+        },
+        {
+         "id": 6225,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2016,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 45000,
+         "odoTo": 60000,
+         "biddingJpyK": 1390,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1279,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:14.608622",
+         "updatedAt": "2026-08-24T16:30:14.608699"
+        }
+       ],
+       "missingOdoBands": [
+        {
+         "odoFrom": 60000,
+         "odoTo": 75000
+        },
+        {
+         "odoFrom": 75000,
+         "odoTo": 90000
+        },
+        {
+         "odoFrom": 90000,
+         "odoTo": 105000
+        },
+        {
+         "odoFrom": 105000,
+         "odoTo": 120000
+        },
+        {
+         "odoFrom": 120000,
+         "odoTo": 135000
+        },
+        {
+         "odoFrom": 135000,
+         "odoTo": 150000
+        },
+        {
+         "odoFrom": 150000,
+         "odoTo": 165000
+        }
+       ],
+       "rowNoBid": false
+      },
+      {
+       "year": 2017,
+       "eligible": true,
+       "lines": [
+        {
+         "id": 6226,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2017,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 0,
+         "odoTo": 15000,
+         "biddingJpyK": 1610,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1481,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:17.668251",
+         "updatedAt": "2026-08-24T16:30:17.668304"
+        },
+        {
+         "id": 6227,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2017,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 15000,
+         "odoTo": 30000,
+         "biddingJpyK": 1520,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1398,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:20.496076",
+         "updatedAt": "2026-08-24T16:30:20.496136"
+        },
+        {
+         "id": 6228,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2017,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 30000,
+         "odoTo": 45000,
+         "biddingJpyK": 1490,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1371,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:23.177859",
+         "updatedAt": "2026-08-24T16:30:23.177939"
+        },
+        {
+         "id": 6229,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2017,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 45000,
+         "odoTo": 60000,
+         "biddingJpyK": 1460,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1343,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:26.089485",
+         "updatedAt": "2026-08-24T16:30:26.089542"
+        }
+       ],
+       "missingOdoBands": [
+        {
+         "odoFrom": 60000,
+         "odoTo": 75000
+        },
+        {
+         "odoFrom": 75000,
+         "odoTo": 90000
+        },
+        {
+         "odoFrom": 90000,
+         "odoTo": 105000
+        },
+        {
+         "odoFrom": 105000,
+         "odoTo": 120000
+        },
+        {
+         "odoFrom": 120000,
+         "odoTo": 135000
+        },
+        {
+         "odoFrom": 135000,
+         "odoTo": 150000
+        },
+        {
+         "odoFrom": 150000,
+         "odoTo": 165000
+        }
+       ],
+       "rowNoBid": false
+      },
+      {
+       "year": 2018,
+       "eligible": true,
+       "lines": [
+        {
+         "id": 6230,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2018,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 0,
+         "odoTo": 15000,
+         "biddingJpyK": 1730,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1592,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:29.289941",
+         "updatedAt": "2026-08-24T16:30:29.289999"
+        },
+        {
+         "id": 6231,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2018,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 15000,
+         "odoTo": 30000,
+         "biddingJpyK": 1640,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1509,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:32.71462",
+         "updatedAt": "2026-08-24T16:30:32.714678"
+        },
+        {
+         "id": 6232,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2018,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 30000,
+         "odoTo": 45000,
+         "biddingJpyK": 1610,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1481,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:36.731366",
+         "updatedAt": "2026-08-24T16:30:36.731439"
+        },
+        {
+         "id": 6233,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2018,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 45000,
+         "odoTo": 60000,
+         "biddingJpyK": 1560,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1435,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:40.708763",
+         "updatedAt": "2026-08-24T16:30:40.708848"
+        }
+       ],
+       "missingOdoBands": [
+        {
+         "odoFrom": 60000,
+         "odoTo": 75000
+        },
+        {
+         "odoFrom": 75000,
+         "odoTo": 90000
+        },
+        {
+         "odoFrom": 90000,
+         "odoTo": 105000
+        },
+        {
+         "odoFrom": 105000,
+         "odoTo": 120000
+        },
+        {
+         "odoFrom": 120000,
+         "odoTo": 135000
+        },
+        {
+         "odoFrom": 135000,
+         "odoTo": 150000
+        },
+        {
+         "odoFrom": 150000,
+         "odoTo": 165000
+        }
+       ],
+       "rowNoBid": false
+      }
+     ]
+    },
+    {
+     "active": true,
+     "mreId": 494,
+     "sevId": 116,
+     "sevNumber": "SEV-000674",
+     "mreNumber": "MRE-000410",
+     "mreRoverApprovalId": "5830cc40-f788-ee11-be36-00224893ba6c",
+     "sevRoverApprovalId": "10ea19f9-bc7f-ef11-ac21-000d3acbed23",
+     "sevBuildFromYm": 201607,
+     "sevBuildToYm": 201804,
+     "mreBuildFromYm": 201607,
+     "mreBuildToYm": 201804,
+     "expiryDate": "2027-09-30",
+     "mreNotes": null,
+     "mreSpecialNotes": null,
+     "mreHolderName": "EXPRESS VEHICLE COMPLIANCE PTY LTD",
+     "sevVariantDetails": "S213 Station wagon (model code 213271)",
+     "sevNotes": null,
+     "sevModelCodes": "S213 series",
+     "sevVariant": "E400 S213 WAGON ONLY",
+     "sevCriterion": "Performance Criterion",
+     "sevVehicleCategory": "MA - Passenger Vehicle",
+     "mreMake": "Mercedes-Benz",
+     "mreModel": "213 Series",
+     "mreSourceMarket": "Japan",
+     "mreComplianceLevel": "Substantially Complies - Minor and Inconsequential non-compliance",
+     "mreModificationCategory": "MA",
+     "mreContactName": "Jamie Park",
+     "mrePhone": "0255504006",
+     "mreWebsite": null,
+     "lastScrapedAt": "2026-04-27T05:44:54.574644Z",
+     "selected": false,
+     "changedSinceReview": false,
+     "years": [
+      {
+       "year": 2016,
+       "eligible": true,
+       "lines": [
+        {
+         "id": 6222,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2016,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 0,
+         "odoTo": 15000,
+         "biddingJpyK": 1560,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1435,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:05.677256",
+         "updatedAt": "2026-08-24T16:30:05.677333"
+        },
+        {
+         "id": 6223,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2016,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 15000,
+         "odoTo": 30000,
+         "biddingJpyK": 1470,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1352,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:09.324889",
+         "updatedAt": "2026-08-24T16:30:09.324961"
+        },
+        {
+         "id": 6224,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2016,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 30000,
+         "odoTo": 45000,
+         "biddingJpyK": 1430,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1316,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:12.047181",
+         "updatedAt": "2026-08-24T16:30:12.047322"
+        },
+        {
+         "id": 6225,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2016,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 45000,
+         "odoTo": 60000,
+         "biddingJpyK": 1390,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1279,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:14.608622",
+         "updatedAt": "2026-08-24T16:30:14.608699"
+        }
+       ],
+       "missingOdoBands": [
+        {
+         "odoFrom": 60000,
+         "odoTo": 75000
+        },
+        {
+         "odoFrom": 75000,
+         "odoTo": 90000
+        },
+        {
+         "odoFrom": 90000,
+         "odoTo": 105000
+        },
+        {
+         "odoFrom": 105000,
+         "odoTo": 120000
+        },
+        {
+         "odoFrom": 120000,
+         "odoTo": 135000
+        },
+        {
+         "odoFrom": 135000,
+         "odoTo": 150000
+        },
+        {
+         "odoFrom": 150000,
+         "odoTo": 165000
+        }
+       ],
+       "rowNoBid": false
+      },
+      {
+       "year": 2017,
+       "eligible": true,
+       "lines": [
+        {
+         "id": 6226,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2017,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 0,
+         "odoTo": 15000,
+         "biddingJpyK": 1610,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1481,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:17.668251",
+         "updatedAt": "2026-08-24T16:30:17.668304"
+        },
+        {
+         "id": 6227,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2017,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 15000,
+         "odoTo": 30000,
+         "biddingJpyK": 1520,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1398,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:20.496076",
+         "updatedAt": "2026-08-24T16:30:20.496136"
+        },
+        {
+         "id": 6228,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2017,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 30000,
+         "odoTo": 45000,
+         "biddingJpyK": 1490,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1371,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:23.177859",
+         "updatedAt": "2026-08-24T16:30:23.177939"
+        },
+        {
+         "id": 6229,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2017,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 45000,
+         "odoTo": 60000,
+         "biddingJpyK": 1460,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1343,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:26.089485",
+         "updatedAt": "2026-08-24T16:30:26.089542"
+        }
+       ],
+       "missingOdoBands": [
+        {
+         "odoFrom": 60000,
+         "odoTo": 75000
+        },
+        {
+         "odoFrom": 75000,
+         "odoTo": 90000
+        },
+        {
+         "odoFrom": 90000,
+         "odoTo": 105000
+        },
+        {
+         "odoFrom": 105000,
+         "odoTo": 120000
+        },
+        {
+         "odoFrom": 120000,
+         "odoTo": 135000
+        },
+        {
+         "odoFrom": 135000,
+         "odoTo": 150000
+        },
+        {
+         "odoFrom": 150000,
+         "odoTo": 165000
+        }
+       ],
+       "rowNoBid": false
+      },
+      {
+       "year": 2018,
+       "eligible": true,
+       "lines": [
+        {
+         "id": 6230,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2018,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 0,
+         "odoTo": 15000,
+         "biddingJpyK": 1730,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1592,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:29.289941",
+         "updatedAt": "2026-08-24T16:30:29.289999"
+        },
+        {
+         "id": 6231,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2018,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 15000,
+         "odoTo": 30000,
+         "biddingJpyK": 1640,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1509,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:32.71462",
+         "updatedAt": "2026-08-24T16:30:32.714678"
+        },
+        {
+         "id": 6232,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2018,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 30000,
+         "odoTo": 45000,
+         "biddingJpyK": 1610,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1481,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:36.731366",
+         "updatedAt": "2026-08-24T16:30:36.731439"
+        },
+        {
+         "id": 6233,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2018,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 45000,
+         "odoTo": 60000,
+         "biddingJpyK": 1560,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1435,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:40.708763",
+         "updatedAt": "2026-08-24T16:30:40.708848"
+        }
+       ],
+       "missingOdoBands": [
+        {
+         "odoFrom": 60000,
+         "odoTo": 75000
+        },
+        {
+         "odoFrom": 75000,
+         "odoTo": 90000
+        },
+        {
+         "odoFrom": 90000,
+         "odoTo": 105000
+        },
+        {
+         "odoFrom": 105000,
+         "odoTo": 120000
+        },
+        {
+         "odoFrom": 120000,
+         "odoTo": 135000
+        },
+        {
+         "odoFrom": 135000,
+         "odoTo": 150000
+        },
+        {
+         "odoFrom": 150000,
+         "odoTo": 165000
+        }
+       ],
+       "rowNoBid": false
+      }
+     ]
+    },
+    {
+     "active": true,
+     "mreId": 493,
+     "sevId": 116,
+     "sevNumber": "SEV-000674",
+     "mreNumber": "MRE-000409",
+     "mreRoverApprovalId": "b629aa28-f788-ee11-be36-00224893ba6c",
+     "sevRoverApprovalId": "10ea19f9-bc7f-ef11-ac21-000d3acbed23",
+     "sevBuildFromYm": 201607,
+     "sevBuildToYm": 201804,
+     "mreBuildFromYm": 201607,
+     "mreBuildToYm": 201804,
+     "expiryDate": "2027-09-30",
+     "mreNotes": null,
+     "mreSpecialNotes": null,
+     "mreHolderName": "Example Compliance Pty Ltd",
+     "sevVariantDetails": "S213 Station wagon (model code 213271)",
+     "sevNotes": null,
+     "sevModelCodes": "S213 series",
+     "sevVariant": "E400 S213 WAGON ONLY",
+     "sevCriterion": "Performance Criterion",
+     "sevVehicleCategory": "MA - Passenger Vehicle",
+     "mreMake": "Mercedes-Benz",
+     "mreModel": "213 Series",
+     "mreSourceMarket": "Japan",
+     "mreComplianceLevel": "Substantially Complies - Minor and Inconsequential non-compliance",
+     "mreModificationCategory": "MA",
+     "mreContactName": "Riley Chen",
+     "mrePhone": "0255504004",
+     "mreWebsite": null,
+     "lastScrapedAt": "2026-04-27T05:44:54.574644Z",
+     "selected": false,
+     "changedSinceReview": false,
+     "years": [
+      {
+       "year": 2016,
+       "eligible": true,
+       "lines": [
+        {
+         "id": 6222,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2016,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 0,
+         "odoTo": 15000,
+         "biddingJpyK": 1560,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1435,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:05.677256",
+         "updatedAt": "2026-08-24T16:30:05.677333"
+        },
+        {
+         "id": 6223,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2016,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 15000,
+         "odoTo": 30000,
+         "biddingJpyK": 1470,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1352,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:09.324889",
+         "updatedAt": "2026-08-24T16:30:09.324961"
+        },
+        {
+         "id": 6224,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2016,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 30000,
+         "odoTo": 45000,
+         "biddingJpyK": 1430,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1316,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:12.047181",
+         "updatedAt": "2026-08-24T16:30:12.047322"
+        },
+        {
+         "id": 6225,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2016,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 45000,
+         "odoTo": 60000,
+         "biddingJpyK": 1390,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1279,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:14.608622",
+         "updatedAt": "2026-08-24T16:30:14.608699"
+        }
+       ],
+       "missingOdoBands": [
+        {
+         "odoFrom": 60000,
+         "odoTo": 75000
+        },
+        {
+         "odoFrom": 75000,
+         "odoTo": 90000
+        },
+        {
+         "odoFrom": 90000,
+         "odoTo": 105000
+        },
+        {
+         "odoFrom": 105000,
+         "odoTo": 120000
+        },
+        {
+         "odoFrom": 120000,
+         "odoTo": 135000
+        },
+        {
+         "odoFrom": 135000,
+         "odoTo": 150000
+        },
+        {
+         "odoFrom": 150000,
+         "odoTo": 165000
+        }
+       ],
+       "rowNoBid": false
+      },
+      {
+       "year": 2017,
+       "eligible": true,
+       "lines": [
+        {
+         "id": 6226,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2017,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 0,
+         "odoTo": 15000,
+         "biddingJpyK": 1610,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1481,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:17.668251",
+         "updatedAt": "2026-08-24T16:30:17.668304"
+        },
+        {
+         "id": 6227,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2017,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 15000,
+         "odoTo": 30000,
+         "biddingJpyK": 1520,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1398,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:20.496076",
+         "updatedAt": "2026-08-24T16:30:20.496136"
+        },
+        {
+         "id": 6228,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2017,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 30000,
+         "odoTo": 45000,
+         "biddingJpyK": 1490,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1371,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:23.177859",
+         "updatedAt": "2026-08-24T16:30:23.177939"
+        },
+        {
+         "id": 6229,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2017,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 45000,
+         "odoTo": 60000,
+         "biddingJpyK": 1460,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1343,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:26.089485",
+         "updatedAt": "2026-08-24T16:30:26.089542"
+        }
+       ],
+       "missingOdoBands": [
+        {
+         "odoFrom": 60000,
+         "odoTo": 75000
+        },
+        {
+         "odoFrom": 75000,
+         "odoTo": 90000
+        },
+        {
+         "odoFrom": 90000,
+         "odoTo": 105000
+        },
+        {
+         "odoFrom": 105000,
+         "odoTo": 120000
+        },
+        {
+         "odoFrom": 120000,
+         "odoTo": 135000
+        },
+        {
+         "odoFrom": 135000,
+         "odoTo": 150000
+        },
+        {
+         "odoFrom": 150000,
+         "odoTo": 165000
+        }
+       ],
+       "rowNoBid": false
+      },
+      {
+       "year": 2018,
+       "eligible": true,
+       "lines": [
+        {
+         "id": 6230,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2018,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 0,
+         "odoTo": 15000,
+         "biddingJpyK": 1730,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1592,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:29.289941",
+         "updatedAt": "2026-08-24T16:30:29.289999"
+        },
+        {
+         "id": 6231,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2018,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 15000,
+         "odoTo": 30000,
+         "biddingJpyK": 1640,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1509,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:32.71462",
+         "updatedAt": "2026-08-24T16:30:32.714678"
+        },
+        {
+         "id": 6232,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2018,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 30000,
+         "odoTo": 45000,
+         "biddingJpyK": 1610,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1481,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:36.731366",
+         "updatedAt": "2026-08-24T16:30:36.731439"
+        },
+        {
+         "id": 6233,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2018,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 45000,
+         "odoTo": 60000,
+         "biddingJpyK": 1560,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1435,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:40.708763",
+         "updatedAt": "2026-08-24T16:30:40.708848"
+        }
+       ],
+       "missingOdoBands": [
+        {
+         "odoFrom": 60000,
+         "odoTo": 75000
+        },
+        {
+         "odoFrom": 75000,
+         "odoTo": 90000
+        },
+        {
+         "odoFrom": 90000,
+         "odoTo": 105000
+        },
+        {
+         "odoFrom": 105000,
+         "odoTo": 120000
+        },
+        {
+         "odoFrom": 120000,
+         "odoTo": 135000
+        },
+        {
+         "odoFrom": 135000,
+         "odoTo": 150000
+        },
+        {
+         "odoFrom": 150000,
+         "odoTo": 165000
+        }
+       ],
+       "rowNoBid": false
+      }
+     ]
+    },
+    {
+     "active": true,
+     "mreId": 111,
+     "sevId": 116,
+     "sevNumber": "SEV-000674",
+     "mreNumber": "MRE-000415",
+     "mreRoverApprovalId": "cd437ba6-b18d-ee11-be36-00224893ba6c",
+     "sevRoverApprovalId": "10ea19f9-bc7f-ef11-ac21-000d3acbed23",
+     "sevBuildFromYm": 201607,
+     "sevBuildToYm": 201804,
+     "mreBuildFromYm": 201607,
+     "mreBuildToYm": 201804,
+     "expiryDate": "2027-09-30",
+     "mreNotes": "Mercedes Benz 213 series with model number 213271. E400 4matic wagon with 3.5 turbo engine.",
+     "mreSpecialNotes": null,
+     "mreHolderName": "SYDNEY AVV PTY LTD",
+     "sevVariantDetails": "S213 Station wagon (model code 213271)",
+     "sevNotes": null,
+     "sevModelCodes": "S213 series",
+     "sevVariant": "E400 S213 WAGON ONLY",
+     "sevCriterion": "Performance Criterion",
+     "sevVehicleCategory": "MA - Passenger Vehicle",
+     "mreMake": "Mercedes-Benz",
+     "mreModel": "213 Series",
+     "mreSourceMarket": "Japan",
+     "mreComplianceLevel": "Complies",
+     "mreModificationCategory": "MA",
+     "mreContactName": "Alex Morgan",
+     "mrePhone": "0255504000",
+     "mreWebsite": null,
+     "lastScrapedAt": "2026-04-27T05:44:54.574644Z",
+     "selected": true,
+     "changedSinceReview": false,
+     "years": [
+      {
+       "year": 2016,
+       "eligible": true,
+       "lines": [
+        {
+         "id": 6222,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2016,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 0,
+         "odoTo": 15000,
+         "biddingJpyK": 1560,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1435,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:05.677256",
+         "updatedAt": "2026-08-24T16:30:05.677333"
+        },
+        {
+         "id": 6223,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2016,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 15000,
+         "odoTo": 30000,
+         "biddingJpyK": 1470,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1352,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:09.324889",
+         "updatedAt": "2026-08-24T16:30:09.324961"
+        },
+        {
+         "id": 6224,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2016,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 30000,
+         "odoTo": 45000,
+         "biddingJpyK": 1430,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1316,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:12.047181",
+         "updatedAt": "2026-08-24T16:30:12.047322"
+        },
+        {
+         "id": 6225,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2016,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 45000,
+         "odoTo": 60000,
+         "biddingJpyK": 1390,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1279,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:14.608622",
+         "updatedAt": "2026-08-24T16:30:14.608699"
+        }
+       ],
+       "missingOdoBands": [
+        {
+         "odoFrom": 60000,
+         "odoTo": 75000
+        },
+        {
+         "odoFrom": 75000,
+         "odoTo": 90000
+        },
+        {
+         "odoFrom": 90000,
+         "odoTo": 105000
+        },
+        {
+         "odoFrom": 105000,
+         "odoTo": 120000
+        },
+        {
+         "odoFrom": 120000,
+         "odoTo": 135000
+        },
+        {
+         "odoFrom": 135000,
+         "odoTo": 150000
+        },
+        {
+         "odoFrom": 150000,
+         "odoTo": 165000
+        }
+       ],
+       "rowNoBid": false
+      },
+      {
+       "year": 2017,
+       "eligible": true,
+       "lines": [
+        {
+         "id": 6226,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2017,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 0,
+         "odoTo": 15000,
+         "biddingJpyK": 1610,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1481,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:17.668251",
+         "updatedAt": "2026-08-24T16:30:17.668304"
+        },
+        {
+         "id": 6227,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2017,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 15000,
+         "odoTo": 30000,
+         "biddingJpyK": 1520,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1398,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:20.496076",
+         "updatedAt": "2026-08-24T16:30:20.496136"
+        },
+        {
+         "id": 6228,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2017,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 30000,
+         "odoTo": 45000,
+         "biddingJpyK": 1490,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1371,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:23.177859",
+         "updatedAt": "2026-08-24T16:30:23.177939"
+        },
+        {
+         "id": 6229,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2017,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 45000,
+         "odoTo": 60000,
+         "biddingJpyK": 1460,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1343,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:26.089485",
+         "updatedAt": "2026-08-24T16:30:26.089542"
+        }
+       ],
+       "missingOdoBands": [
+        {
+         "odoFrom": 60000,
+         "odoTo": 75000
+        },
+        {
+         "odoFrom": 75000,
+         "odoTo": 90000
+        },
+        {
+         "odoFrom": 90000,
+         "odoTo": 105000
+        },
+        {
+         "odoFrom": 105000,
+         "odoTo": 120000
+        },
+        {
+         "odoFrom": 120000,
+         "odoTo": 135000
+        },
+        {
+         "odoFrom": 135000,
+         "odoTo": 150000
+        },
+        {
+         "odoFrom": 150000,
+         "odoTo": 165000
+        }
+       ],
+       "rowNoBid": false
+      },
+      {
+       "year": 2018,
+       "eligible": true,
+       "lines": [
+        {
+         "id": 6230,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2018,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 0,
+         "odoTo": 15000,
+         "biddingJpyK": 1730,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1592,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:29.289941",
+         "updatedAt": "2026-08-24T16:30:29.289999"
+        },
+        {
+         "id": 6231,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2018,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 15000,
+         "odoTo": 30000,
+         "biddingJpyK": 1640,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1509,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:32.71462",
+         "updatedAt": "2026-08-24T16:30:32.714678"
+        },
+        {
+         "id": 6232,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2018,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 30000,
+         "odoTo": 45000,
+         "biddingJpyK": 1610,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1481,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:36.731366",
+         "updatedAt": "2026-08-24T16:30:36.731439"
+        },
+        {
+         "id": 6233,
+         "biddingGuideVariantId": 328,
+         "biddingGuideId": 119,
+         "year": 2018,
+         "grade": "4",
+         "seats": 5,
+         "odoFrom": 45000,
+         "odoTo": 60000,
+         "biddingJpyK": 1560,
+         "active": true,
+         "sortOrder": 0,
+         "effectiveBiddingJpyK": 1435,
+         "effectiveNoBid": false,
+         "effectiveReason": null,
+         "gateModifierIds": [],
+         "appliedModifierIds": [
+          641
+         ],
+         "createdAt": "2026-08-24T16:30:40.708763",
+         "updatedAt": "2026-08-24T16:30:40.708848"
+        }
+       ],
+       "missingOdoBands": [
+        {
+         "odoFrom": 60000,
+         "odoTo": 75000
+        },
+        {
+         "odoFrom": 75000,
+         "odoTo": 90000
+        },
+        {
+         "odoFrom": 90000,
+         "odoTo": 105000
+        },
+        {
+         "odoFrom": 105000,
+         "odoTo": 120000
+        },
+        {
+         "odoFrom": 120000,
+         "odoTo": 135000
+        },
+        {
+         "odoFrom": 135000,
+         "odoTo": 150000
+        },
+        {
+         "odoFrom": 150000,
+         "odoTo": 165000
+        }
+       ],
+       "rowNoBid": false
+      }
+     ]
+    }
+   ],
+   "createdAt": "2026-08-24T16:28:54.397823",
+   "updatedAt": "2026-08-24T16:28:54.398043"
+  }
+ ],
+ "missingBidRows": 6,
+ "bandTemplate": [
+  {
+   "odoFrom": 0,
+   "odoTo": 15000
+  },
+  {
+   "odoFrom": 15000,
+   "odoTo": 30000
+  },
+  {
+   "odoFrom": 30000,
+   "odoTo": 45000
+  },
+  {
+   "odoFrom": 45000,
+   "odoTo": 60000
+  },
+  {
+   "odoFrom": 60000,
+   "odoTo": 75000
+  },
+  {
+   "odoFrom": 75000,
+   "odoTo": 90000
+  },
+  {
+   "odoFrom": 90000,
+   "odoTo": 105000
+  },
+  {
+   "odoFrom": 105000,
+   "odoTo": 120000
+  },
+  {
+   "odoFrom": 120000,
+   "odoTo": 135000
+  },
+  {
+   "odoFrom": 135000,
+   "odoTo": 150000
+  },
+  {
+   "odoFrom": 150000,
+   "odoTo": 165000
+  }
+ ],
+ "modifiers": [
+  {
+   "id": 641,
+   "biddingGuideId": 119,
+   "variantId": 328,
+   "mreId": null,
+   "sevId": null,
+   "mreNumber": null,
+   "sevNumber": null,
+   "yearFrom": null,
+   "yearTo": null,
+   "resolvedYearFrom": null,
+   "resolvedYearTo": null,
+   "odoFrom": null,
+   "odoTo": null,
+   "effectiveFrom": null,
+   "effectiveUntil": null,
+   "conditions": null,
+   "amountJpyK": null,
+   "percent": 92,
+   "noBid": false,
+   "strict": false,
+   "label": null,
+   "note": "Bid at 92%",
+   "active": true,
+   "stale": false,
+   "orphanPair": false,
+   "updatedBy": "editor",
+   "createdAt": "2026-08-24T20:28:53.759516",
+   "updatedAt": "2026-08-24T20:28:53.759516"
+  }
+ ],
+ "selectedPairKeys": [
+  "111:116",
+  "689:116"
+ ],
+ "selectedPairsChanged": false,
+ "missingSelectedPairKeys": [],
+ "otherPairsChanged": false,
+ "expiryState": "OK",
+ "expiryDaysRemaining": null,
+ "expiryPairKey": null,
+ "expiryPairLabel": null,
+ "expiryDate": null,
+ "validAlternatives": 2,
+ "eligibilityReviewedAt": "2026-08-24T16:28:24.136989",
+ "eligibilityReviewedBy": "editor"
+}

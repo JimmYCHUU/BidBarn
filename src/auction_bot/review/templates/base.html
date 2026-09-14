@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}BidBarn review{% endblock %}</title>
+<style>
+  :root { --ok:#1a7f37; --warn:#b26a00; --bad:#b3261e; --muted:#6b7280; --line:#e5e7eb; --bg:#f7f7f8; }
+  body { margin:0; font:14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background:var(--bg); color:#111; }
+  header { background:#fff; border-bottom:1px solid var(--line); padding:10px 20px; display:flex; gap:18px; align-items:center; }
+  header a { color:#111; text-decoration:none; font-weight:600; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; font-weight:600; }
+  .BID { background:#dcfce7; color:var(--ok); } .NEEDS_REVIEW { background:#fef3c7; color:var(--warn); } .SKIP { background:#fee2e2; color:var(--bad); }
+  .approved { background:#dcfce7; color:var(--ok);} .rejected { background:#f3f4f6; color:var(--muted);} .pending { background:#e0e7ff; color:#3730a3; } .superseded { background:#f3f4f6; color:var(--muted); }
+  main { padding:16px 20px; max-width:1400px; margin:0 auto; }
+  table { width:100%; border-collapse:collapse; background:#fff; }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.03em; }
+  .muted { color:var(--muted); } .mono { font-family:ui-monospace, Consolas, monospace; }
+  .grid { display:grid; grid-template-columns: 1fr 1.3fr; gap:18px; }
+  @media (max-width:900px) { .grid { grid-template-columns:1fr; } }
+  .card { background:#fff; border:1px solid var(--line); border-radius:8px; padding:14px 16px; margin-bottom:14px; }
+  .card h3 { margin:0 0 8px; font-size:14px; }
+  .check { display:flex; gap:8px; padding:3px 0; } .check .dot { width:10px; height:10px; border-radius:50%; margin-top:5px; flex:none; }
+  .dot.ok { background:var(--ok);} .dot.bad { background:var(--bad);} .dot.unk { background:var(--warn);}
+  .thumbs { display:flex; flex-wrap:wrap; gap:6px; } .thumbs a img { height:110px; border-radius:4px; border:1px solid var(--line); }
+  .sheet img { max-width:100%; border:1px solid var(--line); border-radius:4px; }
+  .bigbid { font-size:28px; font-weight:700; }
+  form.decide { display:grid; gap:8px; }
+  input[type=text], input[type=number], textarea { width:100%; box-sizing:border-box; padding:8px; border:1px solid #cbd5e1; border-radius:6px; font:inherit; }
+  button { padding:9px 14px; border-radius:6px; border:1px solid transparent; font:inherit; font-weight:600; cursor:pointer; }
+  .approve { background:var(--ok); color:#fff; } .reject { background:#fff; color:var(--bad); border-color:var(--bad); }
+  .banner { background:#fff7ed; border:1px solid #fdba74; padding:8px 12px; border-radius:6px; margin-bottom:12px; }
+  kbd { background:#eee; border:1px solid #ccc; border-radius:3px; padding:0 4px; font-size:12px; }
+  details summary { cursor:pointer; color:var(--muted); }
+  pre { white-space:pre-wrap; font-size:12px; background:#f3f4f6; padding:8px; border-radius:6px; }
+</style>
+</head>
+<body>
+<header>
+  <a href="/">BidBarn review</a>
+  <span class="muted">pending bids: <b>{{ counts.bid if counts else '' }}</b> · needs review: <b>{{ counts.review if counts else '' }}</b> · approved, not placed: <b>{{ counts.approved if counts else '' }}</b> · placed: <b>{{ counts.placed if counts else '' }}</b></span>
+  <span style="margin-left:auto" class="pill {{ 'BID' if lock_label == 'LIVE PLACEMENT' else 'NEEDS_REVIEW' }}">{{ lock_label }}</span>
+</header>
+<main>{% block body %}{% endblock %}</main>
+</body>
+</html>

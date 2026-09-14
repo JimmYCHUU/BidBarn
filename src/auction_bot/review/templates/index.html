@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block body %}
+<form method="get" style="display:flex; gap:10px; margin-bottom:12px; align-items:center">
+  <label>Decision
+    <select name="decision">
+      {% for d in ['pending','approved','rejected',''] %}<option value="{{ d }}" {% if d == decision %}selected{% endif %}>{{ d or 'all' }}</option>{% endfor %}
+    </select></label>
+  <label>Status
+    <select name="status">
+      {% for s in ['', 'BID','NEEDS_REVIEW','SKIP'] %}<option value="{{ s }}" {% if s == status %}selected{% endif %}>{{ s or 'all' }}</option>{% endfor %}
+    </select></label>
+  <label>Model <input type="text" name="model" value="{{ model }}" style="width:120px"></label>
+  <button>Filter</button>
+</form>
+<table>
+  <thead><tr><th>Status</th><th>Model</th><th>Vehicle</th><th>Bid (K JPY)</th><th>Why</th><th>Decision</th><th></th></tr></thead>
+  <tbody>
+  {% for p in rows %}
+    <tr>
+      <td><span class="pill {{ p.status }}">{{ p.status }}</span><div class="muted" style="font-size:11px">{{ p.stage }}{% if p.soft and p.soft.images_pending %} · images pending{% endif %}</div></td>
+      <td class="mono">{{ p.model_code }}{% if p.multi_guide %} <span class="pill NEEDS_REVIEW" title="also proposed under another guide">×2</span>{% endif %}</td>
+      <td><a href="/p/{{ p.id }}">{{ p.summary }}</a></td>
+      <td class="mono">{% if p.bid_jpy_k %}{{ '{:,}'.format(p.bid_jpy_k) }}{% if p.base_jpy_k and p.base_jpy_k != p.bid_jpy_k %} <span class="muted">(base {{ '{:,}'.format(p.base_jpy_k) }})</span>{% endif %}{% endif %}</td>
+      <td style="max-width:420px">
+        {% set reasons = [] %}
+        {% if p.hard and p.hard.checks %}{% for c in p.hard.checks if not c.ok %}{% set _ = reasons.append(c.name ~ ': ' ~ c.detail) %}{% endfor %}{% endif %}
+        {% if p.soft and p.soft.reasons %}{% for r in p.soft.reasons %}{% set _ = reasons.append(r) %}{% endfor %}{% endif %}
+        {% for r in reasons[:3] %}<div>{{ r }}</div>{% endfor %}
+        {% if reasons|length > 3 %}<div class="muted">+{{ reasons|length - 3 }} more</div>{% endif %}
+      </td>
+      <td><span class="pill {{ p.decision }}">{{ p.decision }}</span>{% if p.placed_at %}<div class="muted" style="font-size:11px">placed</div>{% endif %}</td>
+      <td><a href="/p/{{ p.id }}">open</a></td>
+    </tr>
+  {% else %}
+    <tr><td colspan="7" class="muted">Nothing here. Run <span class="mono">bot scan</span>.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

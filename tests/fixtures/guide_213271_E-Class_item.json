@@ -1,0 +1,119 @@
+{
+ "id": 119,
+ "catalogModelCodeId": 168,
+ "make": "Mercedes-Benz",
+ "model": "E-Class E400",
+ "modelCode": "213271",
+ "catalogImage": "https://example.com/catalog-images/mercedes-benz-e-class-e400-213271-20260511162842.png",
+ "yearFrom": 2016,
+ "yearTo": 2018,
+ "yearRange": "7/2016 to 4/2018",
+ "targetUnit": 0,
+ "overTargetAfterPercent": 0,
+ "minGrade": 4.0,
+ "odoBandKm": 15000,
+ "bossBid": false,
+ "dealerLinks": [
+  {
+   "label": "CarSales",
+   "url": "https://www.carsales.com.au/cars/?q=%28And.%28C.Make.Mercedes-Benz._.%28C.Model.E-Class._.%28And.Badge.E400._.Series.W213.%29%29%29_.Year.range%282016..2018%29.%29"
+  }
+ ],
+ "missingBidRows": 6,
+ "notes": null,
+ "updatedBy": "editor",
+ "active": true,
+ "createdAt": "2026-08-18T20:30:08.129101",
+ "updatedAt": "2026-08-24T16:30:40.713063",
+ "selectedPairKeys": [
+  "111:116",
+  "689:116"
+ ],
+ "eligibilityReviewedAt": "2026-08-24T16:28:24.136989",
+ "eligibilityReviewedBy": "editor",
+ "variants": [
+  {
+   "id": 137,
+   "biddingGuideId": 119,
+   "name": "Sedan",
+   "soldVariantValues": [],
+   "soldModelCode": null,
+   "sortOrder": 0,
+   "active": true,
+   "createdAt": "2026-08-18T20:30:08.554768",
+   "updatedAt": "2026-08-24T16:28:43.791988"
+  },
+  {
+   "id": 328,
+   "biddingGuideId": 119,
+   "name": "Wagon",
+   "soldVariantValues": [],
+   "soldModelCode": null,
+   "sortOrder": 1,
+   "active": false,
+   "createdAt": "2026-08-24T16:28:54.397823",
+   "updatedAt": "2026-08-24T16:28:54.398043"
+  }
+ ],
+ "approvalPairs": [
+  {
+   "mreId": 689,
+   "sevId": 116,
+   "mreNumber": "MRE-000656",
+   "sevNumber": "SEV-000674",
+   "active": true,
+   "expiryDate": "2027-09-30",
+   "yearFrom": 2016,
+   "yearTo": 2018,
+   "selected": true,
+   "changedSinceReview": false
+  },
+  {
+   "mreId": 494,
+   "sevId": 116,
+   "mreNumber": "MRE-000410",
+   "sevNumber": "SEV-000674",
+   "active": true,
+   "expiryDate": "2027-09-30",
+   "yearFrom": 2016,
+   "yearTo": 2018,
+   "selected": false,
+   "changedSinceReview": false
+  },
+  {
+   "mreId": 493,
+   "sevId": 116,
+   "mreNumber": "MRE-000409",
+   "sevNumber": "SEV-000674",
+   "active": true,
+   "expiryDate": "2027-09-30",
+   "yearFrom": 2016,
+   "yearTo": 2018,
+   "selected": false,
+   "changedSinceReview": false
+  },
+  {
+   "mreId": 111,
+   "sevId": 116,
+   "mreNumber": "MRE-000415",
+   "sevNumber": "SEV-000674",
+   "active": true,
+   "expiryDate": "2027-09-30",
+   "yearFrom": 2016,
+   "yearTo": 2018,
+   "selected": true,
+   "changedSinceReview": false
+  }
+ ],
+ "dialPercent": null,
+ "avgBidJpyK": 1335.8333333333333,
+ "selectedPairsChanged": false,
+ "missingSelectedPairKeys": [],
+ "otherPairsChanged": false,
+ "expiryState": "OK",
+ "expiryDaysRemaining": null,
+ "expiryPairKey": null,
+ "expiryPairLabel": null,
+ "expiryDate": null,
+ "validAlternatives": 2
+}
