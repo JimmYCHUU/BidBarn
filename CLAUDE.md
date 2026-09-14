@@ -75,6 +75,9 @@ hard constraints. Do not weaken them, work around them, or "temporarily" disable
 
 ## 5. Working in this repo
 
+- Commits and pull requests are authored by Jim only. Never add `Co-Authored-By` or
+  "Generated with" lines (Jim, 2026-09-14).
+
 - Run the CLI with `bot.cmd` / `python -m auction_bot.cli` (the venv `bot.exe` is blocked by
   Windows App Control on Jim's PC). `jiter` is pinned to 0.10.0 for the same reason; do not bump.
 - Keep `tests/` green (`.venv\Scripts\python -m pytest -q`). `tests/test_hard_rules.py` holds
