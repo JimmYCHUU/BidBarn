@@ -333,8 +333,5 @@ decisions exist.
 
 ### Open questions for Carbarn
 
-- Seat counts in text rules are read as the numbers before the word "seat": the Serena
-  Campervan rule "S-Hybrid 2 littre 8 seater" therefore allows 2 or 8 seats. Should "2" be
-  ignored there (engine size), and is 8 the only seat count wanted?
 - The GDH206K variant is inactive on the guide although the walkthrough bids on it; the bot
   treats every variant as biddable (the dot is the selected tab). Confirm.

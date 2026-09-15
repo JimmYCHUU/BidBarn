@@ -211,6 +211,9 @@ def apply_modifiers(variant: Variant, facts: VehicleFacts, base: int, year: int,
 
 
 _SEAT_WORDS = re.compile(r"\bseat(?:s|er|ers|ing)?\b", re.I)
+# Jim, 2026-09-15: "S-Hybrid 2 littre 8 seater" means a 2-litre engine and 8 seats. A number
+# glued to an engine size, a door count or a drive type is never a seat count.
+_NOT_SEATS = re.compile(r"\b\d+(?:\.\d+)?\s*(?:litres?|liters?|littres?|l|cc|doors?|dr|wd)\b", re.I)
 
 
 def allowed_seats(rule: ModelRule) -> set[int] | None:
@@ -225,7 +228,7 @@ def allowed_seats(rule: ModelRule) -> set[int] | None:
         if not _SEAT_WORDS.search(text):
             continue
         # numbers that appear before the word "seat": "2, 3, 5 or 6 seats", "8 seater", "5/7 seats"
-        head = _SEAT_WORDS.split(text, maxsplit=1)[0]
+        head = _NOT_SEATS.sub(" ", _SEAT_WORDS.split(text, maxsplit=1)[0])
         nums = [int(n) for n in re.findall(r"\b(\d{1,2})\b", head)]
         nums = [n for n in nums if 1 <= n <= 30]
         if nums:

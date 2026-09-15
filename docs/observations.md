@@ -38,6 +38,28 @@ from links, so those visits are missing from its log; fixed the same day.)
   card, and count time on the Carbarn dashboard as guide reading. Detail-page visits are not
   the unit of work here; cards are.
 
+## What makes a card "doubtful" (Jim, 2026-09-15)
+
+Not intuition: the guide's own requirements that a card cannot answer. A lot's page is
+opened when the guide carries a rule or a chip that needs the photos or the sheet:
+
+| Guide requirement | Where the answer is | Example guides |
+|---|---|---|
+| Seat colour ("Dark Color Seats Only") | Interior photos | Serena GC27 / GFC27, Serena Campervan |
+| No Pro Pilot (chip, -220) | Steering wheel photo: the Pro Pilot button | Serena GC27 |
+| Autech (chip, +170) | Exterior/interior photos, badges | Serena |
+| "S-Hybrid 2 littre 8 seater" | Auction sheet: model code, engine, 乗車定員 (plus the seat photos) | Serena Campervan GC27 |
+
+"S-Hybrid 2 littre 8 seater" means a 2-litre engine and 8 seats; the bot used to read the
+"2" as a seat count and has been corrected. There are many more such requirements across
+the 46 guides; the pattern is the same: text rules and chips that name something visual or
+something printed on the sheet.
+
+**Follow-up worth building.** Classify every guide's text rules and chips into
+card-decidable, needs-photos, needs-sheet. On the triage view show per lot "open the page
+for: dark seats (photos), Pro Pilot button (photos), S-Hybrid 2L 8 seater (sheet)", and list
+card-only lots first so they can be approved without opening anything.
+
 ## Still to learn
 
 - Which cards raise a doubt and get their page opened, and what is looked at there (sheet,

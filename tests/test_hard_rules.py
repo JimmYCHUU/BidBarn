@@ -294,3 +294,17 @@ def test_variant_text_and_colour_conditions_and_toggles(gdh206):
     no_colour = facts(chassis="GDH206V", year=2022, km=5_000, grade_raw="3.5", variant_text="Van DX", colour="")
     r = evaluate_hard(no_colour, rule)
     assert r.status == PASS and r.deferred_modifiers and r.bid_jpy_k == 2_060  # unknown colour: deferred to the reviewer
+
+
+def test_allowed_seats_ignores_engine_sizes_and_doors(gdh206):
+    import copy
+    from auction_bot.rules.hard import allowed_seats
+    rule = copy.deepcopy(gdh206)
+    rule.text_rules = ["Dark Color Seats Only", "S-Hybrid 2 littre 8 seater"]  # Jim: a 2-litre engine and 8 seats
+    assert allowed_seats(rule) == {8}
+    rule.text_rules = ["2.0L 4WD 5 door 7 seater"]
+    assert allowed_seats(rule) == {7}
+    rule.text_rules = ["2, 3, 5 or 6 seats"]
+    assert allowed_seats(rule) == {2, 3, 5, 6}
+    rule.text_rules = ["Dark Color Seats Only"]
+    assert allowed_seats(rule) is None
