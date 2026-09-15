@@ -28,15 +28,19 @@ from auction_bot.config import Config
 
 NOT_A_LOT = {"search", "cart", "bid", "login", "jsonAuctionSheetData", "jsonSuggested", "jsonMaketPrice"}
 
-# Injected into every Nichibo page. Sends events through window.__bidbarn_event and mounts
-# the reason box. Nothing here clicks, submits or changes anything on the page.
+# Injected into every Nichibo and Carbarn dashboard page (the dashboard tab may live on a
+# second monitor; it is the same browser session, so it is recorded the same way). Sends
+# events through window.__bidbarn_event and mounts the reason box. Nothing here clicks,
+# submits or changes anything on the page.
 INIT_SCRIPT = r"""
 (() => {
   if (window.__bidbarnWatching) return;
-  if (!/(^|\.)nichibojapan\.com$/i.test(location.hostname)) return;
+  const site = /(^|\.)nichibojapan\.com$/i.test(location.hostname) ? 'nichibo'
+             : /(^|\.)carbarn\.com\.au$/i.test(location.hostname) ? 'dashboard' : null;
+  if (!site) return;
   window.__bidbarnWatching = true;
   const send = (type, data) => {
-    try { window.__bidbarn_event(JSON.stringify(Object.assign({type: type, url: location.href, t_page: Date.now()}, data || {}))); } catch (e) {}
+    try { window.__bidbarn_event(JSON.stringify(Object.assign({type: type, site: site, url: location.href, t_page: Date.now()}, data || {}))); } catch (e) {}
   };
   const describe = (el) => {
     if (!el || !el.tagName) return {};
@@ -47,8 +51,41 @@ INIT_SCRIPT = r"""
     if (text) d.text = text.slice(0, 80);
     if (el.href) d.href = String(el.href).slice(0, 200);
     if (el.dataset && el.dataset.refno) d.refno = el.dataset.refno;
+    if (site === 'dashboard') {
+      // Where on the dashboard: the table row and the nearest heading (the guide's name).
+      const row = el.closest && el.closest('tr');
+      if (row && row !== el) d.row = (row.innerText || '').trim().replace(/\s+/g, ' ').slice(0, 80);
+      let n = el;
+      while (n) {
+        const h = n.querySelector && n.querySelector('h1,h2,h3,h4');
+        if (h && h.innerText && h.innerText.trim()) { d.heading = h.innerText.trim().replace(/\s+/g, ' ').slice(0, 60); break; }
+        if (n === document.body) break;
+        n = n.parentElement;
+      }
+    }
     return d;
   };
+  // Where the mouse is, about once a second while it moves (both sites, both monitors).
+  let lastMove = {t: 0, x: 0, y: 0, key: ''};
+  document.addEventListener('mousemove', (e) => {
+    const now = Date.now();
+    if (now - lastMove.t < 1000) return;
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const d = describe(el);
+    const key = (d.id || '') + '|' + (d.text || '') + '|' + (d.row || '');
+    if (key === lastMove.key && Math.abs(e.clientX - lastMove.x) + Math.abs(e.clientY - lastMove.y) < 40) return;
+    lastMove = {t: now, x: e.clientX, y: e.clientY, key: key};
+    send('pointer', {x: e.clientX, y: e.clientY, el: d});
+  }, {passive: true});
+  // Text highlighted with the mouse.
+  let selTimer = null, lastSel = '';
+  document.addEventListener('selectionchange', () => {
+    clearTimeout(selTimer);
+    selTimer = setTimeout(() => {
+      const text = String((window.getSelection && window.getSelection()) || '').trim().replace(/\s+/g, ' ').slice(0, 160);
+      if (text && text !== lastSel) { lastSel = text; send('select', {text: text}); }
+    }, 600);
+  });
   document.addEventListener('click', (e) => {
     if (e.target && e.target.closest && e.target.closest('#bidbarn-box')) return;
     const el = (e.target.closest && e.target.closest('a,button,img,input,label,select,textarea,td,li,div')) || e.target;
@@ -62,12 +99,15 @@ INIT_SCRIPT = r"""
     send('scroll', {y: Math.round(window.scrollY), h: document.documentElement.scrollHeight, vh: window.innerHeight});
   }, {passive: true});
   let lastHover = {key: null, t: 0};
+  const hoverSelector = site === 'nichibo'
+    ? 'a.gallery-demo, img#auction-sheet-img, div.card-item-listings, [data-refno], #bidAmountDisplay, #btnPlaceBid'
+    : 'td, th, a, button, label, input, select, [role=button], [class*=chip], [class*=badge], [class*=tag]';
   document.addEventListener('mouseover', (e) => {
     if (!e.target.closest) return;
-    const el = e.target.closest('a.gallery-demo, img#auction-sheet-img, div.card-item-listings, [data-refno], #bidAmountDisplay, #btnPlaceBid');
+    const el = e.target.closest(hoverSelector);
     if (!el) return;
     const d = describe(el);
-    const key = d.href || d.refno || d.id || d.text;
+    const key = d.href || d.refno || d.id || ((d.text || '') + '|' + (d.row || ''));
     const now = Date.now();
     if (lastHover.key === key && now - lastHover.t < 1500) return;
     lastHover = {key: key, t: now};
@@ -87,7 +127,7 @@ INIT_SCRIPT = r"""
     const box = document.createElement('div');
     box.id = 'bidbarn-box';
     box.style.cssText = 'position:fixed;right:16px;top:16px;z-index:2147483647;background:#1d4ed8;color:#fff;padding:10px 12px;border-radius:10px;font:13px system-ui,sans-serif;box-shadow:0 4px 18px rgba(0,0,0,.5);width:340px;border:2px solid #fff';
-    box.innerHTML = '<div style="margin-bottom:6px;font-weight:700">BidBarn is watching. Why? <span style="font-weight:400;opacity:.85">(Enter saves, Esc clears)</span></div>'
+    box.innerHTML = '<div style="margin-bottom:6px;font-weight:700">BidBarn is watching' + (site === 'dashboard' ? ' the dashboard' : '') + '. Why? <span style="font-weight:400;opacity:.85">(Enter saves, Esc clears)</span></div>'
       + '<input id="bidbarn-reason" placeholder="e.g. skip: dump body  /  bid: clean sheet, good photos" style="width:100%;box-sizing:border-box;padding:6px;border-radius:6px;border:1px solid #666;background:#222;color:#fff;font:13px system-ui,sans-serif">'
       + '<div id="bidbarn-last" style="margin-top:4px;color:#9ae6b4;min-height:14px"></div>';
     document.body.appendChild(box);
@@ -299,6 +339,17 @@ class LotVisit:
 
 
 @dataclass
+class Dashboard:
+    """What happened on the Carbarn dashboard tab (guide reading)."""
+    active_seconds: int = 0  # distinct seconds with mouse, hover, click or selection activity
+    headings: Counter = field(default_factory=Counter)  # guide names under the cursor
+    cells: Counter = field(default_factory=Counter)  # table cells hovered, with their row
+    clicks: list[str] = field(default_factory=list)
+    selections: list[str] = field(default_factory=list)
+    reasons: list[str] = field(default_factory=list)
+
+
+@dataclass
 class Session:
     dir: str
     started: str | None = None
@@ -308,6 +359,7 @@ class Session:
     considered_not_opened: Counter = field(default_factory=Counter)  # cards hovered on the list, never opened
     list_seconds: float = 0.0
     counts: Counter = field(default_factory=Counter)
+    dashboard: Dashboard = field(default_factory=Dashboard)
 
 
 def load_events(session: Path) -> list[dict]:
@@ -382,11 +434,28 @@ def timeline(events: list[dict], session_dir: str = "") -> Session:
             return next((v for v in reversed(s.visits) if v.ref == ref), None)
         return None
 
-    # Pass 2: what happened on each lot.
+    # Pass 2: what happened on each lot, and on the dashboard.
+    dash = s.dashboard
+    dash_seconds: set[str] = set()
     for ev in events:
         kind = ev.get("type")
-        v = visit_for(ev)
         el = ev.get("el") or {}
+        if ev.get("site") == "dashboard":
+            if kind in ("pointer", "hover", "click", "scroll", "select", "input"):
+                dash_seconds.add((ev.get("t") or "")[:19])
+            if kind in ("pointer", "hover"):
+                if el.get("heading"):
+                    dash.headings[el["heading"]] += 1
+                if el.get("tag") in ("td", "th") and el.get("text"):
+                    dash.cells[f"{el.get('row') or ''} > {el['text']}"[:100]] += 1
+            elif kind == "click":
+                dash.clicks.append(_el_label(el) + (f" [{el['heading']}]" if el.get("heading") else ""))
+            elif kind == "select":
+                dash.selections.append(ev.get("text") or "")
+            elif kind == "reason":
+                dash.reasons.append(ev.get("text") or "")
+            continue
+        v = visit_for(ev)
         if kind == "click" and v:
             v.clicks.append(_el_label(el))
             if el.get("id") == "auction-sheet-img":
@@ -418,6 +487,7 @@ def timeline(events: list[dict], session_dir: str = "") -> Session:
                 target.screenshots.append(ev.get("file") or "")
     for v in s.visits:
         s.considered_not_opened.pop(v.ref, None)
+    dash.active_seconds = len(dash_seconds)
     return s
 
 def render_session(s: Session, bot_view=None) -> str:
@@ -452,4 +522,18 @@ def render_session(s: Session, bot_view=None) -> str:
     if s.considered_not_opened:
         lines.append("")
         lines.append("Hovered on the list but never opened: " + ", ".join(list(s.considered_not_opened)[:20]))
+    d = s.dashboard
+    if d.active_seconds or d.headings or d.clicks or d.selections:
+        lines.append("")
+        lines.append(f"Carbarn dashboard: about {d.active_seconds} s of activity")
+        if d.headings:
+            lines.append("   guides under the cursor: " + ", ".join(f"{h} ({n})" for h, n in d.headings.most_common(8)))
+        if d.cells:
+            lines.append("   cells looked at: " + "; ".join(f"{c} ({n})" for c, n in d.cells.most_common(8)))
+        for c in d.clicks[:10]:
+            lines.append(f"   click: {c}")
+        for t in d.selections[:10]:
+            lines.append(f"   highlighted: {t}")
+        for r in d.reasons:
+            lines.append(f"   why: {r}")
     return "\n".join(lines)

@@ -160,3 +160,61 @@ def test_watch_plumbing_in_a_headless_browser(tmp_path):
     assert [v.ref for v in s.visits] == ["TESTREF", "NEWTAB1", "NEWTAB2"]
     assert [e.get("opened") for e in events if e["type"] == "nav"].count("new tab") == 2
     assert (tmp_path / "s" / "0001_lot.png").stat().st_size > 1000
+
+
+def test_dashboard_events_in_timeline():
+    D = "https://dashboard.carbarn.com.au/?view=bidding"
+    events = [
+        _ev("00:00.000", "session", started="2026-09-15T10:00:00.000"),
+        _ev("00:01.000", "nav", url=D, ref=None, chassis=None),
+        _ev("00:02.000", "pointer", site="dashboard", url=D, x=10, y=10, el={"tag": "td", "text": "1,412", "row": "10/2021 1,412 1,370", "heading": "Nissan / Serena GC27"}),
+        _ev("00:02.500", "hover", site="dashboard", url=D, el={"tag": "td", "text": "1,370", "row": "10/2021 1,412 1,370", "heading": "Nissan / Serena GC27"}),
+        _ev("00:04.000", "select", site="dashboard", url=D, text="Dark Color Seats Only"),
+        _ev("00:05.000", "click", site="dashboard", url=D, el={"tag": "button", "text": "Default", "heading": "Nissan / Serena GC27"}),
+        _ev("00:06.000", "reason", site="dashboard", url=D, text="checking seat rule"),
+        _ev("00:10.000", "nav", url=N + "/auction/R1", ref="R1", chassis=None),
+        _ev("00:12.000", "pointer", site="nichibo", url=N + "/auction/R1", x=1, y=1, el={"tag": "div"}),
+        _ev("00:20.000", "session_end", ended="2026-09-15T10:00:20.000"),
+    ]
+    s = timeline(events, "sess")
+    d = s.dashboard
+    assert d.active_seconds == 3 and d.headings["Nissan / Serena GC27"] == 2  # seconds 02, 04, 05; a typed reason is not activity
+    assert d.cells["10/2021 1,412 1,370 > 1,412"] == 1 and d.selections == ["Dark Color Seats Only"]
+    assert d.clicks == ["button 'Default' [Nissan / Serena GC27]"] and d.reasons == ["checking seat rule"]
+    assert [v.ref for v in s.visits] == ["R1"]  # the dashboard is not a lot
+    text = render_session(s)
+    assert "Carbarn dashboard: about 3 s" in text and "Nissan / Serena GC27 (2)" in text and "highlighted: Dark Color Seats Only" in text
+
+
+def test_dashboard_page_is_recorded_in_a_headless_browser(tmp_path):
+    pw_mod = __import__("pytest").importorskip("playwright.sync_api")
+    html = ("<html><body><h2>Nissan / Serena GC27</h2><table><tr><td id='c1'>10/2021</td><td id='c2'>1,412</td></tr></table>"
+            "<p id='rule'>Dark Color Seats Only</p></body></html>")
+    rec = Recorder(tmp_path / "s")
+    with pw_mod.sync_playwright() as pw:
+        try:
+            browser = pw.chromium.launch(headless=True)
+        except pw_mod.Error:
+            __import__("pytest").skip("chromium not installed")
+        ctx = browser.new_context(viewport={"width": 800, "height": 600})
+        ctx.expose_binding("__bidbarn_event", rec.handle_binding)
+        ctx.add_init_script(INIT_SCRIPT)
+        ctx.route("**/*", lambda r: r.fulfill(status=200, content_type="text/html", body=html) if r.request.resource_type == "document" else r.abort())
+        page = ctx.new_page()
+        page.goto("https://dashboard.carbarn.com.au/?view=bidding")
+        assert page.locator("#bidbarn-box").count() == 1 and "dashboard" in page.locator("#bidbarn-box").inner_text()
+        box = page.locator("#c2").bounding_box()
+        page.mouse.move(box["x"] + 5, box["y"] + 5)
+        page.wait_for_timeout(200)
+        page.mouse.move(box["x"] + 8, box["y"] + 6)
+        page.evaluate("const r=document.createRange(); r.selectNodeContents(document.getElementById('rule')); const s=getSelection(); s.removeAllRanges(); s.addRange(r);")
+        page.wait_for_timeout(900)
+        ctx.close()
+        browser.close()
+    rec.close()
+    events = load_events(tmp_path / "s")
+    kinds = {e["type"] for e in events}
+    assert {"pointer", "hover", "select"} <= kinds, kinds
+    hov = next(e for e in events if e["type"] == "hover")
+    assert hov["site"] == "dashboard" and hov["el"]["text"] == "1,412" and hov["el"]["heading"] == "Nissan / Serena GC27" and "10/2021" in hov["el"]["row"]
+    assert next(e for e in events if e["type"] == "select")["text"] == "Dark Color Seats Only"

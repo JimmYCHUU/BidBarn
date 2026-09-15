@@ -179,8 +179,10 @@ at http://127.0.0.1:8765 with the sheet and photos of each candidate.
    compares a manual session you recorded in your browser with the bot's proposals.
 5. **`bot.cmd watch`** opens the bot's browser for you and records a normal manual session:
    every page, click, hover over the photos and the sheet, what you type into the bid form,
-   the bids you place, and the reasons you type into the small box at the bottom right (Enter
-   saves). Close the window when done. `bot.cmd watch --report data\sessions\<stamp>` prints
+   the bids you place, and the reasons you type into the small box at the top right (Enter
+   saves). The Carbarn dashboard tab is recorded too, even when dragged to a second monitor:
+   where the mouse rests (the guide and cell under it), text you highlight, and clicks.
+   Close the window when done. `bot.cmd watch --report data\sessions\<stamp>` prints
    the per-lot timeline with the bot's own verdict beside each lot. The bot only watches: it
    makes no request and never touches the bid form.
 
