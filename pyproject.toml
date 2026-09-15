@@ -8,6 +8,7 @@ dependencies = [
   "openai>=2,<3",   # optional sheet-check mode only (sheet_check: openai); default mode needs no key
   "jiter==0.10.0",  # newer jiter DLLs are blocked by Windows App Control on the Carbarn PC
   "rapidocr-onnxruntime",  # local auction-sheet OCR (needs the Microsoft Visual C++ 2015-2022 x64 runtime)
+  "pillow",  # crops the sheet header before OCR
   "pydantic>=2",
   "fastapi",
   "uvicorn[standard]",
@@ -32,6 +33,9 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"auction_bot.review" = ["templates/*.html", "static/*.js"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

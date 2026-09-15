@@ -50,7 +50,12 @@ def place_bid(browser: Browser, cfg: Config, ref_no: str, bid_jpy_k: int, expect
 
     # Re-verify the vehicle is the one that was approved.
     problems = []
-    if live.chassis != expected.chassis:
+    if expected.source == "card+sheet":
+        # Judged from the search card: the stored chassis is the bare model code and the guide's
+        # variant covers every suffix (needs_detail was False), so the live code must extend it.
+        if not (live.chassis or "").upper().startswith((expected.chassis or "").upper()) or not expected.chassis:
+            problems.append(f"chassis {live.chassis} does not belong to model code {expected.chassis}")
+    elif live.chassis != expected.chassis:
         problems.append(f"chassis changed {expected.chassis} -> {live.chassis}")
     if live.km != expected.km:
         problems.append(f"km changed {expected.km} -> {live.km}")

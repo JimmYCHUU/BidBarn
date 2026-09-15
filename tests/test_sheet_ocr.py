@@ -44,6 +44,9 @@ def test_parse_boxes_seats_variants():
     assert r.seats == 10
     r = parse_boxes([(box(0, 0, 10, 10), "6人", 0.9)])
     assert r.seats == 6  # a lone "N人" box
+    # Real Serena header: the door count (5) sits lower-left of 定員, the seat count (8) to its right.
+    r = parse_boxes([(box(414, 112, 27, 15), "定員", 0.74), (box(388, 122, 15, 20), "5", 0.72), (box(462, 120, 20, 20), "8", 0.78)])
+    assert r.seats == 8
     r = parse_boxes([(box(0, 0, 10, 10), "ハイエース", 0.9)])
     assert r.seats is None and r.model_code is None and r.km is None and r.grade is None
 

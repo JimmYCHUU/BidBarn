@@ -116,7 +116,7 @@ def test_scan_route1_end_to_end(cfg):
     assert any("7 or more" in h["message"] for h in soft["hints"])
     assert p["bid_jpy_k"] == 1_240  # 2020 / 120K-130K = 1,160 + 80 (grade 4)
     ev = json.loads(p["evidence_json"])
-    assert ev["sheet"] and Path(ev["sheet"]).exists() and len(ev["photos"]) >= 8
+    assert ev["sheet"] and Path(ev["sheet"]).exists() and ev["photos"] == []  # photos are a Nichibo link now
     assert (Path(ev["dir"]) / "rule.json").exists() and (Path(ev["dir"]) / "hard.json").exists()
 
     # Second scan re-uses pending proposals instead of re-opening pages, and the search
@@ -133,7 +133,7 @@ def test_scan_route1_end_to_end(cfg):
     r = client.get(f"/p/{p['id']}")
     assert r.status_code == 200
     assert "Your checklist" in r.text and "No sticker paint" in r.text and "Skip ambulance conversions" in r.text
-    assert "sheet.jpg" in r.text and "1,240" in r.text
+    assert "sheet.jpg" in r.text and "1,240" in r.text and "Photos on Nichibo" in r.text
     store.close()
 
 

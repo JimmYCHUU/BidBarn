@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}BidBarn triage{% endblock %}
+{% block body %}
+<div style="display:flex; gap:14px; align-items:center; margin-bottom:10px; flex-wrap:wrap">
+  <form method="get" style="display:flex; gap:8px; align-items:center">
+    <label>Model <input type="text" name="model" value="{{ model }}" style="width:120px"></label>
+    <button>Filter</button>
+  </form>
+  <span class="muted">Sorted like the manual pass: best grade first, then fewest km. Keys: <kbd>j</kbd>/<kbd>k</kbd> move · <kbd>a</kbd> approve · <kbd>r</kbd> reject · <kbd>e</kbd> amount · <kbd>z</kbd> sheet · <kbd>o</kbd> Nichibo · <kbd>p</kbd> photos · <kbd>Enter</kbd> detail · <kbd>?</kbd> help</span>
+</div>
+{% if lock_label != 'LIVE PLACEMENT' %}<div class="banner">{{ lock_label }}. Approving here records your decision; nothing is submitted to Nichibo until the testing lock is lifted in config.yaml.</div>{% endif %}
+
+{% for g in groups %}
+<h2 style="font-size:16px; margin:18px 0 6px">{{ g.guide_name }} <span class="muted" style="font-weight:400">{{ g.rows|length }} pending</span></h2>
+{% if g.suggestions %}
+<div class="banner">Skip rules suggested by your rejections of {{ g.model_code }} (each would have skipped no approved lot):
+  {% for sg in g.suggestions %}
+  <form method="post" action="/rules/{{ g.model_code }}/skip" style="display:inline-block; margin:2px 8px 2px 0">
+    <input type="hidden" name="line" value="{{ sg.line }}"><input type="hidden" name="next" value="/">
+    <span class="mono">{{ sg.line }}</span> <span class="muted">({{ sg.support }} rejection{{ 's' if sg.support != 1 }})</span> <button style="padding:2px 8px">add</button>
+  </form>
+  {% endfor %}
+  <div class="muted" style="font-size:12px">After adding a rule run <span class="mono">bot replay --apply -m {{ g.model_code }}</span> to apply it to stored lots.</div>
+</div>
+{% endif %}
+<table class="triage">
+  <thead><tr><th>Status</th><th>Lot</th><th>Bid (K JPY)</th><th>Sheet</th><th>Why / checklist</th><th>Decide</th></tr></thead>
+  <tbody>
+  {% for p in g.rows %}
+  {% set f = p.facts or {} %}
+  <tr class="lot" id="lot-{{ p.id }}" data-pid="{{ p.id }}" data-url="{{ f.url }}" data-sheet="{{ p.sheet_src }}" data-bid="{{ p.bid_jpy_k or '' }}" data-start="{{ f.start_price_jpy or 0 }}">
+    <td><span class="pill {{ p.status }}">{{ p.status }}</span>
+      <div class="muted" style="font-size:11px">{{ p.stage }}{% if p.soft and p.soft.images_pending %} · images pending{% endif %}{% if p.multi_guide %} · <span class="pill NEEDS_REVIEW" title="also proposed under another guide">×2</span>{% endif %}</div></td>
+    <td><a href="/p/{{ p.id }}"><b>{{ f.year }} {{ f.make }} {{ f.model }}</b></a> <span class="muted">{{ f.variant_text }}</span>
+      <div class="mono" style="font-size:12px">grade <b>{{ f.grade_raw }}</b> · {{ '{:,}'.format(f.km or 0) }} km · start ¥{{ '{:,}'.format(f.start_price_jpy or 0) }}{% if f.seats %} · {{ f.seats }} seats{% endif %}{% if f.chassis %} · {{ f.chassis }}{% endif %}</div></td>
+    <td class="mono">{% if p.bid_jpy_k %}<b class="bid">{{ '{:,}'.format(p.bid_jpy_k) }}</b>{% if p.base_jpy_k and p.base_jpy_k != p.bid_jpy_k %} <span class="muted">(base {{ '{:,}'.format(p.base_jpy_k) }})</span>{% endif %}{% else %}<span class="muted">—</span>{% endif %}</td>
+    <td>{% if p.sheet_src %}<img class="thumb" src="{{ p.sheet_src }}" alt="auction sheet" loading="lazy" style="height:90px; border:1px solid var(--line); border-radius:4px; cursor:zoom-in">{% else %}<span class="muted">no sheet yet</span>{% endif %}</td>
+    <td style="max-width:380px; font-size:13px">
+      {% set lines = [] %}
+      {% if p.hard and p.hard.checks %}{% for c in p.hard.checks if not c.ok %}{% set _ = lines.append(c.name ~ ': ' ~ c.detail) %}{% endfor %}{% endif %}
+      {% if p.soft and p.soft.checklist %}{% for c in p.soft.checklist if not c.startswith('Auto-skip') and not c.startswith('Judged from') %}{% set _ = lines.append(c) %}{% endfor %}{% endif %}
+      {% for l in lines[:2] %}<div>{{ l }}</div>{% endfor %}
+      {% if lines|length > 2 %}<div class="muted">+{{ lines|length - 2 }} more on the detail page</div>{% endif %}
+    </td>
+    <td style="white-space:nowrap">
+      <button class="approve act" data-act="approve" {% if not p.bid_jpy_k %}disabled{% endif %}>Approve</button>
+      <button class="reject act" data-act="reject">Reject</button>
+      <div style="margin-top:4px; font-size:12px"><a href="{{ f.url }}" target="_blank" rel="noopener" data-ev="nichibo_click">Nichibo ↗</a> · <a href="{{ f.url }}" target="_blank" rel="noopener" data-ev="photos_click">photos ↗</a> · <a href="/p/{{ p.id }}">detail</a></div>
+      <div class="result muted" style="font-size:12px"></div>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="card muted">Nothing to review. Run <span class="mono">scan.cmd</span>, or see <a href="/list">all proposals</a>.</div>
+{% endfor %}
+{% endblock %}

@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ p.model_code }} · {{ p.summary }}{% endblock %}
 {% block body %}
+<script>document.body.dataset.pid = "{{ p.id }}";</script>
 {% set f = p.facts or {} %}
 {% set h = p.hard or {} %}
 {% set s = p.soft or {} %}
@@ -10,8 +11,8 @@
   <h2 style="margin:0; font-size:18px">{{ f.year }} {{ f.make }} {{ f.model }} <span class="muted">{{ f.variant_text }}</span></h2>
   <span class="pill {{ p.decision }}">{{ p.decision }}</span>
   <span class="muted">guide: {{ p.guide_name }}</span>
-  <a style="margin-left:auto" href="{{ f.url }}" target="_blank" rel="noopener">Open on Nichibo ↗</a>
-  {% if next_id %}<a href="/p/{{ next_id }}">next ›</a>{% endif %}
+  <a style="margin-left:auto" href="{{ f.url }}" target="_blank" rel="noopener" data-ev="nichibo_click">Open on Nichibo ↗</a>
+  {% if next_id %}<a href="/p/{{ next_id }}" data-next="1">next ›</a>{% endif %}
 </div>
 
 {% if p.siblings %}
@@ -22,11 +23,11 @@
     <div class="card">
       <h3>Listing facts</h3>
       <table>
-        <tr><td>Chassis</td><td class="mono"><b>{{ f.chassis }}</b> → variant {{ h.variant_name or '?' }}</td></tr>
+        <tr><td>Chassis</td><td class="mono"><b>{{ f.chassis }}</b> → variant {{ h.variant_name or '?' }}{% if f.source == 'card+sheet' %} <span class="muted">(judged from the search card and the sheet; the full chassis code is not read until placement)</span>{% endif %}</td></tr>
         <tr><td>Year / km / grade</td><td>{{ f.year }} · {{ '{:,}'.format(f.km or 0) }} km · grade <b>{{ f.grade_raw }}</b></td></tr>
         <tr><td>Start price</td><td>¥{{ '{:,}'.format(f.start_price_jpy or 0) }}</td></tr>
-        <tr><td>Auction</td><td>{{ f.auction_place }} · exhibit {{ f.exhibit_no }} · {{ f.auction_date }}</td></tr>
-        <tr><td>Other</td><td>{{ f.transmission }} · {{ f.colour }} · {{ f.engine_cc }} cc · {{ f.equipment }}</td></tr>
+        {% if f.auction_place or f.exhibit_no or f.auction_date %}<tr><td>Auction</td><td>{{ f.auction_place }} · exhibit {{ f.exhibit_no }} · {{ f.auction_date }}</td></tr>{% endif %}
+        <tr><td>Other</td><td>{{ f.transmission }}{% if f.colour %} · {{ f.colour }}{% endif %} · {{ f.engine_cc }} cc{% if f.equipment %} · {{ f.equipment }}{% endif %}</td></tr>
         {% if f.translator %}<tr><td>Nichibo sheet translation</td><td>{% for k, v in f.translator.items() if k != 'sheet_url' %}<div><b>{{ k }}:</b> {{ v }}</div>{% endfor %}</td></tr>{% endif %}
       </table>
     </div>
@@ -96,10 +97,13 @@
         <label>Bid amount (K JPY) <input type="number" name="amount" value="{{ p.bid_jpy_k or '' }}" min="0" step="10"></label>
         <label>Reason (required to reject; saved as evidence) <textarea name="reason" rows="2" placeholder="e.g. 10 seats on the sheet; the rule allows 2/3/5/6"></textarea></label>
         <label><input type="checkbox" name="make_rule" value="1"> Also save as a standing instruction for {{ p.model_code }}</label>
-        <input type="text" name="rule_text" placeholder="Standing instruction text (defaults to the reason)">
+        <input type="text" name="rule_text" id="rule_text" placeholder="Standing instruction text (defaults to the reason); a line starting with skip: is applied by the bot">
+        <div class="muted" id="suggest_hint" style="font-size:12px"></div>
+        <input type="hidden" name="via" value="detail">
         <div style="display:flex; gap:10px">
           <button class="approve" name="action" value="approve" {% if not p.bid_jpy_k %}disabled{% endif %}>Approve bid</button>
           <button class="reject" name="action" value="reject">Reject</button>
+          <span class="muted" style="align-self:center; font-size:12px"><kbd>a</kbd> approve · <kbd>r</kbd> reason · <kbd>o</kbd> Nichibo · <kbd>n</kbd> next</span>
         </div>
         {% if lock_label != 'LIVE PLACEMENT' %}<div class="banner">{{ lock_label }}. Approving here records your decision for testing; nothing is submitted to Nichibo until the testing lock is lifted in config.yaml.</div>{% endif %}
       </form>
@@ -107,24 +111,44 @@
     {% elif p.decision != 'pending' %}
     <div class="card"><h3>Decision</h3>{{ p.decision }} at {{ p.decided_at }}{% if p.decision_reason %} — {{ p.decision_reason }}{% endif %}
       {% if p.approved_bid_jpy_k %}<div>approved amount {{ '{:,}'.format(p.approved_bid_jpy_k) }}K</div>{% endif %}
+      {% if p.telemetry %}<div class="muted" style="font-size:12px">{% if p.telemetry.decide_seconds is not none %}decided in {{ p.telemetry.decide_seconds|round|int }} s · {% endif %}sheet {{ 'zoomed' if p.telemetry.sheet_zoomed else 'not zoomed' }} · photos {{ 'opened' if p.telemetry.photos_clicked else 'not opened' }}{% if p.telemetry.amount_edited %} · amount changed from {{ '{:,}'.format(p.telemetry.proposed_jpy_k or 0) }}K{% endif %} · via {{ p.telemetry.via or 'detail' }}</div>{% endif %}
       {% if p.placement %}<pre>{{ p.placement }}</pre>{% endif %}</div>
     {% endif %}
   </div>
 
   <div>
     {% if p.evidence_base and p.sheet_file %}
-    <div class="card sheet"><h3>Auction sheet <span class="muted">(click to open full size)</span></h3><a href="/evidence/{{ p.evidence_base }}/{{ p.sheet_file }}" target="_blank"><img src="/evidence/{{ p.evidence_base }}/{{ p.sheet_file }}" alt="auction sheet"></a></div>
+    <div class="card sheet"><h3>Auction sheet <span class="muted">(click to open full size)</span></h3><a href="/evidence/{{ p.evidence_base }}/{{ p.sheet_file }}" target="_blank" data-ev="sheet_zoom"><img src="/evidence/{{ p.evidence_base }}/{{ p.sheet_file }}" alt="auction sheet"></a></div>
     {% elif f.sheet_url %}
     <div class="card sheet"><h3>Auction sheet (not downloaded)</h3><a href="{{ f.sheet_url }}" target="_blank">{{ f.sheet_url }}</a></div>
     {% endif %}
     <div class="card"><h3>Photos {% if p.photo_files %}({{ p.photo_files|length }}){% endif %}</h3>
-      <div class="thumbs">
+      <p><a href="{{ f.url }}" target="_blank" rel="noopener" data-ev="photos_click"><b>Photos on Nichibo ↗</b></a> <span class="muted">— the scan does not download photos; open the lot in your own signed-in browser.</span></p>
+      {% if p.photo_files %}<div class="thumbs">
       {% for ph in p.photo_files %}<a href="/evidence/{{ p.evidence_base }}/{{ ph }}" target="_blank"><img src="/evidence/{{ p.evidence_base }}/{{ ph }}" alt="{{ ph }}"></a>{% endfor %}
-      {% if not p.photo_files %}{% for u in f.photo_urls or [] %}<a href="{{ u }}" target="_blank"><img src="{{ u }}" alt="photo"></a>{% endfor %}{% endif %}
-      </div>
+      </div>{% endif %}
       {% if p.evidence and p.evidence.failed %}<details><summary>{{ p.evidence.failed|length }} image(s) failed to download</summary><pre>{{ p.evidence.failed }}</pre></details>{% endif %}
     </div>
     <details class="card"><summary>Raw data</summary><pre>{{ p.hard_json }}</pre><pre>{{ p.soft_json }}</pre></details>
   </div>
 </div>
+<script>
+(function () {
+  const reason = document.querySelector('textarea[name=reason]');
+  const rule = document.getElementById('rule_text');
+  const hint = document.getElementById('suggest_hint');
+  if (!reason || !rule) return;
+  reason.addEventListener('blur', async () => {
+    if (!reason.value.trim()) return;
+    try {
+      const r = await fetch('/p/{{ p.id }}/suggest?reason=' + encodeURIComponent(reason.value));
+      const d = await r.json();
+      if (d.line) {
+        hint.textContent = 'Suggested skip rule from your reason: ' + d.line + ' (edit or clear it; stored only if the box is ticked)';
+        if (!rule.value.trim() || rule.dataset.suggested === rule.value) { rule.value = d.line; rule.dataset.suggested = d.line; }
+      } else { hint.textContent = ''; }
+    } catch (e) { /* the hint is optional */ }
+  });
+})();
+</script>
 {% endblock %}

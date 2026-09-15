@@ -22,6 +22,11 @@ hard constraints. Do not weaken them, work around them, or "temporarily" disable
 - `nichibo/browser.py` refuses forbidden URLs (`ForbiddenUrl`) and aborts page requests to
   them; the search runs with `includeStock=N`; the card parser drops non-auction cards. Keep
   all three.
+- One documented exception (Jim, 2026-09-15): `bot watch` (`watch.py`) opens the bot's
+  signed-in browser for Jim to drive by hand and only records what he does (navigations,
+  clicks, hovers, typed reasons, screenshots). The URL guard is off for that window because it
+  would block his own clicks. In watch mode the bot makes no request of its own, never touches
+  the bid form, and nothing recorded can approve anything. Do not reuse that context for scans.
 
 ## 0c. Never throw away scraped data (Jim, 2026-09-14)
 
@@ -45,6 +50,10 @@ hard constraints. Do not weaken them, work around them, or "temporarily" disable
   BOTH `dry_run: false` in config AND `bot place --live`. Do not add a third way.
 - Every vehicle can be bid on at most once ever (`bids` table primary key). Keep it that way.
 - Never place, cancel or change a bid on Nichibo as part of a test, a demo, or "to check it works".
+- Learning features (review telemetry, `skip:` standing instructions, `bot insights`,
+  `bot learn --har`) may only add SKIPs, ordering and pre-fills. `skip` is the only verb a
+  standing instruction can have; never add a verb that approves, and never let a suggestion
+  become a rule without Jim adding it (review page button, `bot skip-line`, or the file).
 
 ## 2. Rule semantics are Jim's, not ours
 

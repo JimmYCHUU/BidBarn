@@ -39,7 +39,11 @@ Auth: browser session cookie (login form at /login). Bot reuses the persistent p
 | Place bid | `GET /auction/bid?v={refno}&b={yen}&ba={thousands}&cr=false&c={comment}&u=false&bidCurrencyCode=JPY&sa=0` -> `{"type":"success"}`; the page button `#btnPlaceBid` does exactly this. The bot clicks the button instead of calling the URL. |
 
 Search result card (`div.card-item-listings`):
-- `a.preview[href]` = detail URL (refno is the last path segment), `data-auction` = sheet image
+- `a.preview[href]` = detail URL (refno is the last path segment), `data-auction` = sheet image.
+  This is the same URL the detail page uses for the sheet (`AuctionSheet` in its JS), so the
+  scan downloads the sheet from the card and opens the detail page only when a rule needs
+  the chassis suffix, the colour or another page-only fact (`pipeline.needs_detail`). The sheet
+  is served at 800x800; a 3.7 KB 400x300 GIF means the auction house has not published it yet.
 - `.car-title-h` "2018 Toyota Hiace", `.title-desc-listing small` variant, `.transmission-listing small`
 - `p.card-text` "76,000km 2,800cc Grade: 0"
 - `span[id^=bidPanelPrice]` start price

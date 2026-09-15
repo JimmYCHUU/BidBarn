@@ -8,7 +8,8 @@ from __future__ import annotations
 import json
 import logging
 import re
-from dataclasses import dataclass, field
+import time
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Callable
 
@@ -21,8 +22,10 @@ from auction_bot.nichibo.facts import VehicleFacts
 from auction_bot.nichibo.search import search_rule
 from auction_bot.nichibo.sheet_ocr import read_sheet
 from auction_bot.nichibo.vehicle import _safe, download_evidence, fetch_facts, load_saved_evidence
-from auction_bot.rules.hard import NEEDS_REVIEW, PASS, SKIP, Check, allowed_seats, card_prefilter, evaluate_hard, override_lines
+from auction_bot.rules.hard import (NEEDS_REVIEW, PASS, SKIP, Check, allowed_seats, card_grid_check, card_prefilter,
+                                    evaluate_hard)
 from auction_bot.rules.hints import keyword_hints
+from auction_bot.rules.instructions import detail_fields_used, instruction_check, split_override_lines
 from auction_bot.store import Store
 
 log = logging.getLogger("auction_bot.scan")
@@ -32,7 +35,10 @@ log = logging.getLogger("auction_bot.scan")
 class ScanStats:
     guides: int = 0
     cards: int = 0
-    opened: int = 0
+    opened: int = 0  # candidates taken past the card stage
+    pages: int = 0  # detail pages actually loaded
+    sheet_only: int = 0  # judged from the search card and the sheet, no page
+    pending: int = 0  # sheet not published yet, no page
     model_calls: int = 0
     bid: int = 0
     skip: int = 0
@@ -66,10 +72,54 @@ def model_matches(rule: ModelRule, facts: VehicleFacts) -> bool:
 
 
 def card_check(rule: ModelRule, card: VehicleFacts, cfg: Config) -> Check | None:
-    """Cheap rejection from the search card alone (model family + grade/year/odo)."""
+    """Cheap rejection from the search card alone (model family, grade/year/odo, grid ceiling vs start)."""
     if not model_matches(rule, card):
         return Check("model", False, f"Nichibo lists it as {card.make} {card.model}, guide is {rule.make} {rule.model}")
-    return card_prefilter(card, rule) if cfg.open_details_only_for_candidates else None
+    hit = instruction_check(rule, card)  # "skip: ..." standing instructions decidable from the card
+    if hit is not None:
+        return hit
+    if not cfg.open_details_only_for_candidates:
+        return None
+    return card_prefilter(card, rule) or card_grid_check(card, rule)
+
+
+def needs_detail(rule: ModelRule, card: VehicleFacts) -> tuple[bool, str]:
+    """Must the lot's detail page be opened, or do the search card and the sheet suffice?
+
+    The card carries year, km, grade, start price, variant text and the sheet link. The
+    page is needed only for the chassis suffix (guides whose variants are chassis codes),
+    for colour conditions, or when the card is missing a fact the rules need.
+    """
+    code = rule.model_code.upper()
+    if any(not v.is_default and v.name.strip().upper().startswith(code) for v in rule.variants):
+        return True, "the guide's variants differ by chassis suffix"
+    for v in rule.variants:
+        for m in v.modifiers:
+            if m.active and not m.stale and any(c.attr.upper() in ("COLOR", "COLOUR") for c in m.conditions):
+                return True, "a modifier depends on the colour"
+    if detail_fields_used(split_override_lines(rule)[1]):
+        return True, "a standing instruction needs the listing page"
+    if card.year is None or card.km is None or card.grade is None or card.start_price_jpy is None:
+        return True, "the search card lacks year, km, grade or start price"
+    if not card.sheet_url:
+        return True, "the search card has no auction sheet link"
+    return False, "default variant; every fact the rules need is on the search card"
+
+
+def card_facts(card: VehicleFacts, rule: ModelRule) -> VehicleFacts:
+    """Facts for a lot judged without its detail page: the chassis is the bare model code."""
+    return replace(card, chassis=rule.model_code, chassis_uncertain=False, source="card+sheet",
+                   photo_urls=list(card.photo_urls))
+
+
+def pending_images_proposal(rule: ModelRule, card: VehicleFacts, evidence: dict) -> dict:
+    """Nichibo still serves placeholder images: park the lot until the next scan, no page opened."""
+    return dict(ref_no=card.ref_no, guide_id=rule.guide_id, model_code=rule.model_code, summary=summary_line(card),
+                status=NEEDS_REVIEW, stage="manual", facts_json=card.to_dict(), hard_json={"checks": []},
+                evidence_json=evidence,
+                soft_json={"mode": "manual", "images_pending": True, "checklist": [], "hints": [],
+                           "reasons": ["Nichibo has not published the sheet and photos yet (placeholder images); "
+                                       "the next scan re-checks this vehicle automatically"]})
 
 
 def _should_skip_existing(store: Store, ref_no: str, rule: ModelRule, rescan: bool) -> bool:
@@ -106,6 +156,8 @@ def scan(cfg: Config, browser: Browser, store: Store, model_codes: list[str] | N
         stats.guides += 1
         log.info("== %s %s %s: years %s, odo<=%s, min grade %s", rule.model_code, rule.make, rule.model,
                  rule.search_years, rule.search_max_odo, rule.min_grade)
+        for err in split_override_lines(rule)[2]:
+            log.warning("   %s: standing instruction not understood, ignored: %s", rule.model_code, err)
         try:
             cards = search_rule(browser, cfg, rule, cache)
         except Exception as exc:
@@ -133,19 +185,52 @@ def scan(cfg: Config, browser: Browser, store: Store, model_codes: list[str] | N
                 break
             opened += 1
             stats.opened += 1
+            t0 = time.time()
             try:
-                facts = fetch_facts(browser, cfg, card.ref_no, cache)
-                facts.ref_no = card.ref_no  # the card's reference is the vehicle's identity everywhere
+                # 1. The sheet, straight from the card's own link: no page load. A placeholder
+                #    means Nichibo has not published the images yet, so the lot is parked.
+                photos = 0 if no_model else cfg.max_photos_to_model
+                evidence = download_evidence(browser, cfg, card, photos, cache)
+                t_sheet = time.time() - t0
+                if evidence.get("images_pending"):
+                    stats.pending += 1
+                    store.supersede_pending(card.ref_no, rule.guide_id)
+                    store.add_proposal(snapshot=snap_path.name, rule_updated_at=rule.updated_at,
+                                       **pending_images_proposal(rule, card, evidence))
+                    stats.review += 1
+                    log.info("   %s -> images not published yet | sheet %.1fs, no page opened", summary_line(card), t_sheet)
+                    continue
+                # 2. The detail page only when a rule needs something the card does not carry.
+                need, why = needs_detail(rule, card)
+                t1 = time.time()
+                if need:
+                    facts = fetch_facts(browser, cfg, card.ref_no, cache)
+                    facts.ref_no = card.ref_no  # the card's reference is the vehicle's identity everywhere
+                    stats.pages += 1
+                else:
+                    facts = card_facts(card, rule)
+                    stats.sheet_only += 1
+                t_page = time.time() - t1
                 store.upsert_vehicle(card.ref_no, rule.model_code, facts.to_dict())
+
+                def load_evidence(f=facts, ev=evidence, c=card):
+                    if f.sheet_url and f.sheet_url != c.sheet_url:  # the page named a different sheet
+                        return download_evidence(browser, cfg, f, photos, cache)
+                    return ev
+
                 proposal = evaluate_vehicle(
-                    cfg, rule, facts, no_model,
-                    evidence_loader=lambda f=facts: download_evidence(browser, cfg, f, cfg.max_photos_to_model, cache),
+                    cfg, rule, facts, no_model, evidence_loader=load_evidence,
                     past_decisions=store.past_decisions(rule.model_code) if not no_model else [],
                     stats=stats,
                 )
                 store.supersede_pending(card.ref_no, rule.guide_id)
                 store.add_proposal(snapshot=snap_path.name, rule_updated_at=rule.updated_at, **proposal)
                 _count(stats, proposal["status"])
+                ocr_s = float((facts.sheet_ocr or {}).get("seconds") or 0)
+                bid_txt = f"{proposal['bid_jpy_k']:,}K" if proposal.get("bid_jpy_k") else ""
+                log.info("   %s %s | sheet %.1fs - ocr %.1fs - page %.1fs (%s) - total %.1fs",
+                         proposal["status"], bid_txt, t_sheet, ocr_s, t_page,
+                         "opened: " + why if need else "not opened", time.time() - t0)
             except Exception as exc:
                 stats.errors.append(f"{rule.model_code} {card.ref_no}: {exc}")
                 log.exception("candidate failed %s", card.ref_no)
@@ -180,6 +265,7 @@ def evaluate_vehicle(cfg: Config, rule: ModelRule, facts: VehicleFacts, no_model
     out_dir = Path(evidence["dir"])
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "rule.json").write_text(json.dumps(rule_to_summary(rule), indent=1, ensure_ascii=False), encoding="utf-8")
+    (out_dir / "facts.json").write_text(json.dumps(facts.to_dict(), indent=1, ensure_ascii=False), encoding="utf-8")
 
     # Read the printed fields of the sheet locally (seats, model code, km, grade, 4WD).
     ocr = None
@@ -202,7 +288,10 @@ def evaluate_vehicle(cfg: Config, rule: ModelRule, facts: VehicleFacts, no_model
 
     if no_model:
         # Route 1: the reviewer judges the sheet. Give them the checklist and keyword hints.
-        checklist = list(rule.text_rules) + override_lines(rule)
+        free_lines, instructions, bad_lines = split_override_lines(rule)
+        checklist = list(rule.text_rules) + free_lines
+        checklist += [f"Auto-skip rule in force (did not fire): {i.raw}" for i in instructions]
+        checklist += [f"Skip line NOT understood, ignored: {e}" for e in bad_lines]
         hints = ocr_hints + keyword_hints(facts, rule.text_rules)
         seat_rule = allowed_seats(rule)
         if seat_rule is not None:
@@ -214,6 +303,10 @@ def evaluate_vehicle(cfg: Config, rule: ModelRule, facts: VehicleFacts, no_model
         if hard.variant_how in ("single", "trim", "chassis-uncertain"):
             variant_check = next((c.detail for c in hard.checks if c.name == "variant"), "")
             checklist.insert(0, f"Confirm the variant: {variant_check}")
+        if facts.source == "card+sheet":
+            checklist.insert(0, f"Judged from the search card and the sheet, without the listing page: the guide's "
+                                f"{hard.variant_name or 'default'} variant covers every {rule.model_code} chassis. "
+                                f"Check the model code on the sheet if in doubt; placement re-reads the page anyway.")
         for t in hard.toggles:
             checklist.append(f"Dashboard chip, apply by changing the amount if it fits: {t}")
         reasons = ["sheet and photos to be judged by the reviewer (sheet_check: none)"]
@@ -311,6 +404,13 @@ def reevaluate(cfg: Config, store: Store, model_codes: list[str] | None = None, 
                 st.applied += 1
             continue
         saved = load_saved_evidence(cfg, row["ref_no"])
+        try:
+            parked = bool(json.loads(row["soft_json"] or "{}").get("images_pending"))
+        except json.JSONDecodeError:
+            parked = False
+        if parked and not (saved and saved.get("sheet")):
+            st.unchanged += 1  # still waiting for Nichibo's images; the next scan re-checks it
+            continue
         out_dir = cfg.evidence_dir / _safe(row["ref_no"])
         missing = {"dir": str(out_dir), "sheet": None, "photos": [], "failed": [], "placeholders": 1, "images_pending": True}
         proposal = evaluate_vehicle(cfg, rule, facts, no_model, evidence_loader=lambda s=saved, m=missing: s or m)

@@ -7,12 +7,19 @@ Handwritten inspector notes are not attempted.
 """
 from __future__ import annotations
 
+import io
 import re
+import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 _engine = None
 _engine_error: str | None = None
+
+# The printed header (型式, 乗車定員, 評価点, odometer) sits in the top band of every sheet
+# layout seen so far. Reading only that band is about twice as fast on the office PC and
+# reads the seat cell more reliably; the full sheet is read only when seats were not found.
+CROP_TOP = 0.35
 
 
 @dataclass
@@ -26,6 +33,8 @@ class SheetRead:
     lines: list[str] = field(default_factory=list)
     error: str | None = None
     engine: str = ""
+    region: str = ""  # "top35", "top35+full" or "full": which part of the sheet was read
+    seconds: float = 0.0
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -50,12 +59,26 @@ def engine_status() -> tuple[bool, str]:
         return False, msg
 
 
-def _run_engine(path: Path) -> list[tuple[list, str, float]]:
+def _run_engine(source: Path | bytes) -> list[tuple[list, str, float]]:
     ok, _ = engine_status()
     if not ok:
         raise RuntimeError(_engine_error or "OCR engine unavailable")
-    result, _elapse = _engine(str(path))
+    result, _elapse = _engine(source if isinstance(source, bytes) else str(source))
     return [(box, str(text), float(score)) for box, text, score in (result or [])]
+
+
+def crop_top(path: Path, fraction: float) -> bytes | None:
+    """JPEG bytes of the top `fraction` of the image, or None when it cannot be read."""
+    try:
+        from PIL import Image
+
+        with Image.open(path) as im:
+            w, h = im.size
+            buf = io.BytesIO()
+            im.convert("RGB").crop((0, 0, w, max(1, int(h * fraction)))).save(buf, format="JPEG", quality=92)
+            return buf.getvalue()
+    except Exception:
+        return None
 
 
 # ---- parsing (pure, unit-tested with stubbed engine output) -----------------
@@ -123,8 +146,11 @@ def _value_near_label(label: dict, cands: list[dict]) -> dict | None:
         return None
     lw = max(label.get("w", 40), 40)
     lh = max(label["h"], 12)
+    # A value cell sits under its label or to its right, never to its left: a digit that
+    # starts left of the label belongs to the neighbouring cell (the door count next to 定員).
     below = [c for c in cands
-             if abs(c["cx"] - label["cx"]) <= lw * 0.9 and -lh * 0.5 <= (c["y"] - label["y"]) <= lh * 3.0]
+             if abs(c["cx"] - label["cx"]) <= lw * 0.9 and -lh * 0.5 <= (c["y"] - label["y"]) <= lh * 3.0
+             and c["x"] >= label["x"] - lw * 0.25]
     if below:
         return min(below, key=lambda c: abs(c["y"] - label["y"]) + abs(c["cx"] - label["cx"]) / 10)
     same_row = [c for c in cands if abs(c["y"] - label["y"]) <= lh * 1.2 and 0 <= c["x"] - label["x"] <= lw * 3]
@@ -133,14 +159,35 @@ def _value_near_label(label: dict, cands: list[dict]) -> dict | None:
     return None
 
 
-def read_sheet(path: Path) -> SheetRead:
+_FIELDS = ("seats", "model_code", "km", "grade", "is_4wd")
+
+
+def read_sheet(path: Path, crop: float | None = CROP_TOP) -> SheetRead:
+    """Read the header band first; fall back to the whole sheet when the seat count is missing."""
     ok, detail = engine_status()
     if not ok:
         return SheetRead(available=False, error=detail)
+    t0 = time.time()
     try:
-        boxes = _run_engine(path)
+        read: SheetRead | None = None
+        region = "full"
+        cropped = crop_top(path, crop) if crop else None
+        if cropped is not None:
+            read = parse_boxes(_run_engine(cropped))
+            region = f"top{int(crop * 100)}"
+        if read is None or read.seats is None:
+            full = parse_boxes(_run_engine(path))
+            if read is None:
+                read = full
+            else:
+                for name in _FIELDS:  # keep what the header band read, fill the rest from the full pass
+                    if getattr(read, name) is None and getattr(full, name) is not None:
+                        setattr(read, name, getattr(full, name))
+                read.lines = full.lines
+                region += "+full"
     except Exception as exc:
         return SheetRead(available=False, error=str(exc)[:160])
-    read = parse_boxes(boxes)
     read.engine = detail
+    read.region = region
+    read.seconds = round(time.time() - t0, 1)
     return read

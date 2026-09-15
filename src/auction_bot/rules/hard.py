@@ -11,6 +11,7 @@ from dataclasses import asdict, dataclass, field
 
 from auction_bot.carbarn.models import Condition, GridCell, Modifier, ModelRule, Variant
 from auction_bot.nichibo.facts import VehicleFacts
+from auction_bot.rules.instructions import free_text_lines, instruction_check, override_lines  # noqa: F401  (re-export)
 
 PASS = "PASS"
 SKIP = "SKIP"
@@ -210,18 +211,6 @@ def apply_modifiers(variant: Variant, facts: VehicleFacts, base: int, year: int,
 
 
 _SEAT_WORDS = re.compile(r"\bseat(?:s|er|ers|ing)?\b", re.I)
-_OVERRIDE_STAMP = re.compile(r"^\(\d{4}-\d{2}-\d{2}[^)]*\)\s*")
-
-
-def override_lines(rule: ModelRule) -> list[str]:
-    """Standing instructions without their '(date, author)' stamp."""
-    out = []
-    for ln in rule.override_text.splitlines():
-        if ln.strip().startswith("-"):
-            text = _OVERRIDE_STAMP.sub("", ln.strip().lstrip("- ").strip())
-            if text:
-                out.append(text)
-    return out
 
 
 def allowed_seats(rule: ModelRule) -> set[int] | None:
@@ -232,7 +221,7 @@ def allowed_seats(rule: ModelRule) -> set[int] | None:
     """
     allowed: set[int] = set()
     found = False
-    for text in list(rule.text_rules) + override_lines(rule):
+    for text in list(rule.text_rules) + free_text_lines(rule):  # structured skip lines are not seat lists
         if not _SEAT_WORDS.search(text):
             continue
         # numbers that appear before the word "seat": "2, 3, 5 or 6 seats", "8 seater", "5/7 seats"
@@ -267,6 +256,12 @@ def evaluate_hard(facts: VehicleFacts, rule: ModelRule, final: bool = False) -> 
 
     if not rule.active:
         return fail("guide", f"bidding guide {rule.model_code} is inactive")
+
+    # Standing instructions (rules/overrides/<CODE>.md, "skip: ..." lines) decidable from the facts so far.
+    hit = instruction_check(rule, facts)
+    if hit is not None:
+        checks.append(hit)
+        return res
 
     # Variant: chassis code (GDH206V vs GDH206K), default variant, or trim keywords.
     if not facts.chassis:
@@ -339,6 +334,13 @@ def evaluate_hard(facts: VehicleFacts, rule: ModelRule, final: bool = False) -> 
     res.bid_jpy_k = bid
     checks.append(Check("modifiers", True, ", ".join(applied) if applied else "none applied"))
 
+    # Standing instructions that compare the bid (e.g. "skip: start >= bid").
+    hit = instruction_check(rule, facts, bid)
+    if hit is not None:
+        checks.append(hit)
+        res.status = SKIP
+        return res
+
     # Sanity: bid within the grid's own range (+ modifier headroom).
     lo, hi = variant.min_bid or 0, (variant.max_bid or 0) + 500
     if not (lo <= bid <= hi):
@@ -371,4 +373,30 @@ def card_prefilter(facts: VehicleFacts, rule: ModelRule) -> Check | None:
         return Check("year", False, f"year {facts.year} has no bid row")
     if facts.km is not None and facts.km > rule.search_max_odo:
         return Check("odo", False, f"{facts.km:,} km above every variant cap")
+    return None
+
+
+def card_grid_check(facts: VehicleFacts, rule: ModelRule) -> Check | None:
+    """Cheap rejection from the search card and the whole grid, before any page or image is fetched.
+
+    Every variant is tried, so the check holds whichever variant the lot turns out to be:
+    SKIP only when no variant has a live cell for this year and odometer, or when the start
+    price is above the highest bid any variant could reach (cell plus every positive
+    modifier, reviewer chips included). The ceiling over-estimates, so it never over-skips.
+    """
+    if facts.year is None or facts.km is None:
+        return None
+    ceiling: int | None = None
+    for v in rule.variants:
+        cell = v.cell_for(facts.year, facts.km)
+        if cell is None or cell.no_bid or cell.bid_jpy_k is None:
+            continue
+        extra = sum(m.amount_jpy_k for m in v.modifiers
+                    if m.active and not m.stale and m.amount_jpy_k and m.amount_jpy_k > 0
+                    and m.applies_to_year_odo(facts.year, facts.km))
+        ceiling = max(ceiling or 0, cell.bid_jpy_k + extra)
+    if ceiling is None:
+        return Check("cell", False, f"no variant has a bid cell for {facts.year} / {facts.km:,} km")
+    if facts.start_price_jpy and ceiling * 1000 < facts.start_price_jpy:
+        return Check("start", False, f"start price {facts.start_price_jpy // 1000:,}K is above the highest possible bid {ceiling:,}K")
     return None

@@ -1,0 +1,21 @@
+{
+  "log": {
+    "version": "1.2",
+    "creator": {"name": "hand-written test fixture", "version": "1"},
+    "entries": [
+      {"startedDateTime": "2026-09-15T10:00:00.000Z", "request": {"method": "GET", "url": "https://autosearch.nichibojapan.com/auction?Make=All&Chassis=GDH206&includeStock=N&perPage=1000&page=1"}, "response": {"status": 200}},
+      {"startedDateTime": "2026-09-15T10:00:10.000Z", "request": {"method": "GET", "url": "https://autosearch.nichibojapan.com/auction/T-REF-1"}, "response": {"status": 200}},
+      {"startedDateTime": "2026-09-15T10:00:11.000Z", "request": {"method": "GET", "url": "https://autosearch.nichibojapan.com/image.php?img_url=aHR0cHM6Ly9pbWcuZXhhbXBsZS94"}, "response": {"status": 200}},
+      {"startedDateTime": "2026-09-15T10:00:30.000Z", "request": {"method": "GET", "url": "https://autosearch.nichibojapan.com/auction/T-REF-2"}, "response": {"status": 200}},
+      {"startedDateTime": "2026-09-15T10:00:32.000Z", "request": {"method": "GET", "url": "https://autosearch.nichibojapan.com/auction/T-REF-2"}, "response": {"status": 200}},
+      {"startedDateTime": "2026-09-15T10:00:40.000Z", "request": {"method": "GET", "url": "https://autosearch.nichibojapan.com/auction/jsonAuctionSheetData?AuctionSheet=x&AuctionHall=y"}, "response": {"status": 200}},
+      {"startedDateTime": "2026-09-15T10:01:00.000Z", "request": {"method": "GET", "url": "https://autosearch.nichibojapan.com/auction/bid?v=T-REF-2&b=1240000&ba=1240&cr=false&c=&u=false&bidCurrencyCode=JPY&sa=0"}, "response": {"status": 200}},
+      {"startedDateTime": "2026-09-15T10:01:30.000Z", "request": {"method": "GET", "url": "https://autosearch.nichibojapan.com/auction/T-REF-3"}, "response": {"status": 200}},
+      {"startedDateTime": "2026-09-15T10:01:45.000Z", "request": {"method": "GET", "url": "https://autosearch.nichibojapan.com/auction/cart/T-REF-3"}, "response": {"status": 200}},
+      {"startedDateTime": "2026-09-15T10:02:00.000Z", "request": {"method": "GET", "url": "https://autosearch.nichibojapan.com/auction/bid?v=T-REF-9&b=800000&ba=800&cr=false"}, "response": {"status": 200}},
+      {"startedDateTime": "2026-09-15T10:02:10.000Z", "request": {"method": "GET", "url": "https://autosearch.nichibojapan.com/stock/12345"}, "response": {"status": 200}},
+      {"startedDateTime": "2026-09-15T10:02:20.000Z", "request": {"method": "POST", "url": "https://autosearch.nichibojapan.com/auction/T-REF-1"}, "response": {"status": 200}},
+      {"startedDateTime": "2026-09-15T10:02:30.000Z", "request": {"method": "GET", "url": "https://other.example.com/auction/T-REF-8"}, "response": {"status": 200}}
+    ]
+  }
+}
