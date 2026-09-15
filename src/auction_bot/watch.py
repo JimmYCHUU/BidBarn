@@ -139,6 +139,7 @@ class Recorder:
         self.count = 0
         self.shots = 0
         self._queue: list[tuple[object, str, float]] = []  # (page, tag, not_before)
+        self._last_nav: dict[int, tuple[str, float]] = {}  # per tab: (url, when) to drop duplicates
         self.counts: Counter = Counter()
 
     def record(self, type: str, **data) -> dict:
@@ -161,13 +162,27 @@ class Recorder:
         kind = str(data.pop("type", "") or "page")
         self.record(kind, **data)
 
+    def on_new_page(self, page) -> None:
+        """A tab opened from a link or window.open has often finished its first navigation
+        before we hear about it, so record where it already is."""
+        url = page.url
+        if url and url != "about:blank":
+            self._nav(page, url, opened="new tab")
+
     def on_nav(self, page, frame) -> None:
         if frame != page.main_frame:
             return
-        url = frame.url
+        self._nav(page, frame.url)
+
+    def _nav(self, page, url: str, **extra) -> None:
+        # A new tab can be reported twice (on attach and by its own navigation event).
+        last = self._last_nav.get(id(page))
+        if last and last[0] == url and time.time() - last[1] < 2.0:
+            return
+        self._last_nav[id(page)] = (url, time.time())
         ref = ref_from_url(url)
         chassis = search_chassis(url)
-        self.record("nav", url=url, ref=ref, chassis=chassis)
+        self.record("nav", url=url, ref=ref, chassis=chassis, **extra)
         self._queue.append((page, "lot" if ref else ("search" if chassis else "page"), time.time() + 1.2))
 
     def on_response(self, response) -> None:
@@ -226,6 +241,7 @@ def watch(cfg: Config, echo=print) -> Path:
 
         def attach(page) -> None:
             page.on("framenavigated", lambda frame, p=page: rec.on_nav(p, frame))
+            rec.on_new_page(page)  # a tab opened from a link may already be on its page
             try:
                 page.evaluate(INIT_SCRIPT)  # pages that already exist
             except Exception:
@@ -324,10 +340,16 @@ def _el_label(el: dict) -> str:
 
 
 def timeline(events: list[dict], session_dir: str = "") -> Session:
+    """Per-lot visits from the event log.
+
+    Events sent by the page's script (clicks, hovers, reasons, inputs) can reach the log a
+    little after the navigation events written directly by the recorder, so each of them
+    is attributed to the lot named in its own URL, not to whichever lot was logged last.
+    """
     s = Session(dir=session_dir)
+    # Pass 1: navigations define the visits and the time on result lists.
     current: LotVisit | None = None
     list_since: str | None = None
-    opened: set[str] = set()
     for ev in events:
         kind = ev.get("type")
         s.counts[kind] += 1
@@ -350,46 +372,53 @@ def timeline(events: list[dict], session_dir: str = "") -> Session:
             if ev.get("ref"):
                 current = LotVisit(ref=ev["ref"], opened_at=t)
                 s.visits.append(current)
-                opened.add(ev["ref"])
             elif ev.get("chassis"):
                 s.searches.append(ev["chassis"])
                 list_since = t
-        elif kind == "click":
-            if current:
-                current.clicks.append(_el_label(ev.get("el") or {}))
-                el = ev.get("el") or {}
-                if el.get("id") == "auction-sheet-img" or "gallery" in (el.get("cls") or ""):
-                    current.sheet_viewed = current.sheet_viewed or el.get("id") == "auction-sheet-img"
+
+    def visit_for(ev: dict) -> LotVisit | None:
+        ref = ref_from_url(ev.get("url") or "")
+        if ref:
+            return next((v for v in reversed(s.visits) if v.ref == ref), None)
+        return None
+
+    # Pass 2: what happened on each lot.
+    for ev in events:
+        kind = ev.get("type")
+        v = visit_for(ev)
+        el = ev.get("el") or {}
+        if kind == "click" and v:
+            v.clicks.append(_el_label(el))
+            if el.get("id") == "auction-sheet-img":
+                v.sheet_viewed = True
         elif kind == "hover":
-            el = ev.get("el") or {}
-            if current:
+            if v:
                 if el.get("id") == "auction-sheet-img":
-                    current.sheet_viewed = True
+                    v.sheet_viewed = True
                 elif "gallery" in (el.get("cls") or "") or el.get("tag") == "a":
-                    current.gallery_hovers += 1
+                    v.gallery_hovers += 1
             elif el.get("refno"):
                 s.considered_not_opened[el["refno"]] += 1
-        elif kind == "scroll" and current:
+        elif kind == "scroll" and v:
             h, vh, y = ev.get("h") or 0, ev.get("vh") or 0, ev.get("y") or 0
             if h:
-                depth = min(1.0, round((y + vh) / h, 2))
-                current.scroll_depth = max(current.scroll_depth or 0, depth)
-        elif kind == "input" and current:
-            current.inputs.append(f"{_el_label(ev.get('el') or {})} = {ev.get('value')}")
-        elif kind == "reason":
-            if current:
-                current.reasons.append(ev.get("text") or "")
+                v.scroll_depth = max(v.scroll_depth or 0, min(1.0, round((y + vh) / h, 2)))
+        elif kind == "input" and v:
+            v.inputs.append(f"{_el_label(el)} = {ev.get('value')}")
+        elif kind == "reason" and v:
+            v.reasons.append(ev.get("text") or "")
         elif kind == "bid":
-            target = next((v for v in reversed(s.visits) if v.ref == ev.get("ref")), current)
+            target = next((x for x in reversed(s.visits) if x.ref == ev.get("ref")), None)
             if target:
                 target.bid_k = ev.get("thousands") or None
                 target.bid_status = "ok" if '"success"' in (ev.get("response") or "") else f"http {ev.get('status')}"
-        elif kind == "screenshot" and current:
-            current.screenshots.append(ev.get("file") or "")
-    for ref in opened:
-        s.considered_not_opened.pop(ref, None)
+        elif kind == "screenshot":
+            target = visit_for(ev)
+            if target:
+                target.screenshots.append(ev.get("file") or "")
+    for v in s.visits:
+        s.considered_not_opened.pop(v.ref, None)
     return s
-
 
 def render_session(s: Session, bot_view=None) -> str:
     """Text timeline. `bot_view(ref) -> str | None` adds the bot's status for each lot when given."""

@@ -75,7 +75,7 @@ def test_timeline_and_report():
         _ev("00:05.000", "hover", url=N + "/auction?Chassis=GDH206", el={"tag": "div", "cls": "card-item-listings", "refno": "R9"}),
         _ev("00:06.000", "hover", url=N + "/auction?Chassis=GDH206", el={"tag": "div", "cls": "card-item-listings", "refno": "R1"}),
         _ev("00:10.000", "nav", url=N + "/auction/R1", ref="R1", chassis=None),
-        _ev("00:11.000", "screenshot", file="0001_lot.png", tag="lot"),
+        _ev("00:11.000", "screenshot", url=N + "/auction/R1", file="0001_lot.png", tag="lot"),
         _ev("00:12.000", "hover", url=N + "/auction/R1", el={"tag": "img", "id": "auction-sheet-img"}),
         _ev("00:14.000", "hover", url=N + "/auction/R1", el={"tag": "a", "cls": "gallery-demo", "href": "x1"}),
         _ev("00:15.000", "hover", url=N + "/auction/R1", el={"tag": "a", "cls": "gallery-demo", "href": "x2"}),
@@ -127,9 +127,18 @@ def test_watch_plumbing_in_a_headless_browser(tmp_path):
                 route.abort()
 
         ctx.route("**/*", serve)
+        def attach(p):
+            p.on("framenavigated", lambda f, p=p: rec.on_nav(p, f))
+            rec.on_new_page(p)
+
+        ctx.on("page", attach)  # fires for every new tab, including the first one
         page = ctx.new_page()
-        page.on("framenavigated", lambda f: rec.on_nav(page, f))
         page.goto(N + "/auction/TESTREF")
+        # Lots opened in a new tab (target=_blank or window.open) must be recorded too.
+        page.evaluate("window.open('" + N + "/auction/NEWTAB1', '_blank')")
+        page.evaluate("const a=document.createElement('a');a.href='" + N + "/auction/NEWTAB2';a.target='_blank';document.body.appendChild(a);a.click()")
+        page.wait_for_timeout(800)
+        page.bring_to_front()
         assert page.locator("#bidbarn-box").count() == 1
         page.locator("#bidbarn-reason").fill("skip: test reason")
         page.locator("#bidbarn-reason").press("Enter")
@@ -146,5 +155,8 @@ def test_watch_plumbing_in_a_headless_browser(tmp_path):
     kinds = [e["type"] for e in events]
     assert kinds[0] == "nav" and {"reason", "click", "screenshot"} <= set(kinds)
     s = timeline(events, "s")
-    assert s.visits[0].ref == "TESTREF" and s.visits[0].reasons == ["skip: test reason"] and s.visits[0].clicks
+    trail = [(e["type"], e.get("ref") or e.get("url", "")[-12:], e.get("opened", "")) for e in events]
+    assert s.visits[0].ref == "TESTREF" and s.visits[0].reasons == ["skip: test reason"] and s.visits[0].clicks, trail
+    assert [v.ref for v in s.visits] == ["TESTREF", "NEWTAB1", "NEWTAB2"]
+    assert [e.get("opened") for e in events if e["type"] == "nav"].count("new tab") == 2
     assert (tmp_path / "s" / "0001_lot.png").stat().st_size > 1000

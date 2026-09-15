@@ -6,7 +6,9 @@ in `data/sessions/`. (The few amounts quoted below are invented stand-ins for th
 
 ## Session 1, 2026-09-15 (8 minutes, one model code, no bid placed)
 
-**The manual flow does not open a lot's page at all.**
+**The manual flow runs from the result cards; a lot's page is opened in a new tab only when
+the card leaves a doubt or the guide asks for more.** (Session 1's recorder lost tabs opened
+from links, so those visits are missing from its log; fixed the same day.)
 
 1. Auction Search, then the Carbarn dashboard for about three minutes (reading the guide for
    the model code about to be searched), then back to Nichibo.
@@ -14,8 +16,8 @@ in `data/sessions/`. (The few amounts quoted below are invented stand-ins for th
    (once), model picked from the dropdown. Stock is left included in the search.
 3. The result cards are read in place: year, variant text, km, grade, start price. The first
    two cards get most of the attention; cards outside the grade or odometer limits are passed
-   over without any click. No card was opened, quick-viewed, or had its sheet or photos looked
-   at in this session.
+   over without any click. Lots that raise a question are opened in a new tab (the reviewer
+   said so; the recorder missed those tabs in this session).
 4. Candidates are added to the **cart** with the card's `+ cart` button. Two of seven cards
    went in; both were grade 4, the rest were grade 3.5, grade 0, or far above the odometer cap.
 5. In the **Auction cart** the amount is typed into each card's `CarCostJPY` field (in
@@ -25,9 +27,10 @@ in `data/sessions/`. (The few amounts quoted below are invented stand-ins for th
 
 **What this means for BidBarn**
 
-- For this kind of model the human decision is made from the same facts the bot's card stage
-  already has (year, km, grade, variant, start). The card-and-sheet scan matches the manual
-  flow; the sheet is extra care the human did not take here.
+- For clear-cut cards the human decision is made from the same facts the bot's card stage
+  already has (year, km, grade, variant, start); the page, sheet and photos are consulted only
+  for the doubtful ones. The card-and-sheet scan with the page opened only when a rule needs
+  it matches that shape.
 - The triage view should mirror the cards: the facts read at a glance, grade and km first.
 - The bot must never use the cart or `Place All Bids` (CLAUDE.md, rule 0b); it bids on the
   lot's own page, one at a time. Amounts should still be the ones the reviewer would type.
@@ -37,8 +40,8 @@ in `data/sessions/`. (The few amounts quoted below are invented stand-ins for th
 
 ## Still to learn
 
-- Sessions on models where the sheet or photos matter (Hiace, Alphard, Serena): what is
-  looked at, in which order, and what makes a lot fail.
+- Which cards raise a doubt and get their page opened, and what is looked at there (sheet,
+  photos, equipment), on models such as Hiace, Alphard and Serena.
 - Reasons typed into the box: none yet (the box was off screen in session 1; moved to the
   top right since).
 - Whether typed amounts equal the grid values on models with modifiers and chips. In session 1
