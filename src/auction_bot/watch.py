@@ -86,8 +86,8 @@ INIT_SCRIPT = r"""
     if (!document.body || document.getElementById('bidbarn-box')) return;
     const box = document.createElement('div');
     box.id = 'bidbarn-box';
-    box.style.cssText = 'position:fixed;right:12px;bottom:12px;z-index:2147483647;background:#111;color:#fff;padding:8px 10px;border-radius:8px;font:12px system-ui,sans-serif;box-shadow:0 2px 12px rgba(0,0,0,.45);width:320px;opacity:.93';
-    box.innerHTML = '<div style="margin-bottom:4px">BidBarn is watching. <b>Why?</b> <span style="color:#aaa">(Enter saves, Esc clears)</span></div>'
+    box.style.cssText = 'position:fixed;right:16px;top:16px;z-index:2147483647;background:#1d4ed8;color:#fff;padding:10px 12px;border-radius:10px;font:13px system-ui,sans-serif;box-shadow:0 4px 18px rgba(0,0,0,.5);width:340px;border:2px solid #fff';
+    box.innerHTML = '<div style="margin-bottom:6px;font-weight:700">BidBarn is watching. Why? <span style="font-weight:400;opacity:.85">(Enter saves, Esc clears)</span></div>'
       + '<input id="bidbarn-reason" placeholder="e.g. skip: dump body  /  bid: clean sheet, good photos" style="width:100%;box-sizing:border-box;padding:6px;border-radius:6px;border:1px solid #666;background:#222;color:#fff;font:13px system-ui,sans-serif">'
       + '<div id="bidbarn-last" style="margin-top:4px;color:#9ae6b4;min-height:14px"></div>';
     document.body.appendChild(box);
@@ -102,6 +102,7 @@ INIT_SCRIPT = r"""
     });
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount();
+  setInterval(mount, 2000);  // the site redraws parts of the page; keep the box there
 })();
 """
 
@@ -217,8 +218,8 @@ def watch(cfg: Config, echo=print) -> Path:
     with sync_playwright() as pw:
         # Same profile as the bot, but NO URL guard and NO pacing: Jim is driving, the bot only watches.
         ctx = pw.chromium.launch_persistent_context(
-            user_data_dir=str(cfg.profile_dir), headless=False, viewport={"width": 1400, "height": 900},
-            locale="en-AU", args=["--disable-blink-features=AutomationControlled"])
+            user_data_dir=str(cfg.profile_dir), headless=False, no_viewport=True,  # the page fills the real window
+            locale="en-AU", args=["--disable-blink-features=AutomationControlled", "--start-maximized"])
         ctx.expose_binding("__bidbarn_event", rec.handle_binding)
         ctx.add_init_script(INIT_SCRIPT)
         ctx.on("response", rec.on_response)
