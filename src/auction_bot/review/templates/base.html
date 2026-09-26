@@ -42,7 +42,8 @@
   <a href="/" class="muted" style="font-weight:400">triage</a>
   <a href="/list" class="muted" style="font-weight:400">all proposals</a>
   <span class="muted">pending bids: <b>{{ counts.bid if counts else '' }}</b> · needs review: <b>{{ counts.review if counts else '' }}</b> · approved, not placed: <b>{{ counts.approved if counts else '' }}</b> · placed: <b>{{ counts.placed if counts else '' }}</b></span>
-  <span style="margin-left:auto" class="pill {{ 'BID' if lock_label == 'LIVE PLACEMENT' else 'NEEDS_REVIEW' }}">{{ lock_label }}</span>
+  {% if can_finish %}<form method="post" action="/finish" style="margin-left:auto" onsubmit="return confirm('Finish the review and place the approved bids ({{ counts.approved if counts else 0 }})?')"><button class="approve" title="Hands control back to the BidBarn window, which places the approved bids">Finish review → place approved bids ({{ counts.approved if counts else 0 }})</button></form>{% endif %}
+  <span {% if not can_finish %}style="margin-left:auto"{% endif %} class="pill {{ 'BID' if lock_label == 'LIVE PLACEMENT' else 'NEEDS_REVIEW' }}">{{ lock_label }}</span>
 </header>
 <main>{% block body %}{% endblock %}</main>
 <script src="/static/review.js" defer></script>

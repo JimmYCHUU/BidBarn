@@ -1,7 +1,7 @@
 # BidBarn 🚗
 
 ![Python 3.12](https://img.shields.io/badge/python-3.12-blue)
-![Tests](https://img.shields.io/badge/tests-104%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-117%20passing-brightgreen)
 ![Playwright](https://img.shields.io/badge/browser-Playwright%20Chromium-45ba4b)
 ![No paid AI](https://img.shields.io/badge/AI%20APIs-none%20required-lightgrey)
 ![Testing lock](https://img.shields.io/badge/placement-testing%20lock%20on-orange)
@@ -117,10 +117,29 @@ Enforced in code, not by convention. The full list for anyone touching the code 
 
 ## Install & run
 
-### Route 0 — Windows double-click (the normal way)
+### One click: `bidbarn.cmd`
 
-The project ships with `.cmd` launchers. After the one-time setup below, the daily routine is
-double-clicking `scan.cmd`, then `review.cmd`, then `place.cmd`. `bot.cmd` on its own shows a menu.
+Install Python 3.12 once (tick "Add python.exe to PATH" in the installer), then double-click
+`bidbarn.cmd`. The first run creates the Python environment and installs the packages and the
+browser; every run after that:
+
+1. checks that you are signed in to Nichibo and the Carbarn dashboard, and opens a window for
+   you to sign in if a session has expired (it continues by itself once you have);
+2. fetches the bidding guides;
+3. scans Nichibo;
+4. opens the review page in your browser: approve or reject, then click **Finish review** at
+   the top of the page;
+5. places the approved bids, a dry run while the testing lock is on, and prints the result.
+
+`.\bidbarn.cmd --skip-scan` reviews and places what is already stored; `--no-place` stops
+after the review; `--headed` shows the browser while it works. No exe and no Docker on
+purpose: Windows App Control on the office PC blocks unsigned programs, and a container has
+no screen for the sign-in window or for watch mode.
+
+### The separate steps
+
+The same steps also exist as their own launchers, for when you want just one of them:
+`scan.cmd`, `review.cmd`, `place.cmd`, `login.cmd`. `bot.cmd` on its own shows a menu.
 
 ### What you need first
 
@@ -245,6 +264,7 @@ the checklist as "NOT understood". Add lines on the review page, with
 
 | Command | Purpose |
 |---|---|
+| `bot.cmd run [--skip-scan] [--no-place] [--headed]` | The whole day in one go (what `bidbarn.cmd` runs) |
 | `bot.cmd login` | One-time sign-in to Nichibo and the Carbarn dashboard |
 | `bot.cmd fetch-rules [-m CODE]` | Snapshot the Team Bid guides |
 | `bot.cmd rules [CODE]` | Print the parsed grid of a model |
@@ -291,20 +311,21 @@ Everything the bot downloads stays on the office PC. Git never sees any of it.
 .venv\Scripts\python -m pytest -q
 ```
 
-104 tests: the golden cases from the manual walkthrough against the real GDH206 guide, variant
+117 tests: the golden cases from the manual walkthrough against the real GDH206 guide, variant
 resolution on captured Alphard and E-Class guides, the seat rule, OCR parsing on three real sheets
 plus the header-band crop and its fallback, an offline end-to-end scan against captured Nichibo
 pages, the card-and-sheet path that opens no page, the placeholder path that parks a lot
 without a page, the grid ceiling, placement re-verification of card-judged lots, the cache and
 replay paths, the skip-line grammar and where the scan applies it, review telemetry and
 insights, the triage view, the HAR parser and join (with a socket guard proving no network),
-the Stock URL guard and the testing lock.
+the one-click sequence and its Finish hand-off, the Stock URL guard and the testing lock.
 
 ## Project layout
 
 ```
 bidbarn/
-├── bot.cmd · login.cmd · scan.cmd · review.cmd · place.cmd   Windows launchers
+├── bidbarn.cmd                                              one click: the whole day
+├── bot.cmd · login.cmd · scan.cmd · review.cmd · place.cmd   the separate steps
 ├── config.yaml                                              locks, cache, pacing, review address
 ├── CLAUDE.md                                                rules for anyone working on the code
 ├── docs/endpoints.md                                        both sites' endpoints, from the HAR captures
@@ -317,6 +338,7 @@ bidbarn/
 │   │                 soft.py + schema.py (optional model mode)
 │   ├── review/       FastAPI review page, templates (triage, detail, list) and static/review.js
 │   ├── pipeline.py   scan (card + sheet first, page only when needed) and offline replay
+│   ├── run.py        the one-click sequence: sign-in check, guides, scan, review, place
 │   ├── insights.py   how you decide, per model; suggested skip lines
 │   ├── learn.py      HAR of a manual session vs the bot's proposals, offline
 │   ├── watch.py      watch mode: records Jim's own session (clicks, hovers, reasons, bids)

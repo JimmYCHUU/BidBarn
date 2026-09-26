@@ -153,31 +153,23 @@ def place(live: bool = typer.Option(False, help="Actually submit (also requires 
     """Place every approved, not-yet-placed bid. Dry run unless config and --live both allow it."""
     _log()
     cfg = load_config()
-    from auction_bot.nichibo.bid import place_bid
-    from auction_bot.nichibo.browser import Browser
-    from auction_bot.nichibo.facts import VehicleFacts
-    from auction_bot.store import Store
+    from auction_bot.run import place_approved
 
-    dry, why = cfg.placement_mode(live)
-    store = Store(cfg.db_path)
-    try:
-        rows = store.approved_unplaced(cfg.max_bids_per_run)
-        if not rows:
-            typer.echo("No approved bids waiting.")
-            return
-        typer.echo(f"{'DRY RUN' if dry else 'LIVE'} ({why}): {len(rows)} approved bid(s)")
-        with Browser(cfg, headless=headless) as b:
-            for row in rows:
-                if store.already_bid(row["ref_no"]):
-                    typer.echo(f"  skip {row['ref_no']}: already bid")
-                    continue
-                facts = VehicleFacts.from_dict(json.loads(row["facts_json"]))
-                amount = int(row["approved_bid_jpy_k"] or row["bid_jpy_k"])
-                res = place_bid(b, cfg, row["ref_no"], amount, facts, dry_run=dry)
-                store.record_placement(row["id"], row["ref_no"], row["model_code"], amount, res.ok, res.message, res.screenshot, dry)
-                typer.echo(f"  {row['model_code']} {row['summary'][:70]} -> {amount}K: {'OK' if res.ok else 'BLOCKED'} {res.message}")
-    finally:
-        store.close()
+    place_approved(cfg, echo=typer.echo, headless=headless, live=live)
+
+
+@app.command()
+@friendly
+def run(skip_scan: bool = typer.Option(False, help="Do not scan; review and place what is already stored"),
+        no_place: bool = typer.Option(False, help="Stop after the review"),
+        headed: bool = typer.Option(False, help="Show the browser during the scan and the placement"),
+        no_browser: bool = typer.Option(False, help="Do not open the review page in your browser")) -> None:
+    """The whole day in one go: sign in if needed, fetch the guides, scan, review, place. (bidbarn.cmd runs this.)"""
+    _log()
+    cfg = load_config()
+    from auction_bot.run import run as run_all
+
+    run_all(cfg, echo=typer.echo, skip_scan=skip_scan, no_place=no_place, headed=headed, open_browser=not no_browser)
 
 
 @app.command()

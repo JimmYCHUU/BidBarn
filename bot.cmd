@@ -10,6 +10,7 @@ if "%~1"=="" (
   echo BidBarn - Carbarn's Nichibo auction bidding assistant
   echo.
   echo Double-click one of these files instead of bot.cmd:
+  echo   bidbarn.cmd  the whole day in one go: sign in, guides, scan, review, place
   echo   login.cmd    sign in to Nichibo and the Carbarn dashboard once
   echo   scan.cmd     fetch the bidding guides and scan Nichibo
   echo   review.cmd   open the review page in your browser

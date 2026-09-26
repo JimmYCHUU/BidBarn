@@ -56,9 +56,12 @@ def _wants_json(request: Request) -> bool:
     return "application/json" in (request.headers.get("accept") or "")
 
 
-def create_app(cfg: Config) -> FastAPI:
+def create_app(cfg: Config, finish_event=None) -> FastAPI:
+    """`finish_event` is set by `bot run`: the page then shows "Finish review", which hands control
+    back to the console so the approved bids can be placed."""
     app = FastAPI(title="Bid review")
     templates = Jinja2Templates(directory=str(TEMPLATES))
+    templates.env.globals["can_finish"] = finish_event is not None
     app.mount("/evidence", StaticFiles(directory=str(cfg.evidence_dir)), name="evidence")
     app.mount("/static", StaticFiles(directory=str(STATIC)), name="static")
 
@@ -214,6 +217,23 @@ def create_app(cfg: Config) -> FastAPI:
             raise HTTPException(404)
         facts = VehicleFacts.from_dict(json.loads(row["facts_json"] or "{}"))
         return JSONResponse({"line": suggest_from_reason(reason, facts)})
+
+    @app.post("/finish", response_class=HTMLResponse)
+    def finish():
+        """Hand control back to `bot run`, which then places the approved bids."""
+        if finish_event is None:
+            raise HTTPException(404, "not started by bot run")
+        s = store()
+        try:
+            waiting = s.counts()["approved"]
+        finally:
+            s.close()
+        finish_event.set()
+        return HTMLResponse(
+            "<!doctype html><meta charset='utf-8'><title>BidBarn</title>"
+            "<body style='font:16px system-ui;padding:40px;max-width:640px'>"
+            f"<h2>Review finished.</h2><p>{waiting} approved bid(s) will now be placed by the BidBarn window "
+            f"({lock_label().lower()}). You can close this tab.</p></body>")
 
     @app.post("/rules/{code}/skip")
     def add_skip_line(code: str, line: str = Form(...), next: str = Form("/")):
