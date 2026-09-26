@@ -20,7 +20,8 @@ from urllib.parse import parse_qs, unquote, urlsplit
 from auction_bot.store import Store
 
 # /auction/<segment> paths that are not a lot's detail page
-NOT_A_LOT = {"search", "cart", "bid", "login", "jsonAuctionSheetData", "jsonSuggested", "jsonMaketPrice"}
+NOT_A_LOT = {"search", "cart", "bid", "login", "today", "favourites", "favorites", "history",
+             "jsonAuctionSheetData", "jsonSuggested", "jsonMaketPrice"}
 RELOAD_SECONDS = 5.0
 
 

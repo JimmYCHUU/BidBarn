@@ -72,12 +72,16 @@ class Browser:
 
     def __enter__(self) -> "Browser":
         self._pw = sync_playwright().start()
+        # Headed: the page fills the real window (opened maximised) so nothing is cut off on
+        # Jim's screen. Headless: a fixed page size keeps screenshots comparable.
+        size = {"viewport": {"width": 1400, "height": 900}} if self.headless else {"no_viewport": True}
+        args = ["--disable-blink-features=AutomationControlled"] + ([] if self.headless else ["--start-maximized"])
         self.context = self._pw.chromium.launch_persistent_context(
             user_data_dir=str(self.cfg.profile_dir),
             headless=self.headless,
-            viewport={"width": 1400, "height": 900},
             locale="en-AU",
-            args=["--disable-blink-features=AutomationControlled"],
+            args=args,
+            **size,
         )
         # Second line of defence: even a page-initiated request to a forbidden Nichibo area is aborted.
         self.context.route(re.compile(r"https?://[^/]*nichibojapan\.com/(stock|vehicle[-_]?offers?|offers?|buy|purchase|order|checkout|cart|auction/cart|auction/update-image-credit)(/|\?|$)", re.I), _route_guard)

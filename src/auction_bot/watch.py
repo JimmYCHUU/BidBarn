@@ -26,7 +26,8 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 from auction_bot.config import Config
 
-NOT_A_LOT = {"search", "cart", "bid", "login", "jsonAuctionSheetData", "jsonSuggested", "jsonMaketPrice"}
+NOT_A_LOT = {"search", "cart", "bid", "login", "today", "favourites", "favorites", "history",
+             "jsonAuctionSheetData", "jsonSuggested", "jsonMaketPrice"}
 
 # Injected into every Nichibo and Carbarn dashboard page (the dashboard tab may live on a
 # second monitor; it is the same browser session, so it is recorded the same way). Sends

@@ -12,6 +12,7 @@ N = "https://autosearch.nichibojapan.com"
 def test_url_helpers():
     assert ref_from_url(N + "/auction/abc+def%3D") == "abc+def="  # base64 refs keep their plus signs
     assert ref_from_url(N + "/auction/cart/x") is None and ref_from_url(N + "/auction/bid?v=x") is None
+    assert ref_from_url(N + "/auction/today") is None  # Nichibo's "today" page is not a lot
     assert ref_from_url(N + "/auction?Chassis=GDH206") is None and ref_from_url("https://other.example/auction/x") is None
     assert search_chassis(N + "/auction?Make=All&Chassis=gdh206&page=1") == "GDH206"
     assert search_chassis(N + "/auction/x") is None
