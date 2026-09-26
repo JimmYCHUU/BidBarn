@@ -1,4 +1,4 @@
-"""One click (`bidbarn.cmd` -> `bot run`): sign in if needed, fetch the guides, scan, review, place.
+"""One click (`bidbarn.cmd`): Learn mode (`bot learn`) watches Jim bid; Bid mode (`bot bid`) does the day.
 
 Every step is the same code the separate commands use; this module only puts them in
 order and stops in the middle for the human review. The review page gets a "Finish review"
@@ -243,4 +243,124 @@ def run(cfg: Config, echo: Callable[[str], None] = print, skip_scan: bool = Fals
         out.approved = len(out.placed)
     echo("")
     echo("Done. " + (f"{out.approved} approved bid(s) handled." if out.approved else "Nothing was placed."))
+    return out
+
+
+# -- teaching: Jim bids by hand, the bot watches, then compares and suggests -------------------------
+
+def scan_codes(cfg: Config, codes: list[str], echo: Callable[[str], None] = print, headless: bool = True) -> dict:
+    """Scan only the model codes Jim searched, so the bot has its own view of the same lots."""
+    from auction_bot.nichibo.browser import Browser
+    from auction_bot.pipeline import scan
+    from auction_bot.store import Store
+
+    store = Store(cfg.db_path)
+    try:
+        with Browser(cfg, headless=headless) as b:
+            stats = scan(cfg, b, store, codes, no_model=True)
+    finally:
+        store.close()
+    d = dict(stats.__dict__)
+    echo(f"Bot's own scan of {', '.join(codes)}: {d['guides']} guides, {d['cards']} cards, {d['opened']} judged, "
+         f"{d['review']} to review, {d['skip']} skipped, {d['reused']} already known")
+    return d
+
+
+def compare_session(cfg: Config, session, store) -> list[str]:
+    """Per lot Jim touched: what he did, what the bot proposed, and the rule his comment suggests."""
+    from auction_bot.learn import _reasons
+    from auction_bot.nichibo.facts import VehicleFacts
+    from auction_bot.rules.instructions import suggest_from_reason
+
+    lines: list[str] = []
+    for v in session.lots.values():
+        if not v.touched or v.ref in ("today",):
+            continue
+        row = store.latest_proposal(v.ref)
+        row = dict(row) if row is not None else None
+        facts = store.vehicle_facts(v.ref)
+        title = v.title or (f"{facts.get('year', '')} {facts.get('make', '')} {facts.get('model', '')}".strip() if facts else v.ref)
+        jim = []
+        if v.bid_k:
+            jim.append(f"bid {v.bid_k}K")
+        elif v.amounts:
+            jim.append(f"typed {v.amounts[-1]}K")
+        if v.cart_clicks:
+            jim.append("left in the cart" if v.carted else "carted, then taken out")
+        if v.opened:
+            jim.append("opened the page")
+        if row is None:
+            bot = "never seen (not in the bot's scan)"
+        else:
+            bot = row["status"] + (f" {row['bid_jpy_k']:,}K" if row.get("bid_jpy_k") else "")
+            why = _reasons(row)
+            if why:
+                bot += " because " + why[0]
+        delta = ""
+        typed = v.bid_k or (v.amounts[-1] if v.amounts else None)
+        if typed and row and row.get("bid_jpy_k"):
+            try:
+                delta = f" (Jim {int(typed) - int(row['bid_jpy_k']):+,}K against the grid)"
+            except ValueError:
+                pass
+        lines.append(f"- {title}: Jim {', '.join(jim) or 'looked'} | bot {bot}{delta}")
+        for r in v.reasons:
+            lines.append(f"     why: {r}")
+            cand = suggest_from_reason(r, VehicleFacts.from_dict(facts)) if facts else None
+            if cand:
+                lines.append(f"     candidate rule for {row['model_code'] if row else 'this model'}: {cand}")
+    for n in session.notes:
+        lines.append(f"- note [{n.where}]: {n.text}")
+    return lines
+
+
+def learn(cfg: Config, echo: Callable[[str], None] = print, steps: dict | None = None) -> Path:
+    """Learn mode: watch Jim bid by hand, then scan what he searched, compare, and suggest rules."""
+    from auction_bot.store import Store
+    from auction_bot.watch import load_events, render_session, timeline
+    from auction_bot.watch import watch as watch_fn
+
+    s_ = steps or {}
+    watch_ = s_.get("watch", watch_fn)
+    guides_ = s_.get("fetch_guides", fetch_guides)
+    scan_ = s_.get("scan_codes", scan_codes)
+    echo("BidBarn is learning. Bid exactly as you normally do; type why in the blue box (Enter saves).")
+    echo("Close the browser window when you are done.")
+    out = watch_(cfg, echo)
+    session = timeline(load_events(out), str(out))
+    codes = list(dict.fromkeys(session.searches))
+    if codes:
+        echo("")
+        echo(f"You searched {', '.join(codes)}. The bot now scans the same codes for comparison (nothing is placed).")
+        try:
+            guides_(cfg, echo)
+            scan_(cfg, codes, echo)
+        except Exception as exc:  # the comparison is optional; the session is already saved
+            echo(f"Could not scan for comparison: {str(exc)[:200]}")
+    store = Store(cfg.db_path)
+    try:
+        def bot_view(ref: str) -> str:
+            row = store.latest_proposal(ref)
+            if row is None:
+                return "never seen"
+            return row["status"] + (f" {row['bid_jpy_k']:,}K" if row["bid_jpy_k"] else "") + f", {row['decision']}"
+
+        report = render_session(session, bot_view)
+        comparison = compare_session(cfg, session, store)
+        actions = [(v.ref, "open", None, None, v.opened_at, None) for v in session.visits]
+        actions += [(v.ref, "bid", int(v.bid_k) * 1000 if str(v.bid_k).isdigit() else None,
+                     int(v.bid_k) if str(v.bid_k).isdigit() else None, session.ended or session.started or "", None)
+                    for v in session.lots.values() if v.bid_k]
+        actions += [(v.ref, "reason", None, None, (v.reason_times[i] if i < len(v.reason_times) else session.ended or ""), r)
+                    for v in session.lots.values() for i, r in enumerate(v.reasons)]
+        saved = store.add_manual_actions(f"{out.name} (watch)", actions) if actions else 0
+    finally:
+        store.close()
+    text = report + "\n\nWhat the bot would have done, and the rules your comments suggest:\n" + "\n".join(comparison or ["   (nothing to compare)"])
+    (out / "report.txt").write_text(text, encoding="utf-8")
+    echo("")
+    echo(text)
+    echo("")
+    echo(f"Report saved to {out / 'report.txt'} ({saved} actions kept in the store).")
+    echo("A candidate rule becomes a rule only when you add it: review page, or  bot skip-line CODE \"skip: ...\".")
     return out

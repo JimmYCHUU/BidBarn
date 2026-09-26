@@ -103,6 +103,7 @@ class Store:
         self.conn.executescript(SCHEMA)
         self._ensure_columns("proposals", {"guide_id": "INTEGER"})  # databases created before guide_id existed
         self._ensure_columns("decisions", DECISION_COLUMNS)
+        self._ensure_columns("manual_actions", {"note": "TEXT"})  # typed reasons from watch sessions
 
     def _ensure_columns(self, table: str, columns: dict[str, str]) -> None:
         """Add the columns a newer version needs to a database created by an older one. Never drops anything."""
@@ -147,10 +148,11 @@ class Store:
 
     # -- manual sessions (bot learn --har) -------------------------------------
     def add_manual_actions(self, session: str, actions: list[tuple]) -> int:
-        """actions: (ref_no, action, bid_jpy, bid_jpy_k, at). Re-running the same file adds nothing."""
+        """actions: (ref_no, action, bid_jpy, bid_jpy_k, at[, note]). Re-running the same session adds nothing."""
+        rows = [(session, *a, *([None] * (6 - len(a)))) for a in actions]
         cur = self.conn.executemany(
-            "INSERT OR IGNORE INTO manual_actions(session, ref_no, action, bid_jpy, bid_jpy_k, at) VALUES(?,?,?,?,?,?)",
-            [(session, *a) for a in actions])
+            "INSERT OR IGNORE INTO manual_actions(session, ref_no, action, bid_jpy, bid_jpy_k, at, note) VALUES(?,?,?,?,?,?,?)",
+            rows)
         self.conn.commit()
         return cur.rowcount if cur.rowcount is not None and cur.rowcount >= 0 else 0
 

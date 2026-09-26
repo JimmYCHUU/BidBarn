@@ -254,9 +254,11 @@ def suggest_from_reason(reason: str, facts: VehicleFacts) -> str | None:
     if not text:
         return None
     low = text.lower()
-    m = re.search(r"(\d{2,3}(?:,\d{3})+|\d{4,7})\s*km", low)
+    m = re.search(r"(\d{2,3}(?:,\d{3})+|\d{4,7})\s*km", low) or re.search(r"\b(\d{2,3})\s*k\b\s*(?:km|odo|kms)?", low)
     if m:
         n = int(m.group(1).replace(",", ""))
+        if n < 1000:  # "80k odo" -> 80,000
+            n *= 1000
         if facts.km is None or facts.km >= n:
             return f"skip: km >= {n}"
     if "start" in low and ("bid" in low or "price" in low):

@@ -1,7 +1,7 @@
 # BidBarn 🚗
 
 ![Python 3.12](https://img.shields.io/badge/python-3.12-blue)
-![Tests](https://img.shields.io/badge/tests-117%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-120%20passing-brightgreen)
 ![Playwright](https://img.shields.io/badge/browser-Playwright%20Chromium-45ba4b)
 ![No paid AI](https://img.shields.io/badge/AI%20APIs-none%20required-lightgrey)
 ![Testing lock](https://img.shields.io/badge/placement-testing%20lock%20on-orange)
@@ -121,7 +121,17 @@ Enforced in code, not by convention. The full list for anyone touching the code 
 
 Install Python 3.12 once (tick "Add python.exe to PATH" in the installer), then double-click
 `bidbarn.cmd`. The first run creates the Python environment and installs the packages and the
-browser; every run after that:
+browser. Every run then asks for one of two modes (or run `bidbarn.cmd learn` /
+`bidbarn.cmd bid` to skip the question).
+
+**Learn mode (L).** The bot's browser opens; you bid exactly as you normally do and type why in
+the blue box at the top right (Enter saves), on Nichibo and on the Carbarn dashboard. The bot
+only watches. When you close the browser it scans the model codes you searched, compares its
+own proposals with what you did, card by card, turns your comments into candidate `skip:`
+rules where it can, and saves everything to `data\sessions\<stamp>\report.txt`. Nothing is
+placed and no rule is stored until you add it.
+
+**Bid mode (B)**, every run:
 
 1. checks that you are signed in to Nichibo and the Carbarn dashboard, and opens a window for
    you to sign in if a session has expired (it continues by itself once you have);
@@ -131,8 +141,8 @@ browser; every run after that:
    the top of the page;
 5. places the approved bids, a dry run while the testing lock is on, and prints the result.
 
-`.\bidbarn.cmd --skip-scan` reviews and places what is already stored; `--no-place` stops
-after the review; `--headed` shows the browser while it works. No exe and no Docker on
+`.\bidbarn.cmd bid --skip-scan` reviews and places what is already stored; `--no-place`
+stops after the review; `--headed` shows the browser while it works. No exe and no Docker on
 purpose: Windows App Control on the office PC blocks unsigned programs, and a container has
 no screen for the sign-in window or for watch mode.
 
@@ -264,7 +274,8 @@ the checklist as "NOT understood". Add lines on the review page, with
 
 | Command | Purpose |
 |---|---|
-| `bot.cmd run [--skip-scan] [--no-place] [--headed]` | The whole day in one go (what `bidbarn.cmd` runs) |
+| `bot.cmd learn` | Learn mode (`bidbarn.cmd`, L): watch you bid, then scan the same codes, compare, suggest rules |
+| `bot.cmd bid [--skip-scan] [--no-place] [--headed]` | Bid mode (`bidbarn.cmd`, B): sign-in check, guides, scan, review, place |
 | `bot.cmd login` | One-time sign-in to Nichibo and the Carbarn dashboard |
 | `bot.cmd fetch-rules [-m CODE]` | Snapshot the Team Bid guides |
 | `bot.cmd rules [CODE]` | Print the parsed grid of a model |
@@ -274,7 +285,7 @@ the checklist as "NOT understood". Add lines on the review page, with
 | `bot.cmd place [--live]` | Place approved bids (dry run unless every lock is off) |
 | `bot.cmd insights [-m CODE] [--days N] [--min-support N]` | How you decide per model, and the skip lines your rejections justify |
 | `bot.cmd skip-line CODE "skip: ..."` | Add a structured standing instruction (validated first) |
-| `bot.cmd learn --har FILE [-m CODE] [--save]` | Compare a manual Nichibo session (HAR from your browser) with the bot's proposals; offline |
+| `bot.cmd learn --har FILE [-m CODE] [--save]` | Learn from a HAR saved in your own browser instead of watching; offline |
 | `bot.cmd watch [--report DIR]` | Record a manual session in the bot's browser (clicks, hovers, reasons, bids, screenshots); `--report` prints a recorded session's timeline |
 
 ## Where your files live
@@ -311,20 +322,20 @@ Everything the bot downloads stays on the office PC. Git never sees any of it.
 .venv\Scripts\python -m pytest -q
 ```
 
-117 tests: the golden cases from the manual walkthrough against the real GDH206 guide, variant
+120 tests: the golden cases from the manual walkthrough against the real GDH206 guide, variant
 resolution on captured Alphard and E-Class guides, the seat rule, OCR parsing on three real sheets
 plus the header-band crop and its fallback, an offline end-to-end scan against captured Nichibo
 pages, the card-and-sheet path that opens no page, the placeholder path that parks a lot
 without a page, the grid ceiling, placement re-verification of card-judged lots, the cache and
 replay paths, the skip-line grammar and where the scan applies it, review telemetry and
 insights, the triage view, the HAR parser and join (with a socket guard proving no network),
-the one-click sequence and its Finish hand-off, the Stock URL guard and the testing lock.
+the learn and bid modes (card attribution of comments, the Finish hand-off), the Stock URL guard and the testing lock.
 
 ## Project layout
 
 ```
 bidbarn/
-├── bidbarn.cmd                                              one click: the whole day
+├── bidbarn.cmd                                              one click: Learn mode or Bid mode
 ├── bot.cmd · login.cmd · scan.cmd · review.cmd · place.cmd   the separate steps
 ├── config.yaml                                              locks, cache, pacing, review address
 ├── CLAUDE.md                                                rules for anyone working on the code
@@ -338,7 +349,7 @@ bidbarn/
 │   │                 soft.py + schema.py (optional model mode)
 │   ├── review/       FastAPI review page, templates (triage, detail, list) and static/review.js
 │   ├── pipeline.py   scan (card + sheet first, page only when needed) and offline replay
-│   ├── run.py        the one-click sequence: sign-in check, guides, scan, review, place
+│   ├── run.py        the one-click modes: learn (watch, compare, suggest) and bid (sign-in, guides, scan, review, place)
 │   ├── insights.py   how you decide, per model; suggested skip lines
 │   ├── learn.py      HAR of a manual session vs the bot's proposals, offline
 │   ├── watch.py      watch mode: records Jim's own session (clicks, hovers, reasons, bids)
@@ -357,5 +368,11 @@ decisions exist.
 
 ### Open questions for Carbarn
 
+- Odometer margin (from the teaching session of 2026-09-15): the reviewer skips a lot that is
+  already at the last band's cap ("already 80k") and, for a lot exactly on a band boundary
+  ("50k on the mark"), uses the next band's value, because the odometer rises between the
+  auction and the warehouse. Bands are upper-bound inclusive today, so the bot would price
+  50,000 km in the 40-50K band and would bid on an 80,000 km lot with an 80K cap. What margin
+  should the bot apply, in km, and does it apply to every model?
 - The GDH206K variant is inactive on the guide although the walkthrough bids on it; the bot
   treats every variant as biddable (the dot is the selected tab). Confirm.

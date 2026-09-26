@@ -52,6 +52,17 @@ INIT_SCRIPT = r"""
     if (text) d.text = text.slice(0, 80);
     if (el.href) d.href = String(el.href).slice(0, 200);
     if (el.dataset && el.dataset.refno) d.refno = el.dataset.refno;
+    if (site === 'nichibo' && el.closest) {
+      // The result card or cart card this element sits in: its reference and title.
+      const card = el.closest('div.card-item-listings, [data-refno], div.card');
+      if (card) {
+        const rb = card.querySelector ? card.querySelector('[data-refno]') : null;
+        const ref = (card.dataset && card.dataset.refno) || (rb && rb.dataset.refno);
+        if (ref) d.card_ref = ref;
+        const title = card.querySelector ? card.querySelector('.car-title-h, .card-title, h5') : null;
+        if (title && title.innerText) d.card = title.innerText.trim().replace(/\s+/g, ' ').slice(0, 60);
+      }
+    }
     if (site === 'dashboard') {
       // Where on the dashboard: the table row and the nearest heading (the guide's name).
       const row = el.closest && el.closest('tr');
@@ -323,20 +334,47 @@ def watch(cfg: Config, echo=print) -> Path:
 
 # -- reading a recorded session (offline) ----------------------------------------------------------
 
+REASON_LINK_SECONDS = 90.0  # a comment typed within this long of touching a card belongs to that card
+
+
 @dataclass
 class LotVisit:
     ref: str
-    opened_at: str
+    opened_at: str | None = None  # when the lot's own page was opened (None: seen on a list only)
+    title: str = ""  # the card's title, e.g. "2020 Honda Shuttle"
     seconds: float | None = None
     clicks: list[str] = field(default_factory=list)
     gallery_hovers: int = 0
     sheet_viewed: bool = False
     scroll_depth: float | None = None  # 0..1 of the page height reached
     inputs: list[str] = field(default_factory=list)
+    amounts: list[str] = field(default_factory=list)  # typed into the card's bid field (thousands)
     reasons: list[str] = field(default_factory=list)
+    reason_times: list[str] = field(default_factory=list)  # when each reason was typed
+    cart_clicks: int = 0  # the card's cart button: odd = in the cart, even = taken out again
     bid_k: str | None = None
     bid_status: str | None = None
     screenshots: list[str] = field(default_factory=list)
+
+    @property
+    def opened(self) -> bool:
+        return self.opened_at is not None
+
+    @property
+    def carted(self) -> bool:
+        return self.cart_clicks % 2 == 1
+
+    @property
+    def touched(self) -> bool:
+        return self.opened or self.cart_clicks > 0 or bool(self.amounts) or bool(self.reasons) or self.bid_k is not None
+
+
+@dataclass
+class Note:
+    """A comment typed on a results list, the cart or another page that names no lot."""
+    at: str
+    text: str
+    where: str  # "list GDH206", "cart", "page"
 
 
 @dataclass
@@ -356,11 +394,18 @@ class Session:
     started: str | None = None
     ended: str | None = None
     searches: list[str] = field(default_factory=list)
-    visits: list[LotVisit] = field(default_factory=list)
+    visits: list[LotVisit] = field(default_factory=list)  # lots whose page was opened, in order
+    lots: dict[str, LotVisit] = field(default_factory=dict)  # every lot touched, by reference
+    notes: list[Note] = field(default_factory=list)
     considered_not_opened: Counter = field(default_factory=Counter)  # cards hovered on the list, never opened
     list_seconds: float = 0.0
     counts: Counter = field(default_factory=Counter)
     dashboard: Dashboard = field(default_factory=Dashboard)
+
+    @property
+    def carted(self) -> list[LotVisit]:
+        """Lots handled on a results list or in the cart without opening their page."""
+        return [v for v in self.lots.values() if not v.opened and (v.cart_clicks or v.amounts or v.bid_k)]
 
 
 def load_events(session: Path) -> list[dict]:
@@ -392,15 +437,35 @@ def _el_label(el: dict) -> str:
     return " ".join(bits)
 
 
+def _page_kind(url: str) -> str:
+    parts = urlsplit(url or "")
+    p = parts.path.rstrip("/")
+    if p == "/auction/cart":
+        return "cart"
+    chassis = search_chassis(url)
+    if chassis:
+        return f"list {chassis}"
+    if p in ("/auction", "/auction/search"):
+        return "list"
+    return "page"
+
+
 def timeline(events: list[dict], session_dir: str = "") -> Session:
-    """Per-lot visits from the event log.
+    """What happened per lot, on the lists and the cart, and on the dashboard.
 
     Events sent by the page's script (clicks, hovers, reasons, inputs) can reach the log a
-    little after the navigation events written directly by the recorder, so each of them
-    is attributed to the lot named in its own URL, not to whichever lot was logged last.
+    little after the navigation events written directly by the recorder, so each of them is
+    attributed by its own URL and by the card it names, not by whichever lot was logged last.
+    A comment typed on a list or cart page belongs to the card touched just before it.
     """
     s = Session(dir=session_dir)
-    # Pass 1: navigations define the visits and the time on result lists.
+
+    def lot(ref: str) -> LotVisit:
+        if ref not in s.lots:
+            s.lots[ref] = LotVisit(ref=ref)
+        return s.lots[ref]
+
+    # Pass 1: navigations define the page visits and the time on result lists.
     current: LotVisit | None = None
     list_since: str | None = None
     for ev in events:
@@ -424,6 +489,11 @@ def timeline(events: list[dict], session_dir: str = "") -> Session:
                 list_since = None
             if ev.get("ref"):
                 current = LotVisit(ref=ev["ref"], opened_at=t)
+                if ev["ref"] in s.lots and not s.lots[ev["ref"]].opened:
+                    prev = s.lots[ev["ref"]]  # seen on a list first: keep what was typed there
+                    current.title, current.amounts, current.cart_clicks = prev.title, prev.amounts, prev.cart_clicks
+                    current.reasons, current.reason_times = prev.reasons, prev.reason_times
+                s.lots[ev["ref"]] = current
                 s.visits.append(current)
             elif ev.get("chassis"):
                 s.searches.append(ev["chassis"])
@@ -435,15 +505,17 @@ def timeline(events: list[dict], session_dir: str = "") -> Session:
             return next((v for v in reversed(s.visits) if v.ref == ref), None)
         return None
 
-    # Pass 2: what happened on each lot, and on the dashboard.
+    # Pass 2: what happened on each lot, on the lists and the cart, and on the dashboard.
     dash = s.dashboard
     dash_seconds: set[str] = set()
+    last_card: tuple[str, str] | None = None  # (ref, time) of the card touched last on a list/cart page
     for ev in events:
         kind = ev.get("type")
         el = ev.get("el") or {}
+        t = ev.get("t") or ""
         if ev.get("site") == "dashboard":
             if kind in ("pointer", "hover", "click", "scroll", "select", "input"):
-                dash_seconds.add((ev.get("t") or "")[:19])
+                dash_seconds.add(t[:19])
             if kind in ("pointer", "hover"):
                 if el.get("heading"):
                     dash.headings[el["heading"]] += 1
@@ -457,6 +529,20 @@ def timeline(events: list[dict], session_dir: str = "") -> Session:
                 dash.reasons.append(ev.get("text") or "")
             continue
         v = visit_for(ev)
+        card_ref = el.get("refno") or el.get("card_ref")
+        if v is None and card_ref and kind in ("click", "hover", "input", "pointer"):
+            card = lot(card_ref)
+            if el.get("card") and not card.title:
+                card.title = el["card"]
+            if kind == "click" and (el.get("text") or "").strip().lower() == "cart":
+                card.cart_clicks += 1
+            elif kind == "input" and ev.get("value") not in (None, ""):
+                card.amounts.append(str(ev["value"]))
+            if kind != "pointer":
+                last_card = (card_ref, t)
+            if kind == "hover":
+                s.considered_not_opened[card_ref] += 1
+            continue
         if kind == "click" and v:
             v.clicks.append(_el_label(el))
             if el.get("id") == "auction-sheet-img":
@@ -467,43 +553,54 @@ def timeline(events: list[dict], session_dir: str = "") -> Session:
                     v.sheet_viewed = True
                 elif "gallery" in (el.get("cls") or "") or el.get("tag") == "a":
                     v.gallery_hovers += 1
-            elif el.get("refno"):
-                s.considered_not_opened[el["refno"]] += 1
         elif kind == "scroll" and v:
             h, vh, y = ev.get("h") or 0, ev.get("vh") or 0, ev.get("y") or 0
             if h:
                 v.scroll_depth = max(v.scroll_depth or 0, min(1.0, round((y + vh) / h, 2)))
         elif kind == "input" and v:
             v.inputs.append(f"{_el_label(el)} = {ev.get('value')}")
-        elif kind == "reason" and v:
-            v.reasons.append(ev.get("text") or "")
+        elif kind == "reason":
+            text = ev.get("text") or ""
+            target_lot = v if v else (lot(last_card[0]) if last_card and t and _secs(last_card[1], t) <= REASON_LINK_SECONDS else None)
+            if target_lot is not None:
+                target_lot.reasons.append(text)
+                target_lot.reason_times.append(t)
+            else:
+                s.notes.append(Note(at=t, text=text, where=_page_kind(ev.get("url") or "")))
         elif kind == "bid":
-            target = next((x for x in reversed(s.visits) if x.ref == ev.get("ref")), None)
-            if target:
-                target.bid_k = ev.get("thousands") or None
-                target.bid_status = "ok" if '"success"' in (ev.get("response") or "") else f"http {ev.get('status')}"
+            target = lot(ev.get("ref") or "?")
+            target.bid_k = ev.get("thousands") or None
+            target.bid_status = "ok" if '"success"' in (ev.get("response") or "") else f"http {ev.get('status')}"
         elif kind == "screenshot":
             target = visit_for(ev)
             if target:
                 target.screenshots.append(ev.get("file") or "")
     for v in s.visits:
         s.considered_not_opened.pop(v.ref, None)
+    for ref, v in s.lots.items():
+        if v.cart_clicks or v.amounts or v.bid_k:
+            s.considered_not_opened.pop(ref, None)
     dash.active_seconds = len(dash_seconds)
     return s
 
+
 def render_session(s: Session, bot_view=None) -> str:
     """Text timeline. `bot_view(ref) -> str | None` adds the bot's status for each lot when given."""
-    lines = [f"Session {s.dir}: {len(s.visits)} lots opened, {sum(1 for v in s.visits if v.bid_k)} bids, "
-             f"{len(s.searches)} searches ({', '.join(dict.fromkeys(s.searches)) or '-'}), "
-             f"{s.list_seconds:g} s on result lists, {len(s.considered_not_opened)} cards hovered but never opened"]
+    carted = s.carted
+    lines = [f"Session {s.dir}: {len(s.visits)} lots opened, {len(carted)} cards handled on the list or in the cart, "
+             f"{sum(1 for v in s.lots.values() if v.bid_k)} bids, {len(s.searches)} searches "
+             f"({', '.join(dict.fromkeys(s.searches)) or '-'}), {s.list_seconds:g} s on result lists, "
+             f"{len(s.considered_not_opened)} cards hovered only"]
     if s.started and s.ended:
         lines.append(f"   {s.started[:19]} to {s.ended[:19]}")
     secs = [v.seconds for v in s.visits if v.seconds is not None]
     if secs:
-        lines.append(f"   time per lot: median {statistics.median(secs):g} s, max {max(secs):g} s; "
+        lines.append(f"   time per opened lot: median {statistics.median(secs):g} s, max {max(secs):g} s; "
                      f"sheet viewed on {sum(1 for v in s.visits if v.sheet_viewed)} of {len(s.visits)}, "
                      f"photos hovered on {sum(1 for v in s.visits if v.gallery_hovers)}")
-    lines.append("")
+    if s.visits:
+        lines.append("")
+        lines.append("Lots opened:")
     for i, v in enumerate(s.visits, 1):
         what = []
         if v.sheet_viewed:
@@ -517,12 +614,29 @@ def render_session(s: Session, bot_view=None) -> str:
         bid = f" BID {v.bid_k}K ({v.bid_status})" if v.bid_k else ""
         bot = f" | bot: {bot_view(v.ref)}" if bot_view else ""
         secs_txt = f"{v.seconds:g} s" if v.seconds is not None else "?"
-        lines.append(f"{i:3d}. {v.ref} {secs_txt}{bid} | {', '.join(what) or 'looked only'}{bot}")
+        lines.append(f"{i:3d}. {v.title or v.ref} {secs_txt}{bid} | {', '.join(what) or 'looked only'}{bot}")
         for r in v.reasons:
             lines.append(f"       why: {r}")
+    listed = carted
+    if listed:
+        lines.append("")
+        lines.append("Cards handled on the list and in the cart (never opened):")
+        for v in listed:
+            state = "in the cart" if v.carted else ("carted then taken out" if v.cart_clicks else "priced")
+            amount = f", typed {', '.join(v.amounts[-2:])}" if v.amounts else ""
+            bid = f", BID {v.bid_k}K ({v.bid_status})" if v.bid_k else ""
+            bot = f" | bot: {bot_view(v.ref)}" if bot_view else ""
+            lines.append(f"   - {v.title or v.ref}: {state}{amount}{bid}{bot}")
+            for r in v.reasons:
+                lines.append(f"       why: {r}")
+    if s.notes:
+        lines.append("")
+        lines.append("Comments typed on list and cart pages:")
+        for n in s.notes:
+            lines.append(f"   [{n.where}] {n.text}")
     if s.considered_not_opened:
         lines.append("")
-        lines.append("Hovered on the list but never opened: " + ", ".join(list(s.considered_not_opened)[:20]))
+        lines.append("Hovered on the list, nothing else: " + ", ".join(list(s.considered_not_opened)[:20]))
     d = s.dashboard
     if d.active_seconds or d.headings or d.clicks or d.selections:
         lines.append("")

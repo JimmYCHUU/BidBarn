@@ -1,4 +1,4 @@
-"""Command line: login | fetch-rules | rules | scan | review | place | replay | skip-line."""
+"""Command line: learn | bid | login | fetch-rules | rules | scan | review | place | replay | skip-line | watch."""
 from __future__ import annotations
 
 import json
@@ -160,11 +160,11 @@ def place(live: bool = typer.Option(False, help="Actually submit (also requires 
 
 @app.command()
 @friendly
-def run(skip_scan: bool = typer.Option(False, help="Do not scan; review and place what is already stored"),
+def bid(skip_scan: bool = typer.Option(False, help="Do not scan; review and place what is already stored"),
         no_place: bool = typer.Option(False, help="Stop after the review"),
         headed: bool = typer.Option(False, help="Show the browser during the scan and the placement"),
         no_browser: bool = typer.Option(False, help="Do not open the review page in your browser")) -> None:
-    """The whole day in one go: sign in if needed, fetch the guides, scan, review, place. (bidbarn.cmd runs this.)"""
+    """Bid mode (bidbarn.cmd, B): sign in if needed, fetch the guides, scan, review page, place what you approve."""
     _log()
     cfg = load_config()
     from auction_bot.run import run as run_all
@@ -222,11 +222,17 @@ def insights(model: list[str] = typer.Option(None, "--model", "-m", help="Only t
 
 @app.command()
 @friendly
-def learn(har: Path = typer.Option(..., "--har", exists=True, dir_okay=False, help="HAR saved from your own browser session"),
-          model: list[str] = typer.Option(None, "--model", "-m", help="Only these model codes"),
-          save: bool = typer.Option(False, help="Keep the parsed opens and bids (refs, times, amounts) in the store")) -> None:
-    """Compare a manual Nichibo session of yours (a HAR file) with the bot's proposals. Offline, touches nothing."""
+def learn(har: Path = typer.Option(None, "--har", exists=True, dir_okay=False, help="Instead of watching: a HAR saved from your own browser"),
+          model: list[str] = typer.Option(None, "--model", "-m", help="With --har: only these model codes"),
+          save: bool = typer.Option(False, help="With --har: keep the parsed opens and bids in the store")) -> None:
+    """Learn mode (bidbarn.cmd, L): you bid by hand in the bot's browser and type why; the bot watches, then compares."""
+    _log()
     cfg = load_config()
+    if har is None:
+        from auction_bot.run import learn as learn_by_watching
+
+        learn_by_watching(cfg, echo=typer.echo)
+        return
     from auction_bot.learn import join_session, parse_har, render_report, save_session
     from auction_bot.store import Store
 

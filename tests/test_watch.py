@@ -102,8 +102,8 @@ def test_timeline_and_report():
     assert s.searches == ["GDH206", "GDH206", "GDH206"] and s.list_seconds == 9 + 10 + 5
     assert dict(s.considered_not_opened) == {"R9": 1}  # R1 was hovered then opened
     text = render_session(s, bot_view=lambda ref: "NEEDS_REVIEW 1,240K, pending" if ref == "R1" else "never seen")
-    assert "2 lots opened, 1 bids" in text and "R1 30 s BID 1240K (ok)" in text and "sheet, 2 photo hovers, scrolled 60%" in text
-    assert "why: skip: dump body" in text and "bot: never seen" in text and "never opened: R9" in text
+    assert "2 lots opened, 0 cards handled on the list or in the cart, 1 bids" in text and "R1 30 s BID 1240K (ok)" in text and "sheet, 2 photo hovers, scrolled 60%" in text
+    assert "why: skip: dump body" in text and "bot: never seen" in text and "nothing else: R9" in text
     assert "median 17.5 s, max 30 s" in text
 
 
@@ -219,3 +219,37 @@ def test_dashboard_page_is_recorded_in_a_headless_browser(tmp_path):
     hov = next(e for e in events if e["type"] == "hover")
     assert hov["site"] == "dashboard" and hov["el"]["text"] == "1,412" and hov["el"]["heading"] == "Nissan / Serena GC27" and "10/2021" in hov["el"]["row"]
     assert next(e for e in events if e["type"] == "select")["text"] == "Dark Color Seats Only"
+
+
+def test_cart_flow_attributes_amounts_and_comments_to_cards():
+    L = N + "/auction?Chassis=GP7"
+    C = N + "/auction/cart"
+    card = {"tag": "button", "text": "cart", "refno": "S1", "card_ref": "S1", "card": "2020 Honda Shuttle"}
+    other = {"tag": "button", "text": "cart", "refno": "S2", "card_ref": "S2", "card": "2021 Honda Shuttle"}
+    events = [
+        _ev("00:00.000", "session", started="2026-09-15T10:00:00.000"),
+        _ev("00:01.000", "nav", url=L, ref=None, chassis="GP7"),
+        _ev("00:05.000", "reason", url=L, text="only the grade 4 ones"),  # nothing touched yet: a general note
+        _ev("00:10.000", "hover", url=L, el=other),
+        _ev("00:12.000", "click", url=L, el=card),  # into the cart
+        _ev("00:15.000", "reason", url=L, text="grade 4, 54,000 km"),  # belongs to S1
+        _ev("00:20.000", "nav", url=C, ref=None, chassis=None),
+        _ev("00:25.000", "input", url=C, el={"tag": "input", "cls": "form-control text-right", "card_ref": "S1", "card": "2020 Honda Shuttle"}, value="640"),
+        _ev("00:30.000", "reason", url=C, text="entered 640 because 2020 and 50-60k"),
+        _ev("00:40.000", "click", url=C, el=card),  # taken out again
+        _ev("00:41.000", "reason", url=C, text="uncarted, just teaching"),
+        _ev("03:00.000", "reason", url=C, text="late remark"),  # more than 90 s after the last card touch
+        _ev("03:05.000", "bid", url=N + "/auction/bid?v=S2&b=610000&ba=610", ref="S2", yen="610000", thousands="610", status=200, response='{"type":"success"}'),
+        _ev("03:10.000", "session_end", ended="2026-09-15T10:03:10.000"),
+    ]
+    s = timeline(events, "sess")
+    assert s.visits == [] and set(s.lots) == {"S1", "S2"}
+    s1, s2 = s.lots["S1"], s.lots["S2"]
+    assert s1.title == "2020 Honda Shuttle" and s1.cart_clicks == 2 and not s1.carted and s1.amounts == ["640"]
+    assert s1.reasons == ["grade 4, 54,000 km", "entered 640 because 2020 and 50-60k", "uncarted, just teaching"]
+    assert s2.bid_k == "610" and s2.bid_status == "ok" and not s2.opened
+    assert [(n.where, n.text) for n in s.notes] == [("list GP7", "only the grade 4 ones"), ("cart", "late remark")]
+    assert dict(s.considered_not_opened) == {}  # S2 was hovered, then bid on
+    text = render_session(s, bot_view=lambda ref: "bot says")
+    assert "2 cards handled on the list or in the cart, 1 bids" in text and "2020 Honda Shuttle: carted then taken out, typed 640 | bot: bot says" in text
+    assert "2021 Honda Shuttle: priced, BID 610K (ok)" in text and "[list GP7] only the grade 4 ones" in text
