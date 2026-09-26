@@ -124,9 +124,10 @@ Install Python 3.12 once (tick "Add python.exe to PATH" in the installer), then 
 browser. Every run then asks for one of two modes (or run `bidbarn.cmd learn` /
 `bidbarn.cmd bid` to skip the question).
 
-**Learn mode (L).** The bot's browser opens; you bid exactly as you normally do and type why in
-the blue box at the top right (Enter saves), on Nichibo and on the Carbarn dashboard. The bot
-only watches. When you close the browser it scans the model codes you searched, compares its
+**Learn mode (L).** The bot's browser opens with two tabs, Nichibo and the Carbarn dashboard
+(drag the dashboard tab to your other monitor); you bid exactly as you normally do and type
+why in the blue box at the top right (Enter saves). Where your mouse rests, what you hover
+and what you highlight is recorded on both tabs. The bot only watches. When you close the browser it scans the model codes you searched, compares its
 own proposals with what you did, card by card, turns your comments into candidate `skip:`
 rules where it can, and saves everything to `data\sessions\<stamp>\report.txt`. Nothing is
 placed and no rule is stored until you add it.

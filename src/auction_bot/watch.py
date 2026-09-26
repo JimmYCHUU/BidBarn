@@ -275,18 +275,21 @@ def session_dir(cfg: Config, stamp: datetime | None = None) -> Path:
     return cfg.db_path.parent / "sessions" / stamp.strftime("%Y%m%d-%H%M%S")
 
 
-def watch(cfg: Config, echo=print) -> Path:
-    """Open the bot's browser for Jim and record until he closes it (or Ctrl+C)."""
+def watch(cfg: Config, echo=print, headless: bool = False, max_seconds: float | None = None) -> Path:
+    """Open the bot's browser for Jim, with Nichibo and the Carbarn dashboard in two tabs, and
+    record until he closes it (or Ctrl+C). `headless` and `max_seconds` exist for smoke tests."""
     from playwright.sync_api import sync_playwright
 
     out = session_dir(cfg)
     rec = Recorder(out)
     base = cfg.nichibo.get("base_url", "https://autosearch.nichibojapan.com").rstrip("/")
+    dashboard = cfg.carbarn.get("dashboard_url", "https://dashboard.carbarn.com.au/?view=bidding")
     with sync_playwright() as pw:
         # Same profile as the bot, but NO URL guard and NO pacing: Jim is driving, the bot only watches.
+        size = {"viewport": {"width": 1400, "height": 900}} if headless else {"no_viewport": True}
         ctx = pw.chromium.launch_persistent_context(
-            user_data_dir=str(cfg.profile_dir), headless=False, no_viewport=True,  # the page fills the real window
-            locale="en-AU", args=["--disable-blink-features=AutomationControlled", "--start-maximized"])
+            user_data_dir=str(cfg.profile_dir), headless=headless, locale="en-AU",
+            args=["--disable-blink-features=AutomationControlled"] + ([] if headless else ["--start-maximized"]), **size)
         ctx.expose_binding("__bidbarn_event", rec.handle_binding)
         ctx.add_init_script(INIT_SCRIPT)
         ctx.on("response", rec.on_response)
@@ -305,12 +308,24 @@ def watch(cfg: Config, echo=print) -> Path:
         page = ctx.pages[0] if ctx.pages else ctx.new_page()
         rec.record("session", started=now_iso(), note="watch mode: the bot observes only; every bid is a manual bid")
         page.goto(base + "/auction")
-        echo(f"Watching. Work on Nichibo as you normally do; type why in the box at the bottom right (Enter saves).")
+        # The Carbarn dashboard in a second tab: drag it to the other monitor; it is recorded the same way.
+        try:
+            dash = ctx.new_page()
+            dash.goto(dashboard)
+            page.bring_to_front()
+        except Exception as exc:
+            rec.record("dashboard_failed", error=str(exc)[:160])
+            echo(f"Could not open the Carbarn dashboard tab ({str(exc)[:80]}); open it yourself in this browser.")
+        echo("Watching. Two tabs are open: Nichibo and the Carbarn dashboard (drag it to your other monitor).")
+        echo("Work as you normally do; type why in the blue box at the top right (Enter saves).")
         echo(f"Close the browser window when you are done. Recording to {out}")
         closed = {"v": False}
         ctx.on("close", lambda: closed.__setitem__("v", True))
+        deadline = time.time() + max_seconds if max_seconds else None
         try:
             while not closed["v"]:
+                if deadline and time.time() > deadline:
+                    break
                 rec.flush_screenshots()
                 live = [p for p in ctx.pages if not p.is_closed()]
                 if not live:
