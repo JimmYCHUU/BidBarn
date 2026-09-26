@@ -138,7 +138,7 @@ INIT_SCRIPT = r"""
     if (!document.body || document.getElementById('bidbarn-box')) return;
     const box = document.createElement('div');
     box.id = 'bidbarn-box';
-    box.style.cssText = 'position:fixed;right:16px;top:16px;z-index:2147483647;background:#1d4ed8;color:#fff;padding:10px 12px;border-radius:10px;font:13px system-ui,sans-serif;box-shadow:0 4px 18px rgba(0,0,0,.5);width:340px;border:2px solid #fff';
+    box.style.cssText = 'position:fixed;right:16px;top:' + (site === 'dashboard' ? '72px' : '16px') + ';z-index:2147483647;background:#1d4ed8;color:#fff;padding:10px 12px;border-radius:10px;font:13px system-ui,sans-serif;box-shadow:0 4px 18px rgba(0,0,0,.5);width:340px;border:2px solid #fff';
     box.innerHTML = '<div style="margin-bottom:6px;font-weight:700">BidBarn is watching' + (site === 'dashboard' ? ' the dashboard' : '') + '. Why? <span style="font-weight:400;opacity:.85">(Enter saves, Esc clears)</span></div>'
       + '<input id="bidbarn-reason" placeholder="e.g. skip: dump body  /  bid: clean sheet, good photos" style="width:100%;box-sizing:border-box;padding:6px;border-radius:6px;border:1px solid #666;background:#222;color:#fff;font:13px system-ui,sans-serif">'
       + '<div id="bidbarn-last" style="margin-top:4px;color:#9ae6b4;min-height:14px"></div>';
