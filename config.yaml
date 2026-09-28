@@ -16,11 +16,13 @@ model: gpt-5
 model_reasoning_effort: medium
 max_photos_to_model: 12
 
-# Free vision providers, tried in order (the next one takes over when a quota is used up or a
-# call fails). Keys live in .env: GEMINI_API_KEY (Google AI Studio), GROQ_API_KEY (Groq console).
-# rpm/rpd are the free-tier limits to respect; check your consoles, they change. The bot never
-# sends the bid grid: only the lot's facts, the guide's text requirements, your comments, the
-# candidate amounts, the sheet and the photos.
+# Free providers, tried in order (the next one takes over when a quota is used up or a call
+# fails). Keys live in .env: GEMINI_API_KEY (Google AI Studio), GROQ_API_KEY (Groq console).
+# Model names checked on 2026-09-28 against each provider's model list; rpm/rpd are the free-tier
+# limits to respect (check your consoles, they change). Groq has no vision model on the free
+# tier today, so it is text only: used for lots that need no photos. The bot never sends the bid
+# grid: only the lot's facts, the guide's text requirements, your comments, the candidate
+# amounts, the sheet and the photos.
 judge:
   enabled: true
   inline: true          # judge during the scan; `bot judge --pending` catches up when false or when a quota ran out
@@ -28,16 +30,25 @@ judge:
   providers:
     - name: gemini
       base_url: https://generativelanguage.googleapis.com/v1beta/openai/
-      model: gemini-2.5-flash-lite
+      model: gemini-3.5-flash-lite
       api_key_env: GEMINI_API_KEY
       rpm: 10
       rpd: 400
+      vision: true
+    - name: gemini-3.1
+      base_url: https://generativelanguage.googleapis.com/v1beta/openai/
+      model: gemini-3.1-flash-lite
+      api_key_env: GEMINI_API_KEY
+      rpm: 10
+      rpd: 400
+      vision: true
     - name: groq
       base_url: https://api.groq.com/openai/v1
-      model: meta-llama/llama-4-scout-17b-16e-instruct
+      model: openai/gpt-oss-120b
       api_key_env: GROQ_API_KEY
       rpm: 20
       rpd: 800
+      vision: false
 
 # Refuse to propose or place when the rules snapshot is older than this.
 max_rules_age_hours: 12

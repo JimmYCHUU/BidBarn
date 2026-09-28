@@ -21,9 +21,11 @@ from auction_bot.nichibo.vehicle import sniff_image
 
 DEFAULT_PROVIDERS: list[dict] = [
     {"name": "gemini", "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
-     "model": "gemini-2.5-flash-lite", "api_key_env": "GEMINI_API_KEY", "rpm": 10, "rpd": 400},
+     "model": "gemini-3.5-flash-lite", "api_key_env": "GEMINI_API_KEY", "rpm": 10, "rpd": 400, "vision": True},
+    {"name": "gemini-3.1", "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+     "model": "gemini-3.1-flash-lite", "api_key_env": "GEMINI_API_KEY", "rpm": 10, "rpd": 400, "vision": True},
     {"name": "groq", "base_url": "https://api.groq.com/openai/v1",
-     "model": "meta-llama/llama-4-scout-17b-16e-instruct", "api_key_env": "GROQ_API_KEY", "rpm": 20, "rpd": 800},
+     "model": "openai/gpt-oss-120b", "api_key_env": "GROQ_API_KEY", "rpm": 20, "rpd": 800, "vision": False},
 ]
 OPENAI_PROVIDER: dict = {"name": "openai", "base_url": None, "model": "gpt-5", "api_key_env": "OPENAI_API_KEY", "rpm": 30, "rpd": 5000}
 
@@ -49,6 +51,7 @@ class Provider:
     rpm: int = 10
     rpd: int = 400
     timeout: float = 90.0
+    vision: bool = True  # False: text only, used only for calls that carry no image
 
     @property
     def api_key(self) -> str | None:
@@ -58,7 +61,8 @@ class Provider:
     def from_dict(cls, d: dict) -> "Provider":
         return cls(name=str(d.get("name") or d.get("model") or "provider"), base_url=d.get("base_url") or None,
                    model=str(d["model"]), api_key_env=str(d.get("api_key_env") or "OPENAI_API_KEY"),
-                   rpm=int(d.get("rpm") or 10), rpd=int(d.get("rpd") or 400), timeout=float(d.get("timeout") or 90))
+                   rpm=int(d.get("rpm") or 10), rpd=int(d.get("rpd") or 400), timeout=float(d.get("timeout") or 90),
+                   vision=bool(d.get("vision", True)))
 
 
 def providers_for(cfg) -> list[Provider]:
@@ -124,9 +128,9 @@ def openai_transport(p: Provider, messages: list[dict], response_format: dict, m
     import openai
 
     client = openai.OpenAI(base_url=p.base_url, api_key=p.api_key, timeout=p.timeout, max_retries=0)
+    extra = {"response_format": response_format} if response_format else {}
     try:
-        r = client.chat.completions.create(model=p.model, messages=messages, response_format=response_format,
-                                           max_tokens=max_tokens, temperature=0)
+        r = client.chat.completions.create(model=p.model, messages=messages, max_tokens=max_tokens, temperature=0, **extra)
     except openai.RateLimitError as exc:
         raise RateLimited(str(exc)[:200]) from exc
     except (openai.APITimeoutError, openai.APIConnectionError) as exc:
@@ -135,7 +139,8 @@ def openai_transport(p: Provider, messages: list[dict], response_format: dict, m
         msg = str(exc)
         if exc.status_code >= 500:
             raise ServerError(msg[:200]) from exc
-        if exc.status_code == 400 and response_format.get("type") == "json_schema" and re.search(r"response_format|json_schema|schema", msg, re.I):
+        if exc.status_code == 400 and response_format \
+                and re.search(r"response_format|json_schema|schema|validate JSON|failed_generation|json", msg, re.I):
             raise SchemaUnsupported(msg[:200]) from exc
         if exc.status_code == 429 or re.search(r"quota|rate limit", msg, re.I):
             raise RateLimited(msg[:200]) from exc
@@ -205,9 +210,14 @@ class JudgeClient:
         """Ask the first provider that can answer; validate the reply against `schema` (pydantic)."""
         attempts: list[str] = []
         json_schema = {"type": "json_schema", "json_schema": {"name": schema.__name__, "schema": schema.model_json_schema()}}
+        has_images = any(isinstance(m.get("content"), list) and any(part.get("type") == "image_url" for part in m["content"])
+                         for m in messages)
         for p in self.providers:
             if not p.api_key:
                 attempts.append(f"{p.name}: no {p.api_key_env} in .env")
+                continue
+            if has_images and not p.vision:
+                attempts.append(f"{p.name}: text only, cannot look at images")
                 continue
             if self.ledger.calls_today(p.name) >= p.rpd:
                 attempts.append(f"{p.name}: daily quota of {p.rpd} calls used")
@@ -219,9 +229,13 @@ class JudgeClient:
                 try:
                     text, usage = self._transport(p, messages, json_schema, max_tokens)
                 except SchemaUnsupported:
+                    # Strict mode refused: ask for a JSON object, then as a last resort plain text we parse ourselves.
                     fallback = list(messages) + [{"role": "user", "content": "Reply with one JSON object only, following this schema:\n"
                                                   + json.dumps(schema.model_json_schema())}]
-                    text, usage = self._transport(p, fallback, {"type": "json_object"}, max_tokens)
+                    try:
+                        text, usage = self._transport(p, fallback, {"type": "json_object"}, max_tokens)
+                    except SchemaUnsupported:
+                        text, usage = self._transport(p, fallback, {}, max_tokens)
             except RateLimited as exc:
                 attempts.append(f"{p.name}: rate limited ({exc})")
                 continue

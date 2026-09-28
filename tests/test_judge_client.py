@@ -24,13 +24,14 @@ def _providers(monkeypatch, gemini=True, groq=True):
         monkeypatch.setenv("GROQ_API_KEY", "q")
     else:
         monkeypatch.delenv("GROQ_API_KEY", raising=False)
-    return [Provider.from_dict(d) for d in DEFAULT_PROVIDERS]
+    return [Provider.from_dict(DEFAULT_PROVIDERS[0]), Provider.from_dict(dict(DEFAULT_PROVIDERS[-1], vision=True))]  # gemini, groq
 
 
 def test_providers_for_config(monkeypatch):
     cfg = Config()
     cfg.sheet_check = "judge"
-    assert [p.name for p in providers_for(cfg)] == ["gemini", "groq"]
+    assert [p.name for p in providers_for(cfg)] == ["gemini", "gemini-3.1", "groq"]
+    assert [p.vision for p in providers_for(cfg)] == [True, True, False]
     cfg.judge = {"providers": [{"name": "mine", "base_url": "http://x", "model": "m", "api_key_env": "MY_KEY", "rpd": 5}]}
     p = providers_for(cfg)[0]
     assert (p.name, p.base_url, p.model, p.api_key_env, p.rpd) == ("mine", "http://x", "m", "MY_KEY", 5)
@@ -140,3 +141,18 @@ def test_store_ledger_persists_per_day(tmp_path):
     row = s.conn.execute("SELECT tokens FROM model_calls WHERE provider='gemini'").fetchone()
     assert row["tokens"] == 200
     s.close()
+
+
+def test_text_only_providers_are_skipped_when_images_are_attached(monkeypatch):
+    monkeypatch.setenv("GROQ_API_KEY", "q")
+    monkeypatch.setenv("GEMINI_API_KEY", "g")
+    providers = [Provider("groq", "http://groq", "gpt-oss", "GROQ_API_KEY", vision=False),
+                 Provider("gemini", "http://gemini", "flash-lite", "GEMINI_API_KEY", vision=True)]
+    seen = []
+    c = JudgeClient(providers, transport=lambda p, *a: seen.append(p.name) or ('{"verdict": "ok"}', None), sleep=lambda s: None)
+    with_image = [{"role": "user", "content": [{"type": "text", "text": "x"}, {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,AA=="}}]}]
+    r = c.complete(with_image, Answer)
+    assert r.provider == "gemini" and seen == ["gemini"] and r.attempts == ["groq: text only, cannot look at images"]
+    r = c.complete([{"role": "user", "content": "text only"}], Answer)
+    assert r.provider == "groq"
+    assert Provider.from_dict({"model": "m", "vision": False}).vision is False and Provider.from_dict({"model": "m"}).vision is True

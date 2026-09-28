@@ -15,6 +15,8 @@ app = typer.Typer(add_completion=False, no_args_is_help=True, help="BidBarn: Car
 
 def _log() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S")
+    for noisy in ("httpx", "httpcore", "openai"):  # the model client logs every request; the judge line says enough
+        logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
 def friendly(fn):
