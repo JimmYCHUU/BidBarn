@@ -152,7 +152,7 @@ def test_proposals_ignore_gone_lots_and_ground_value_rules_in_the_reason():
         _row("reject", "USS Yokohama lots are always rough", auction_place="USS Yokohama"),
         _row("reject", "another rough one from that hall", auction_place="USS Yokohama"),
         _row("reject", "pearl paint fades", colour="Pearl"),
-        _row("reject", "no reason about colour here", colour="Pearl"),
+        _row("reject", "nothing worth saying", colour="Pearl"),  # does not mention the colour: no support
     ]
     lines = {p.line for p in propose_skip_lines(rows, min_support=2)}
     assert "skip: hall is USS Yokohama" in lines and "skip: colour is Pearl" not in lines  # only one reason mentions the colour

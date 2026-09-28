@@ -34,6 +34,7 @@ REASON_KEYWORDS: dict[str, str] = {
     "model paused": r"no bid on|for a while|\bpause|expires in|expiry|\bsev\b|eligib",
 }
 _STALE = re.compile(REASON_KEYWORDS["lot gone"], re.I)
+_VALUE_LINE = re.compile(r"^skip: (hall|colou?r|transmission) (is|contains) ", re.I)
 _PAUSED = re.compile(REASON_KEYWORDS["model paused"], re.I)
 _FIELD_WORDS = {"hall": r"\bhall\b|auction place|\buss\b|\bcaa\b|\btaa\b|\bjaa\b|\bhaa\b|\bnaa\b|\bnps\b",
                 "colour": r"colou?r|\bwhite\b|\bblack\b|\bsilver\b|\bpearl\b|\bred\b|\bblue\b|\bgold\b|\bgrey\b|\bgray\b",
@@ -151,7 +152,12 @@ def propose_skip_lines(rows: list[dict], min_support: int = 2) -> list[SkipPropo
                 paused.append(reason)
             line = suggest_from_reason(reason, f)
             if line:
-                candidates.setdefault(line, None)
+                if _VALUE_LINE.match(line):  # a hall / colour / gearbox line counts only grounded rejections
+                    candidates.setdefault(line, set())
+                    if candidates[line] is not None:
+                        candidates[line].add(i)
+                else:
+                    candidates.setdefault(line, None)
             for name, value in (("hall", f.auction_place), ("colour", f.colour), ("transmission", f.transmission)):
                 value = (value or "").strip()
                 if value and (re.search(_FIELD_WORDS[name], reason, re.I) or re.search(r"\b" + re.escape(value) + r"\b", reason, re.I)):
