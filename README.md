@@ -281,10 +281,12 @@ cases (odometer at the cap, conversions, sheet notes). It works like this:
    wrong ("The model was wrong about … because …") writes a line into the playbook for that
    model code, so the next judgement reads your correction.
 
-Providers are free tiers, tried in order: Google Gemini Flash-Lite, then Groq Llama 4 Scout when
-the daily quota is used up (limits and model names in `config.yaml`, keys in `.env`, see
-`.env.example`). Google may use free-tier content to improve its products; Groq states it does
-not train on it. Neither ever receives the bid grid. When no provider can answer, the lot still
+Providers are free tiers, tried in order: Google Gemini 3.5 Flash-Lite, then Gemini 3.1
+Flash-Lite (a separate free quota on the same key), then Groq's text-only model for lots that
+need no photos (Groq had no free vision model on 2026-09-28). Limits and model names live in
+`config.yaml`, keys in `.env` (see `.env.example`); when a provider retires a model, the next one
+takes over and the name is a one-line config change. Google may use free-tier content to
+improve its products; Groq states it does not train on it. Neither ever receives the bid grid. When no provider can answer, the lot still
 reaches you, marked "model unavailable", and `bot.cmd judge --pending` catches up later.
 
 ## Standing instructions
