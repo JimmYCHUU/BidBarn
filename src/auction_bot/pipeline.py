@@ -26,6 +26,7 @@ from auction_bot.rules.hard import (NEEDS_REVIEW, PASS, SKIP, Check, allowed_sea
                                     evaluate_hard)
 from auction_bot.rules.hints import keyword_hints
 from auction_bot.rules.instructions import detail_fields_used, instruction_check, split_override_lines
+from auction_bot.judge.requirements import needs_judge, needs_photos, odd_flags, requirements_for, requirements_hash
 from auction_bot.store import Store
 
 log = logging.getLogger("auction_bot.scan")
@@ -144,6 +145,10 @@ def scan(cfg: Config, browser: Browser, store: Store, model_codes: list[str] | N
          limit_per_model: int | None = None, fresh: bool = False) -> ScanStats:
     if no_model is None:
         no_model = (cfg.sheet_check or "none").lower() == "none"
+    judge_client = None
+    if not no_model and judge_mode(cfg):
+        from auction_bot.judge.client import make_client
+        judge_client = make_client(cfg, store)
     rules, snap_path = load_rules(cfg, snapshot, model_codes)
     age = snapshot_age_hours(snap_path)
     if age > cfg.max_rules_age_hours:
@@ -218,10 +223,20 @@ def scan(cfg: Config, browser: Browser, store: Store, model_codes: list[str] | N
                         return download_evidence(browser, cfg, f, photos, cache)
                     return ev
 
+                def load_photos(f, c=card):
+                    """Judge mode: a lot whose requirements need the photos gets its page opened now."""
+                    full = f if f.source == "detail" else fetch_facts(browser, cfg, c.ref_no, cache)
+                    if full is not f:
+                        full.ref_no = c.ref_no
+                        full.seats, full.sheet_ocr = f.seats, f.sheet_ocr
+                        stats.pages += 1
+                    ev = download_evidence(browser, cfg, full, judge_photos(cfg), cache)
+                    return full, ev
+
                 proposal = evaluate_vehicle(
                     cfg, rule, facts, no_model, evidence_loader=load_evidence,
                     past_decisions=store.past_decisions(rule.model_code) if not no_model else [],
-                    stats=stats,
+                    stats=stats, judge_client=judge_client, store=store, photo_loader=load_photos,
                 )
                 store.supersede_pending(card.ref_no, rule.guide_id)
                 store.add_proposal(snapshot=snap_path.name, rule_updated_at=rule.updated_at, **proposal)
@@ -249,10 +264,65 @@ def _ocr_hints(ocr, facts: VehicleFacts) -> list[dict]:
     return hints
 
 
+def judge_mode(cfg: Config) -> bool:
+    return (cfg.sheet_check or "none").lower() == "judge"
+
+
+def judge_photos(cfg: Config) -> int:
+    return int((getattr(cfg, "judge", None) or {}).get("max_photos") or 8)
+
+
+def judge_inline(cfg: Config) -> bool:
+    return bool((getattr(cfg, "judge", None) or {}).get("inline", True))
+
+
+def manual_soft(rule: ModelRule, hard, facts: VehicleFacts, ocr, ocr_hints: list[dict], evidence: dict, mode: str = "manual") -> dict:
+    """The reviewer's checklist and hints for one lot (route 1, and the base of the judge's row)."""
+    free_lines, instructions, bad_lines = split_override_lines(rule)
+    checklist = list(rule.text_rules) + free_lines
+    checklist += [f"Auto-skip rule in force (did not fire): {i.raw}" for i in instructions]
+    checklist += [f"Skip line NOT understood, ignored: {e}" for e in bad_lines]
+    hints = ocr_hints + keyword_hints(facts, rule.text_rules)
+    seat_rule = allowed_seats(rule)
+    if seat_rule is not None:
+        allowed_txt = ", ".join(map(str, sorted(seat_rule)))
+        if facts.seats is not None:
+            checklist.insert(0, f"Seats: the sheet reads {facts.seats} (rule allows {allowed_txt}); confirm on the sheet")
+        else:
+            checklist.insert(0, f"Seats: read 乗車定員 on the sheet (rule allows {allowed_txt})")
+    if hard.variant_how in ("single", "trim", "chassis-uncertain"):
+        variant_check = next((c.detail for c in hard.checks if c.name == "variant"), "")
+        checklist.insert(0, f"Confirm the variant: {variant_check}")
+    if facts.source == "card+sheet":
+        checklist.insert(0, f"Judged from the search card and the sheet, without the listing page: the guide's "
+                            f"{hard.variant_name or 'default'} variant covers every {rule.model_code} chassis. "
+                            f"Check the model code on the sheet if in doubt; placement re-reads the page anyway.")
+    for t in hard.toggles:
+        checklist.append(f"Dashboard chip, apply by changing the amount if it fits: {t}")
+    reasons = ["sheet and photos to be judged by the reviewer (sheet_check: none)"] if mode == "manual" else []
+    if hard.deferred_modifiers:
+        reasons.append("modifier needs your judgement: " + "; ".join(hard.deferred_modifiers))
+    images_pending = bool(evidence.get("images_pending"))
+    if images_pending:
+        reasons.append("Nichibo has not published the sheet and photos yet (placeholder images); "
+                       "the next scan re-checks this vehicle automatically")
+    elif not evidence.get("sheet"):
+        reasons.append("auction sheet image could not be downloaded; open it on Nichibo")
+    return {"status": NEEDS_REVIEW, "reasons": reasons, "checklist": checklist, "hints": hints, "mode": mode,
+            "images_pending": images_pending, "ocr": ocr.to_dict() if ocr else None}
+
+
 def evaluate_vehicle(cfg: Config, rule: ModelRule, facts: VehicleFacts, no_model: bool,
                      evidence_loader: Callable[[], dict], past_decisions: list[dict] | None = None,
-                     stats: ScanStats | None = None) -> dict:
-    """Decide one vehicle. Returns the proposal row fields (without snapshot/rule_updated_at)."""
+                     stats: ScanStats | None = None, judge_client=None, store=None, photo_loader=None,
+                     previous_soft: dict | None = None) -> dict:
+    """Decide one vehicle. Returns the proposal row fields (without snapshot/rule_updated_at).
+
+    Judge mode (`sheet_check: judge`): after the hard rules and the OCR, the guide's requirements
+    and the odd-case flags decide whether the photos are needed (`photo_loader` opens the page)
+    and whether the model is asked at all. The lot always stays NEEDS_REVIEW with the model's
+    recommendation and proposed amount beside the checklist; Jim confirms.
+    """
     base = dict(ref_no=facts.ref_no, guide_id=rule.guide_id, model_code=rule.model_code, summary=summary_line(facts))
     hard = evaluate_hard(facts, rule)
     log.info("   %s -> hard %s %s", base["summary"], hard.status, "; ".join(hard.reasons)[:160])
@@ -288,40 +358,56 @@ def evaluate_vehicle(cfg: Config, rule: ModelRule, facts: VehicleFacts, no_model
 
     if no_model:
         # Route 1: the reviewer judges the sheet. Give them the checklist and keyword hints.
-        free_lines, instructions, bad_lines = split_override_lines(rule)
-        checklist = list(rule.text_rules) + free_lines
-        checklist += [f"Auto-skip rule in force (did not fire): {i.raw}" for i in instructions]
-        checklist += [f"Skip line NOT understood, ignored: {e}" for e in bad_lines]
-        hints = ocr_hints + keyword_hints(facts, rule.text_rules)
-        seat_rule = allowed_seats(rule)
-        if seat_rule is not None:
-            allowed_txt = ", ".join(map(str, sorted(seat_rule)))
-            if facts.seats is not None:
-                checklist.insert(0, f"Seats: the sheet reads {facts.seats} (rule allows {allowed_txt}); confirm on the sheet")
-            else:
-                checklist.insert(0, f"Seats: read 乗車定員 on the sheet (rule allows {allowed_txt})")
-        if hard.variant_how in ("single", "trim", "chassis-uncertain"):
-            variant_check = next((c.detail for c in hard.checks if c.name == "variant"), "")
-            checklist.insert(0, f"Confirm the variant: {variant_check}")
-        if facts.source == "card+sheet":
-            checklist.insert(0, f"Judged from the search card and the sheet, without the listing page: the guide's "
-                                f"{hard.variant_name or 'default'} variant covers every {rule.model_code} chassis. "
-                                f"Check the model code on the sheet if in doubt; placement re-reads the page anyway.")
-        for t in hard.toggles:
-            checklist.append(f"Dashboard chip, apply by changing the amount if it fits: {t}")
-        reasons = ["sheet and photos to be judged by the reviewer (sheet_check: none)"]
-        if hard.deferred_modifiers:
-            reasons.append("modifier needs your judgement: " + "; ".join(hard.deferred_modifiers))
-        images_pending = bool(evidence.get("images_pending"))
-        if images_pending:
-            reasons.append("Nichibo has not published the sheet and photos yet (placeholder images); "
-                           "the next scan re-checks this vehicle automatically")
-        elif not evidence.get("sheet"):
-            reasons.append("auction sheet image could not be downloaded; open it on Nichibo")
-        soft = {"status": NEEDS_REVIEW, "reasons": reasons, "checklist": checklist, "hints": hints, "mode": "manual",
-                "images_pending": images_pending, "ocr": ocr.to_dict() if ocr else None}
+        soft = manual_soft(rule, hard, facts, ocr, ocr_hints, evidence)
         (out_dir / "hard.json").write_text(json.dumps(hard.to_dict(), indent=1), encoding="utf-8")
         return dict(base, status=NEEDS_REVIEW, stage="manual", bid_jpy_k=hard.bid_jpy_k, base_jpy_k=hard.base_jpy_k,
+                    facts_json=facts.to_dict(), hard_json=hard.to_dict(), evidence_json=evidence, soft_json=soft)
+
+    if judge_mode(cfg):
+        # The judgement layer: what to look at, whether the photos are needed, whether to ask the model.
+        reqs = requirements_for(rule, hard)
+        soft = manual_soft(rule, hard, facts, ocr, ocr_hints, evidence, mode="judge")
+        flags = odd_flags(rule, hard, facts, ocr_hints, soft["hints"])
+        if needs_photos(reqs) and not evidence.get("photos") and photo_loader is not None and not evidence.get("images_pending"):
+            facts, evidence = photo_loader(facts)
+            base["summary"] = summary_line(facts)
+            hard = evaluate_hard(facts, rule)  # the page may name a different chassis
+            if hard.status != PASS:
+                status = NEEDS_REVIEW if hard.status == NEEDS_REVIEW else SKIP
+                return dict(base, status=status, stage="hard", bid_jpy_k=hard.bid_jpy_k, base_jpy_k=hard.base_jpy_k,
+                            facts_json=facts.to_dict(), hard_json=hard.to_dict(), evidence_json=evidence)
+            reqs = requirements_for(rule, hard)
+            soft = manual_soft(rule, hard, facts, ocr, ocr_hints, evidence, mode="judge")
+            flags = odd_flags(rule, hard, facts, ocr_hints, soft["hints"])
+            (out_dir / "facts.json").write_text(json.dumps(facts.to_dict(), indent=1, ensure_ascii=False), encoding="utf-8")
+        rhash = requirements_hash(reqs, flags)
+        soft.update(requirements=[r.to_dict() for r in reqs], flags=flags, requirements_hash=rhash,
+                    proposed_bid_jpy_k=hard.bid_jpy_k, judgement=None, recommendation="review", judge_notes=[],
+                    judge_pending=False, candidates=[], provider=None, usage=None, unavailable=None, images_used=[])
+        wanted = needs_judge(reqs, flags)
+        prev = previous_soft or {}
+        if not wanted:
+            soft.update(recommendation="bid", judge_notes=["routine: nothing to look at beyond the grid; confirm"])
+        elif prev.get("judgement") and prev.get("requirements_hash") == rhash:
+            for k in ("judgement", "recommendation", "proposed_bid_jpy_k", "judge_notes", "candidates", "provider",
+                      "usage", "images_used"):
+                soft[k] = prev.get(k, soft.get(k))
+        elif judge_client is not None and judge_inline(cfg):
+            from auction_bot.judge.judge import judge_lot
+            res = judge_lot(judge_client, cfg, store, facts, rule, hard, evidence, ocr.to_dict() if ocr else None,
+                            ocr_hints, soft["hints"], reqs, flags)
+            if stats is not None and res.provider:
+                stats.model_calls += 1
+            soft.update(judgement=res.judgement, recommendation=res.recommendation, proposed_bid_jpy_k=res.proposed_bid_jpy_k,
+                        judge_notes=res.notes, candidates=res.candidates, provider=res.provider, usage=res.usage,
+                        unavailable=res.unavailable, images_used=res.images_used, judge_pending=res.judgement is None)
+            (out_dir / "judge.json").write_text(json.dumps(res.to_dict(), indent=1, ensure_ascii=False), encoding="utf-8")
+            log.info("   judge %s -> %s, proposed %s (%s)", res.provider or "unavailable", res.recommendation,
+                     res.proposed_bid_jpy_k, "; ".join(res.notes)[:120])
+        else:
+            soft.update(judge_pending=True, judge_notes=["judge pending: run `bot judge --pending`"])
+        (out_dir / "hard.json").write_text(json.dumps(hard.to_dict(), indent=1), encoding="utf-8")
+        return dict(base, status=NEEDS_REVIEW, stage="judge", bid_jpy_k=hard.bid_jpy_k, base_jpy_k=hard.base_jpy_k,
                     facts_json=facts.to_dict(), hard_json=hard.to_dict(), evidence_json=evidence, soft_json=soft)
 
     from auction_bot.rules.soft import evaluate_soft  # optional path (route 2, needs an API key)
@@ -413,8 +499,15 @@ def reevaluate(cfg: Config, store: Store, model_codes: list[str] | None = None, 
             continue
         out_dir = cfg.evidence_dir / _safe(row["ref_no"])
         missing = {"dir": str(out_dir), "sheet": None, "photos": [], "failed": [], "placeholders": 1, "images_pending": True}
-        proposal = evaluate_vehicle(cfg, rule, facts, no_model, evidence_loader=lambda s=saved, m=missing: s or m)
-        new = (proposal["status"], proposal["bid_jpy_k"])
+        try:
+            prev_soft = json.loads(row["soft_json"] or "{}")
+        except json.JSONDecodeError:
+            prev_soft = {}
+        proposal = evaluate_vehicle(cfg, rule, facts, no_model, evidence_loader=lambda s=saved, m=missing: s or m,
+                                    previous_soft=prev_soft)
+        # A judge row whose requirements changed needs a fresh judgement: that counts as a change too.
+        old = (*old, prev_soft.get("requirements_hash"))
+        new = (proposal["status"], proposal["bid_jpy_k"], (proposal.get("soft_json") or {}).get("requirements_hash"))
         if new == old:
             st.unchanged += 1
             continue
@@ -424,4 +517,85 @@ def reevaluate(cfg: Config, store: Store, model_codes: list[str] | None = None, 
             store.supersede_pending(row["ref_no"], rule.guide_id)
             store.add_proposal(snapshot=snap_path.name, rule_updated_at=rule.updated_at, **proposal)
             st.applied += 1
+    return st
+
+
+@dataclass
+class JudgeStats:
+    checked: int = 0
+    judged: int = 0
+    routine: int = 0
+    pages: int = 0
+    unavailable: int = 0
+    errors: list[str] = field(default_factory=list)
+
+
+def judge_pending(cfg: Config, store: Store, model_codes: list[str] | None = None, limit: int | None = None,
+                  browser: Browser | None = None, client=None, snapshot: Path | None = None) -> JudgeStats:
+    """Judge stored pending lots that have no judgement yet (or a stale one), rate-limited and resumable.
+
+    Lots whose requirements need the photos get their page opened through `browser` (headless);
+    without a browser they are left pending with a note. The proposal row is updated in place.
+    """
+    from auction_bot.judge.client import make_client
+    from auction_bot.judge.judge import judge_lot
+    from auction_bot.judge.requirements import Requirement
+
+    rules, _ = load_rules(cfg, snapshot, model_codes)
+    by_guide = {r.guide_id: r for r in rules}
+    by_code = {r.model_code: r for r in rules}
+    client = client or make_client(cfg, store)
+    cache = PageCache(cache_dir(cfg), cfg.cache_hours)
+    st = JudgeStats()
+    wanted = {c.upper() for c in model_codes} if model_codes else None
+    for row in store.list_proposals(decision="pending", status=NEEDS_REVIEW, limit=100_000):
+        try:
+            soft = json.loads(row["soft_json"] or "{}")
+        except json.JSONDecodeError:
+            continue
+        if soft.get("mode") != "judge" or not soft.get("judge_pending"):
+            continue
+        rule = by_guide.get(row["guide_id"]) or by_code.get(row["model_code"])
+        if rule is None or (wanted and rule.model_code.upper() not in wanted):
+            continue
+        if limit is not None and st.judged >= limit:
+            break
+        st.checked += 1
+        facts = VehicleFacts.from_dict(json.loads(row["facts_json"] or "{}"))
+        hard = evaluate_hard(facts, rule)
+        if hard.status != PASS:
+            continue
+        evidence = load_saved_evidence(cfg, row["ref_no"]) or {"dir": str(cfg.evidence_dir / _safe(row["ref_no"])), "sheet": None, "photos": []}
+        reqs = [Requirement(**r) for r in soft.get("requirements", [])] or requirements_for(rule, hard)
+        flags = soft.get("flags") or []
+        if needs_photos(reqs) and not evidence.get("photos"):
+            if browser is None:
+                soft["judge_notes"] = ["judge pending: the photos are needed; run `bot judge --pending` with a browser"]
+                store.update_soft(row["id"], soft)
+                continue
+            try:
+                full = fetch_facts(browser, cfg, row["ref_no"], cache)
+                full.ref_no = row["ref_no"]
+                full.seats, full.sheet_ocr = facts.seats, facts.sheet_ocr
+                evidence = download_evidence(browser, cfg, full, judge_photos(cfg), cache)
+                facts = full
+                st.pages += 1
+            except Exception as exc:
+                st.errors.append(f"{row['ref_no']}: {exc}")
+                continue
+        ocr = facts.sheet_ocr
+        res = judge_lot(client, cfg, store, facts, rule, hard, evidence, ocr, [], soft.get("hints") or [], reqs, flags)
+        soft.update(judgement=res.judgement, recommendation=res.recommendation, proposed_bid_jpy_k=res.proposed_bid_jpy_k,
+                    judge_notes=res.notes, candidates=res.candidates, provider=res.provider, usage=res.usage,
+                    unavailable=res.unavailable, images_used=res.images_used, judge_pending=res.judgement is None)
+        out_dir = Path(evidence["dir"])
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "judge.json").write_text(json.dumps(res.to_dict(), indent=1, ensure_ascii=False), encoding="utf-8")
+        store.update_soft(row["id"], soft, facts=facts.to_dict(), evidence=evidence)
+        if res.judgement is None:
+            st.unavailable += 1
+            if res.unavailable and "quota" in res.unavailable and "no " not in res.unavailable:
+                break  # every provider is out for today; the rest stays pending
+        else:
+            st.judged += 1
     return st

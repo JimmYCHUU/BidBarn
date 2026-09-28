@@ -114,13 +114,20 @@ def scan(model: list[str] = typer.Option(None, "--model", "-m", help="Only these
     from auction_bot.store import Store
 
     mode = (sheet_check or cfg.sheet_check or "none").lower()
-    if mode not in ("none", "openai"):
-        typer.echo("sheet_check must be 'none' or 'openai'")
+    if mode not in ("none", "judge", "openai"):
+        typer.echo("sheet_check must be 'none', 'judge' or 'openai'")
         raise typer.Exit(2)
     if mode == "openai" and not cfg.openai_api_key:
         typer.echo("sheet_check is 'openai' but OPENAI_API_KEY is not set in .env. Use --sheet-check none.")
         raise typer.Exit(2)
-    typer.echo(f"sheet check: {mode}" + ("  (you judge sheets on the review page)" if mode == "none" else f"  (model {cfg.model})"))
+    cfg.sheet_check = mode
+    if mode == "judge":
+        from auction_bot.judge.client import providers_for
+        ready = [p.name for p in providers_for(cfg) if p.api_key]
+        typer.echo("judge: " + (", ".join(ready) + " (free vision model; you confirm on the review page)" if ready
+                               else "no provider key in .env (GEMINI_API_KEY / GROQ_API_KEY): lots go to review unjudged"))
+    else:
+        typer.echo(f"sheet check: {mode}" + ("  (you judge sheets on the review page)" if mode == "none" else f"  (model {cfg.model})"))
     store = Store(cfg.db_path)
     try:
         with Browser(cfg, headless=headless) as b:
@@ -130,6 +137,42 @@ def scan(model: list[str] = typer.Option(None, "--model", "-m", help="Only these
         store.close()
     typer.echo(json.dumps(stats.__dict__, indent=1))
     typer.echo(f"Review at http://{cfg.review.get('host', '127.0.0.1')}:{cfg.review.get('port', 8765)}  (bot review)")
+
+
+@app.command()
+@friendly
+def judge(pending: bool = typer.Option(True, "--pending/--all", help="Only lots without a judgement (default)"),
+          model: list[str] = typer.Option(None, "--model", "-m", help="Only these model codes"),
+          limit: int = typer.Option(None, help="Judge at most N lots"),
+          no_browser: bool = typer.Option(False, help="Do not open lot pages for photos; such lots stay pending")) -> None:
+    """Ask the free vision model about stored lots that are still waiting for a judgement (rate-limited, resumable)."""
+    _log()
+    cfg = load_config()
+    from auction_bot.pipeline import judge_pending
+    from auction_bot.store import Store
+
+    if not judge_mode(cfg):
+        typer.echo("sheet_check is not 'judge' in config.yaml; nothing to do.")
+        return
+    store = Store(cfg.db_path)
+    try:
+        if no_browser:
+            st = judge_pending(cfg, store, model or None, limit=limit)
+        else:
+            from auction_bot.nichibo.browser import Browser
+
+            with Browser(cfg, headless=True) as b:
+                st = judge_pending(cfg, store, model or None, limit=limit, browser=b)
+    finally:
+        store.close()
+    typer.echo(f"checked {st.checked}: judged {st.judged}, pages opened {st.pages}, model unavailable {st.unavailable}"
+               + (f", errors {len(st.errors)}" if st.errors else ""))
+    for e in st.errors[:10]:
+        typer.echo("  " + e)
+
+
+def judge_mode(cfg) -> bool:
+    return (cfg.sheet_check or "none").lower() == "judge"
 
 
 @app.command()
@@ -209,15 +252,19 @@ def insights(model: list[str] = typer.Option(None, "--model", "-m", help="Only t
     from auction_bot.store import Store
 
     since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec="seconds") if days else None
+    from auction_bot.insights import model_accuracy
+
     store = Store(cfg.db_path)
     try:
         rows = store.decisions_with_facts(since=since)
+        feedback = [dict(r) for r in store.judge_feedback()]
     finally:
         store.close()
     if model:
         wanted = {m.upper() for m in model}
         rows = [r for r in rows if r["model_code"].upper() in wanted]
-    typer.echo(render(summarise(rows), propose_skip_lines(rows, min_support=min_support)))
+        feedback = [r for r in feedback if (r["model_code"] or "").upper() in wanted]
+    typer.echo(render(summarise(rows), propose_skip_lines(rows, min_support=min_support), accuracy=model_accuracy(feedback)))
 
 
 @app.command()

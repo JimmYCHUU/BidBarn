@@ -7,6 +7,7 @@ a dry run while the testing lock is on (CLAUDE.md, rule 0).
 """
 from __future__ import annotations
 
+import json
 import threading
 import time
 import webbrowser
@@ -111,6 +112,12 @@ def scan_all(cfg: Config, echo: Callable[[str], None] = print, headless: bool = 
     try:
         with Browser(cfg, headless=headless) as b:
             stats = scan(cfg, b, store, None, no_model=(mode == "none"))
+            if mode == "judge":
+                from auction_bot.pipeline import judge_pending
+
+                js = judge_pending(cfg, store, browser=b)
+                echo(f"Judge: {js.judged} lots judged by the model, {js.unavailable} left unjudged (model unavailable), "
+                     f"{js.pages} pages opened for photos")
     finally:
         store.close()
     d = dict(stats.__dict__)
@@ -254,16 +261,49 @@ def scan_codes(cfg: Config, codes: list[str], echo: Callable[[str], None] = prin
     from auction_bot.pipeline import scan
     from auction_bot.store import Store
 
+    judge = (cfg.sheet_check or "none").lower() == "judge"
     store = Store(cfg.db_path)
     try:
         with Browser(cfg, headless=headless) as b:
-            stats = scan(cfg, b, store, codes, no_model=True)
+            stats = scan(cfg, b, store, codes, no_model=None if judge else True)
+            if judge:
+                from auction_bot.pipeline import judge_pending
+
+                judge_pending(cfg, store, codes, browser=b)
     finally:
         store.close()
     d = dict(stats.__dict__)
     echo(f"Bot's own scan of {', '.join(codes)}: {d['guides']} guides, {d['cards']} cards, {d['opened']} judged, "
-         f"{d['review']} to review, {d['skip']} skipped, {d['reused']} already known")
+         f"{d['review']} to review, {d['skip']} skipped, {d['reused']} already known"
+         + (f", {d['model_calls']} asked of the model" if judge else ""))
     return d
+
+
+def model_view(soft: dict, jim_acted: bool, jim_passed: bool) -> str:
+    """What the judgement layer said about a lot, and whether it agrees with what Jim did."""
+    if not soft or soft.get("mode") != "judge":
+        return ""
+    rec = soft.get("recommendation") or "review"
+    j = soft.get("judgement") or {}
+    bits = [f"model recommends {rec}"]
+    if soft.get("proposed_bid_jpy_k"):
+        bits.append(f"proposes {soft['proposed_bid_jpy_k']:,}K")
+    marks = {"pass": "✓", "fail": "✗", "unclear": "?"}
+    verdicts = {v.get("id"): v for v in j.get("requirements", [])}
+    reqs = [f"{marks.get(verdicts.get(r['id'], {}).get('verdict'), '·')} {r['text'][:30]}" for r in soft.get("requirements", [])
+            if r.get("kind") != "chip"]
+    if reqs:
+        bits.append(", ".join(reqs))
+    if j.get("summary"):
+        bits.append(j["summary"])
+    verdict = ""
+    if jim_acted and rec == "skip":
+        verdict = " | DISAGREE: you bid, the model would skip"
+    elif jim_passed and rec == "bid":
+        verdict = " | DISAGREE: you passed, the model would bid"
+    elif jim_acted and rec == "bid":
+        verdict = " | agree"
+    return "; ".join(bits) + verdict
 
 
 def compare_session(cfg: Config, session, store) -> list[str]:
@@ -304,6 +344,15 @@ def compare_session(cfg: Config, session, store) -> list[str]:
             except ValueError:
                 pass
         lines.append(f"- {title}: Jim {', '.join(jim) or 'looked'} | bot {bot}{delta}")
+        if row and row.get("soft_json"):
+            try:
+                soft = json.loads(row["soft_json"])
+            except (TypeError, ValueError):
+                soft = {}
+            mv = model_view(soft, jim_acted=bool(v.bid_k or v.amounts or v.carted),
+                            jim_passed=bool(v.cart_clicks and not v.carted and not v.bid_k and not v.amounts))
+            if mv:
+                lines.append(f"     {mv}")
         for r in v.reasons:
             lines.append(f"     why: {r}")
             cand = suggest_from_reason(r, VehicleFacts.from_dict(facts)) if facts else None

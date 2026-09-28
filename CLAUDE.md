@@ -67,12 +67,25 @@ hard constraints. Do not weaken them, work around them, or "temporarily" disable
 - Do not change how variants, modifiers or model matching are interpreted without asking Jim.
   Open questions are listed in `README.md`; add to that list rather than guessing.
 
-## 3. No paid model APIs
+## 3. No paid model APIs; the free judgement layer is a pre-fill
 
-- Default mode is `sheet_check: none`: Jim judges the auction sheet and photos himself on the
-  review page. Do not add Anthropic/Claude API calls. The optional OpenAI path stays opt-in and
-  only runs if Jim puts a key in `.env` and sets `sheet_check: openai`.
-- Even with a model enabled, model output is a pre-fill for the reviewer, never a bid decision.
+- `sheet_check: judge` (Jim, 2026-09-28) uses free-tier vision providers chosen by Jim, today
+  Gemini Flash-Lite first and Groq Llama 4 Scout as fallback, through their OpenAI-compatible
+  endpoints (`judge/client.py`, keys in `.env`). Never add Anthropic/Claude API calls. The
+  OpenAI path stays opt-in (`sheet_check: openai`, `OPENAI_API_KEY`). `sheet_check: none`
+  means Jim judges the sheet and photos himself.
+- The model's output is a pre-fill and a recommendation: per-requirement verdicts with
+  evidence, whether a chip applies, odd cases, and one of the candidate amounts computed from
+  the grid (`judge/candidates.py`). Every judged lot stays NEEDS_REVIEW; only Jim's click on
+  the review page approves, and the model never sets a number outside the candidates.
+- Data minimisation: the bid grid is never sent to a provider. A prompt carries the lot's
+  facts, the OCR fields, Nichibo's translation, the guide's text requirements and chips, the
+  odd-case flags, Jim's playbook (`rules/playbook/`, git-ignored), the candidate amounts, the
+  sheet and up to `judge.max_photos` photos. Keep it that way.
+- The playbook is Jim's words (learn-mode comments, review-page corrections, the seeded
+  principles). It is context for the model, not code rules; never turn it into automatic
+  approvals. Quotas: respect `rpm`/`rpd` per provider; when every provider is out, lots go
+  to review unjudged (`judge_pending`), the scan never fails because of the model.
 
 ## 4. Data handling
 

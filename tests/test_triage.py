@@ -44,8 +44,9 @@ def test_triage_order_and_content(cfg):
 
 
 def test_triage_sort_key_handles_missing_facts():
-    assert triage_sort_key({"model_code": "X", "id": 3, "facts": {}}) == ("X", 0.0, 10**9, -3)
-    assert triage_sort_key({"model_code": "X", "id": 3, "facts": {"grade": 4.5, "km": 0}}) == ("X", -4.5, 0, -3)
+    assert triage_sort_key({"model_code": "X", "id": 3, "facts": {}}) == ("X", 1, 0.0, 10**9, -3)  # no recommendation: middle
+    assert triage_sort_key({"model_code": "X", "id": 3, "facts": {"grade": 4.5, "km": 0}, "recommendation": "bid"}) == ("X", 0, -4.5, 0, -3)
+    assert triage_sort_key({"model_code": "X", "id": 3, "facts": {}, "recommendation": "skip"})[1] == 2
 
 
 def test_json_decide_from_triage_logs_open_and_via(cfg):

@@ -42,18 +42,84 @@ def _load(row) -> dict:
     d["sheet_file"] = Path(ev["sheet"]).name if ev.get("sheet") else None
     d["photo_files"] = [Path(p).name for p in ev.get("photos", [])]
     d["sheet_src"] = f"/evidence/{base}/{d['sheet_file']}" if base and d["sheet_file"] else ((d.get("facts") or {}).get("sheet_url") or "")
+    soft = d.get("soft") or {}
+    d["judge"] = soft if soft.get("mode") == "judge" else None
+    d["recommendation"] = soft.get("recommendation") if d["judge"] else None
+    d["proposed_bid_jpy_k"] = (soft.get("proposed_bid_jpy_k") if d["judge"] else None) or d.get("bid_jpy_k")
+    d["badges"] = judge_badges(soft) if d["judge"] else []
     return d
 
 
+REC_RANK = {"bid": 0, "review": 1, "skip": 2}
+
+
+def judge_badges(soft: dict) -> list[dict]:
+    """One badge per requirement and chip: mark, short text, evidence (for the title attribute)."""
+    j = soft.get("judgement") or {}
+    verdicts = {v.get("id"): v for v in j.get("requirements", [])}
+    chips = {c.get("id"): c for c in j.get("chips", [])}
+    out = []
+    for r in soft.get("requirements", []):
+        if r.get("kind") == "chip":
+            c = chips.get(r["id"], {})
+            mark = {"yes": "chip", "no": "no chip", "unclear": "?"}.get(c.get("applies"), "?")
+            out.append({"mark": mark, "cls": {"yes": "unk", "no": "ok"}.get(c.get("applies"), "unk"),
+                        "text": f"{r['text']} {r['amount_k']:+d}K" if r.get("amount_k") else r["text"], "evidence": c.get("evidence", "")})
+        else:
+            v = verdicts.get(r["id"], {})
+            verdict = v.get("verdict", "unclear" if j else "")
+            mark = {"pass": "✓", "fail": "✗", "unclear": "?"}.get(verdict, "·")
+            out.append({"mark": mark, "cls": {"pass": "ok", "fail": "bad"}.get(verdict, "unk"), "text": r["text"][:40],
+                        "evidence": v.get("evidence", "") + (f" ({v['confidence']})" if v.get("confidence") else "")})
+    return out
+
+
 def triage_sort_key(p: dict) -> tuple:
-    """Within a model: best grade first, then fewest km, then newest proposal (Jim's manual order)."""
+    """Within a model: the model's recommendation (bid, review, skip), then best grade, fewest km, newest."""
     f = p.get("facts") or {}
     km = f.get("km")
-    return (p["model_code"], -float(f.get("grade") or 0), km if km is not None else 10**9, -p["id"])
+    return (p["model_code"], REC_RANK.get(p.get("recommendation"), 1), -float(f.get("grade") or 0),
+            km if km is not None else 10**9, -p["id"])
 
 
 def _wants_json(request: Request) -> bool:
     return "application/json" in (request.headers.get("accept") or "")
+
+
+def feedback_lines(loaded: dict, action: str, amount: int | None, reason: str, req_id: str, note: str) -> list[tuple[str, str, str, str]]:
+    """(requirement id, what the model said, what Jim said, playbook line) for a judged lot Jim overruled or corrected."""
+    judge = loaded.get("judge") or {}
+    j = judge.get("judgement") or {}
+    if not j:
+        return []
+    out = []
+    lot = (loaded.get("summary") or "")[:70]
+    reqs = {r["id"]: r for r in judge.get("requirements", [])}
+    if req_id and note:
+        v = next((x for x in j.get("requirements", []) if x.get("id") == req_id), None) or \
+            next((x for x in j.get("chips", []) if x.get("id") == req_id), None) or {}
+        said = f"{v.get('verdict') or v.get('applies') or '?'}: {v.get('evidence', '')}"
+        text = reqs.get(req_id, {}).get("text", req_id)
+        out.append((req_id, said, note, f"Model was wrong about '{text}' (it said {said}); Jim: {note} [{lot}]"))
+    rec = judge.get("recommendation")
+    if action == "reject" and rec == "bid":
+        out.append(("overall", f"recommended bid {judge.get('proposed_bid_jpy_k')}K", reason,
+                    f"Model recommended a bid but Jim rejected: {reason} [{lot}]"))
+    elif action == "approve" and rec == "skip":
+        out.append(("overall", "recommended skip", f"approved at {amount}K",
+                    f"Model recommended skip but Jim bid {amount}K [{lot}]"))
+    elif action == "approve" and amount and judge.get("proposed_bid_jpy_k") and amount != judge["proposed_bid_jpy_k"]:
+        out.append(("amount", f"proposed {judge['proposed_bid_jpy_k']}K", f"{amount}K",
+                    f"Model proposed {judge['proposed_bid_jpy_k']}K, Jim bid {amount}K" + (f": {reason}" if reason else "") + f" [{lot}]"))
+    return out
+
+
+def record_feedback(s: Store, loaded: dict, action: str, amount: int | None, reason: str, req_id: str, note: str) -> None:
+    from auction_bot.judge.playbook import append_playbook
+
+    for rid, said, jim, line in feedback_lines(loaded, action, amount, reason, req_id, note):
+        s.add_judge_feedback(loaded["id"], rid, said, jim, note or reason or None)
+        append_playbook(s.cfg, loaded["model_code"], line, author="review") if getattr(s, "cfg", None) else None
 
 
 def create_app(cfg: Config, finish_event=None) -> FastAPI:
@@ -66,7 +132,9 @@ def create_app(cfg: Config, finish_event=None) -> FastAPI:
     app.mount("/static", StaticFiles(directory=str(STATIC)), name="static")
 
     def store() -> Store:
-        return Store(cfg.db_path)
+        s = Store(cfg.db_path)
+        s.cfg = cfg  # so feedback can reach the playbook files
+        return s
 
     guide_names: dict[int, str] = {}
     try:
@@ -166,7 +234,8 @@ def create_app(cfg: Config, finish_event=None) -> FastAPI:
 
     @app.post("/p/{pid}/decide")
     def decide(request: Request, pid: int, action: str = Form(...), reason: str = Form(""), amount: str = Form(""),
-               make_rule: str | None = Form(None), rule_text: str = Form(""), via: str = Form("detail")):
+               make_rule: str | None = Form(None), rule_text: str = Form(""), via: str = Form("detail"),
+               feedback_req: str = Form(""), feedback_note: str = Form("")):
         if action not in ("approve", "reject"):
             raise HTTPException(400, "bad action")
         s = store()
@@ -176,9 +245,10 @@ def create_app(cfg: Config, finish_event=None) -> FastAPI:
                 raise HTTPException(404)
             if row["decision"] != "pending":
                 raise HTTPException(409, "already decided")
+            loaded = _load(row)
             amt = None
             if action == "approve":
-                amt = int(amount) if amount.strip() else row["bid_jpy_k"]
+                amt = int(amount) if amount.strip() else (loaded.get("proposed_bid_jpy_k") or row["bid_jpy_k"])
                 if not amt or amt <= 0:
                     raise HTTPException(400, "approve needs a bid amount")
                 facts = json.loads(row["facts_json"] or "{}")
@@ -197,6 +267,7 @@ def create_app(cfg: Config, finish_event=None) -> FastAPI:
             s.decide(pid, action, reason.strip() or None, amt, bool(make_rule), via=via if via in ("detail", "triage") else "detail")
             if make_rule and line:
                 append_override(cfg, row["model_code"], line)
+            record_feedback(s, loaded, action, amt, reason.strip(), feedback_req.strip(), feedback_note.strip())
             nxt = next_pending(s, pid)
             decision = s.proposal(pid)["decision"]
         finally:

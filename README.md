@@ -1,7 +1,7 @@
 # BidBarn 🚗
 
 ![Python 3.12](https://img.shields.io/badge/python-3.12-blue)
-![Tests](https://img.shields.io/badge/tests-120%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-148%20passing-brightgreen)
 ![Playwright](https://img.shields.io/badge/browser-Playwright%20Chromium-45ba4b)
 ![No paid AI](https://img.shields.io/badge/AI%20APIs-none%20required-lightgrey)
 ![Testing lock](https://img.shields.io/badge/placement-testing%20lock%20on-orange)
@@ -78,8 +78,15 @@ Learning only ever adds skips, ordering and pre-fills: an approval is always you
         │   needs the colour, or a skip line needs the page    │
         └──────────────────────────┬──────────────────────────┘
         ┌──────────────────────────▼──────────────────────────┐
-        │ 4. REVIEW PAGE   triage list · sheet · checklist     │──► REJECT (+ standing instruction)
-        │                  photos on Nichibo · chips · ×2 rows │
+        │ 3b. JUDGE        free vision model (Gemini, Groq)    │──► recommends bid / review / skip
+        │   (sheet_check:  requirements with "where to look"   │    with evidence per requirement,
+        │    judge)        photos fetched when needed · chips  │    chips, odd cases, a proposed
+        │                  odd-case flags · your playbook      │    amount from the candidates
+        │                  candidate amounts (never the grid)  │
+        └──────────────────────────┬──────────────────────────┘
+        ┌──────────────────────────▼──────────────────────────┐
+        │ 4. REVIEW PAGE   triage list · sheet · checklist     │──► REJECT (+ standing instruction,
+        │                  the model's verdicts · photos       │    + correction into the playbook)
         └──────────────────────────┬──────────────────────────┘
                               APPROVED
         ┌──────────────────────────▼──────────────────────────┐
@@ -248,6 +255,38 @@ Recorded here so the code and the team agree. Change the code only when this lis
 | Detail page | Opened only when the guide's variants differ by chassis suffix (GDH206V / GDH206K), a modifier depends on the colour, a skip line needs a page-only fact, or the search card lacks a fact. Otherwise the lot is judged from the card and the sheet; placement re-opens the page and re-verifies it anyway |
 | Card-stage ceiling | A lot whose start price is above the highest bid any variant could reach (cell plus every positive modifier) is skipped before anything is downloaded |
 
+## The judgement layer
+
+With `sheet_check: judge` in `config.yaml`, a free hosted vision model reads each lot's photos
+and sheet against the guide's own requirements and decides what a rule cannot: dark seats or
+not, leather or cloth, the Pro Pilot button on the steering wheel, an Autech badge, and the odd
+cases (odometer at the cap, conversions, sheet notes). It works like this:
+
+1. The guide's text rules, chips and standing instructions become **requirements**, each with
+   a place to look: card, sheet or photos (`judge/requirements.py`). Odd-case flags name what is
+   unusual about the lot. A lot with nothing to look at and nothing odd never costs a model call.
+2. When the photos are needed the lot's page is opened and up to `judge.max_photos` photos are
+   downloaded (only then; the scan stays fast).
+3. The model receives the lot's facts, the OCR fields, Nichibo's translation, the requirements,
+   the flags, **your playbook** (`rules/playbook/general.md` and `rules/playbook/<CODE>.md`, your
+   own words from learn-mode comments and review corrections), the candidate amounts (the grid
+   cell, the cell with a chip, the next odometer band when the odometer is on a boundary or near
+   the cap; never the grid itself), the sheet and the photos.
+4. It answers with a verdict and evidence per requirement, whether each chip applies, the odd
+   cases, one of the candidate amounts or none, and a recommendation: bid, review or skip.
+   The bot turns that into a proposal deterministically (`judge/judge.py::decide`).
+5. **You confirm.** Every judged lot stays on the triage view with the model's recommendation,
+   badges per requirement (hover for the evidence), the proposed amount beside the grid's,
+   and the photos it looked at. Approve, change the amount, or reject. Telling it what it got
+   wrong ("The model was wrong about … because …") writes a line into the playbook for that
+   model code, so the next judgement reads your correction.
+
+Providers are free tiers, tried in order: Google Gemini Flash-Lite, then Groq Llama 4 Scout when
+the daily quota is used up (limits and model names in `config.yaml`, keys in `.env`, see
+`.env.example`). Google may use free-tier content to improve its products; Groq states it does
+not train on it. Neither ever receives the bid grid. When no provider can answer, the lot still
+reaches you, marked "model unavailable", and `bot.cmd judge --pending` catches up later.
+
 ## Standing instructions
 
 `rules/overrides/<CODE>.md` holds one line per instruction, stamped with date and author.
@@ -284,7 +323,8 @@ the checklist as "NOT understood". Add lines on the review page, with
 | `bot.cmd review` | Serve the review page (triage at `/`, table at `/list`) |
 | `bot.cmd replay [--apply]` | Re-apply current rules, skip lines and code to stored proposals, offline |
 | `bot.cmd place [--live]` | Place approved bids (dry run unless every lock is off) |
-| `bot.cmd insights [-m CODE] [--days N] [--min-support N]` | How you decide per model, and the skip lines your rejections justify |
+| `bot.cmd judge [--pending] [-m CODE] [--limit N]` | Ask the free vision model about stored lots still waiting for a judgement (rate-limited, resumable) |
+| `bot.cmd insights [-m CODE] [--days N] [--min-support N]` | How you decide per model, how often the model was corrected, and the skip lines your rejections justify |
 | `bot.cmd skip-line CODE "skip: ..."` | Add a structured standing instruction (validated first) |
 | `bot.cmd learn --har FILE [-m CODE] [--save]` | Learn from a HAR saved in your own browser instead of watching; offline |
 | `bot.cmd watch [--report DIR]` | Record a manual session in the bot's browser (clicks, hovers, reasons, bids, screenshots); `--report` prints a recorded session's timeline |
@@ -302,6 +342,7 @@ Everything the bot downloads stays on the office PC. Git never sees any of it.
 | `data\cache\` | Downloaded pages and translator replies, reused for `cache_hours` (12) |
 | `rules\snapshots\` | Timestamped copies of the bidding guides |
 | `rules\overrides\` | Standing instructions per model code |
+| `rules\playbook\` | Your playbook for the judgement model: `general.md` (principles) and `<CODE>.md` (your comments and corrections) |
 | `har\` | Network captures used to learn the endpoints (`docs/endpoints.md` is the distilled version) |
 
 ## Troubleshooting
@@ -323,14 +364,14 @@ Everything the bot downloads stays on the office PC. Git never sees any of it.
 .venv\Scripts\python -m pytest -q
 ```
 
-120 tests: the golden cases from the manual walkthrough against the real GDH206 guide, variant
+148 tests: the golden cases from the manual walkthrough against the real GDH206 guide, variant
 resolution on captured Alphard and E-Class guides, the seat rule, OCR parsing on three real sheets
 plus the header-band crop and its fallback, an offline end-to-end scan against captured Nichibo
 pages, the card-and-sheet path that opens no page, the placeholder path that parks a lot
 without a page, the grid ceiling, placement re-verification of card-judged lots, the cache and
 replay paths, the skip-line grammar and where the scan applies it, review telemetry and
 insights, the triage view, the HAR parser and join (with a socket guard proving no network),
-the learn and bid modes (card attribution of comments, the Finish hand-off), the Stock URL guard and the testing lock.
+the learn and bid modes (card attribution of comments, the Finish hand-off), the judgement layer (provider fallback and quotas, requirement classification, candidates, playbook, the stubbed model in the scan, the pending pass, replay, the review page and corrections), the Stock URL guard and the testing lock.
 
 ## Project layout
 
@@ -347,7 +388,9 @@ bidbarn/
 │   ├── nichibo/      browser.py (session + URL guard) · search.py · parsers.py · vehicle.py
 │   │                 sheet_ocr.py (local OCR) · cache.py · bid.py (placement) · facts.py
 │   ├── rules/        hard.py (deterministic rules) · instructions.py (skip lines) · hints.py
-│   │                 soft.py + schema.py (optional model mode)
+│   │                 soft.py + schema.py (the opt-in OpenAI sheet check)
+│   ├── judge/        client.py (free providers, fallback, quotas) · requirements.py · candidates.py
+│   │                 playbook.py · judge.py (prompt, schema, deterministic decision)
 │   ├── review/       FastAPI review page, templates (triage, detail, list) and static/review.js
 │   ├── pipeline.py   scan (card + sheet first, page only when needed) and offline replay
 │   ├── run.py        the one-click modes: learn (watch, compare, suggest) and bid (sign-in, guides, scan, review, place)

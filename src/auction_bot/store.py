@@ -80,6 +80,24 @@ CREATE TABLE IF NOT EXISTS manual_actions (
   at TEXT NOT NULL,
   UNIQUE(session, ref_no, action, at)
 );
+CREATE TABLE IF NOT EXISTS model_calls (
+  provider TEXT NOT NULL,          -- free vision providers: calls per day, so quotas survive restarts
+  day TEXT NOT NULL,
+  calls INTEGER NOT NULL DEFAULT 0,
+  tokens INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY(provider, day)
+);
+CREATE TABLE IF NOT EXISTS judge_feedback (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  proposal_id INTEGER NOT NULL,
+  ref_no TEXT,
+  model_code TEXT,
+  requirement_id TEXT,
+  model_said TEXT,
+  jim_said TEXT,
+  note TEXT,
+  at TEXT NOT NULL
+);
 """
 
 # What the reviewer did on the page, summarised per decision (added to `decisions` on first run).
@@ -155,6 +173,57 @@ class Store:
             rows)
         self.conn.commit()
         return cur.rowcount if cur.rowcount is not None and cur.rowcount >= 0 else 0
+
+    # -- model quota and feedback (judgement layer) ------------------------------
+    def model_calls_today(self, provider: str, day: str | None = None) -> int:
+        day = day or datetime.now().strftime("%Y-%m-%d")
+        row = self.conn.execute("SELECT calls FROM model_calls WHERE provider=? AND day=?", (provider, day)).fetchone()
+        return int(row["calls"]) if row else 0
+
+    def record_model_call(self, provider: str, tokens: int = 0, day: str | None = None) -> None:
+        day = day or datetime.now().strftime("%Y-%m-%d")
+        self.conn.execute(
+            "INSERT INTO model_calls(provider, day, calls, tokens) VALUES(?,?,1,?) "
+            "ON CONFLICT(provider, day) DO UPDATE SET calls=calls+1, tokens=tokens+excluded.tokens",
+            (provider, day, int(tokens or 0)))
+        self.conn.commit()
+
+    def manual_notes(self, model_code: str, limit: int = 15) -> list[str]:
+        """Comments Jim typed in learn mode about lots of this model code, newest first, with the lot in brief."""
+        rows = self.conn.execute(
+            "SELECT m.note, v.facts_json FROM manual_actions m JOIN vehicles v ON v.ref_no=m.ref_no "
+            "WHERE m.action='reason' AND m.note IS NOT NULL AND m.note<>'' AND v.model_code=? ORDER BY m.id DESC LIMIT ?",
+            (model_code, limit)).fetchall()
+        out = []
+        for r in rows:
+            try:
+                f = json.loads(r["facts_json"] or "{}")
+            except json.JSONDecodeError:
+                f = {}
+            lot = " ".join(str(x) for x in (f.get("year"), f.get("variant_text")) if x)
+            km = f"{f['km']:,} km" if f.get("km") else ""
+            grade = f"grade {f['grade_raw']}" if f.get("grade_raw") else ""
+            brief = ", ".join(x for x in (lot, km, grade) if x)
+            out.append(f"{r['note']}" + (f" [{brief}]" if brief else ""))
+        return out
+
+    def add_judge_feedback(self, pid: int, requirement_id: str | None, model_said: str | None, jim_said: str | None,
+                           note: str | None) -> None:
+        p = self.proposal(pid)
+        if p is None:
+            raise KeyError(pid)
+        self.conn.execute(
+            "INSERT INTO judge_feedback(proposal_id, ref_no, model_code, requirement_id, model_said, jim_said, note, at) "
+            "VALUES(?,?,?,?,?,?,?,?)", (pid, p["ref_no"], p["model_code"], requirement_id, model_said, jim_said, note, now()))
+        self.conn.commit()
+
+    def judge_feedback(self, model_code: str | None = None, limit: int = 200) -> list[sqlite3.Row]:
+        q = "SELECT f.*, p.summary FROM judge_feedback f JOIN proposals p ON p.id=f.proposal_id"
+        args: list = []
+        if model_code:
+            q += " WHERE f.model_code=?"; args.append(model_code)
+        q += " ORDER BY f.id DESC LIMIT ?"; args.append(limit)
+        return self.conn.execute(q, args).fetchall()
 
     # -- proposals --------------------------------------------------------
     def latest_proposal(self, ref_no: str, guide_id: int | None = None) -> sqlite3.Row | None:
@@ -286,6 +355,17 @@ class Store:
         if model_code:
             q += " AND model_code=?"; args.append(model_code)
         return self.conn.execute(q + " ORDER BY model_code, id DESC", args).fetchall()
+
+    def update_soft(self, pid: int, soft: dict, facts: dict | None = None, evidence: dict | None = None) -> None:
+        """Store a (new) judgement on an existing pending proposal without superseding it."""
+        sets, args = ["soft_json=?"], [json.dumps(soft, ensure_ascii=False, default=str)]
+        if facts is not None:
+            sets.append("facts_json=?"); args.append(json.dumps(facts, ensure_ascii=False, default=str))
+        if evidence is not None:
+            sets.append("evidence_json=?"); args.append(json.dumps(evidence, ensure_ascii=False, default=str))
+        args.append(pid)
+        self.conn.execute(f"UPDATE proposals SET {', '.join(sets)} WHERE id=?", args)
+        self.conn.commit()
 
     def supersede_pending(self, ref_no: str, guide_id: int | None) -> int:
         """Retire earlier pending proposals for this vehicle+guide before a fresh evaluation is stored."""

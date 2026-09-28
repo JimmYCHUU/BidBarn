@@ -19,6 +19,11 @@ rules/snapshots/*
 !rules/snapshots/.gitkeep
 rules/overrides/*
 !rules/overrides/.gitkeep
+rules/playbook/*
+!rules/playbook/.gitkeep
 
 # Build metadata
 *.egg-info/
+
+# Browser tool snapshots (page content), never committed
+.playwright-mcp/

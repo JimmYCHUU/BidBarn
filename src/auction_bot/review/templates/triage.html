@@ -28,14 +28,21 @@
   <tbody>
   {% for p in g.rows %}
   {% set f = p.facts or {} %}
-  <tr class="lot" id="lot-{{ p.id }}" data-pid="{{ p.id }}" data-url="{{ f.url }}" data-sheet="{{ p.sheet_src }}" data-bid="{{ p.bid_jpy_k or '' }}" data-start="{{ f.start_price_jpy or 0 }}">
+  <tr class="lot" id="lot-{{ p.id }}" data-pid="{{ p.id }}" data-url="{{ f.url }}" data-sheet="{{ p.sheet_src }}" data-bid="{{ p.proposed_bid_jpy_k or '' }}" data-start="{{ f.start_price_jpy or 0 }}">
     <td><span class="pill {{ p.status }}">{{ p.status }}</span>
       <div class="muted" style="font-size:11px">{{ p.stage }}{% if p.soft and p.soft.images_pending %} · images pending{% endif %}{% if p.multi_guide %} · <span class="pill NEEDS_REVIEW" title="also proposed under another guide">×2</span>{% endif %}</div></td>
     <td><a href="/p/{{ p.id }}"><b>{{ f.year }} {{ f.make }} {{ f.model }}</b></a> <span class="muted">{{ f.variant_text }}</span>
       <div class="mono" style="font-size:12px">grade <b>{{ f.grade_raw }}</b> · {{ '{:,}'.format(f.km or 0) }} km · start ¥{{ '{:,}'.format(f.start_price_jpy or 0) }}{% if f.seats %} · {{ f.seats }} seats{% endif %}{% if f.chassis %} · {{ f.chassis }}{% endif %}</div></td>
-    <td class="mono">{% if p.bid_jpy_k %}<b class="bid">{{ '{:,}'.format(p.bid_jpy_k) }}</b>{% if p.base_jpy_k and p.base_jpy_k != p.bid_jpy_k %} <span class="muted">(base {{ '{:,}'.format(p.base_jpy_k) }})</span>{% endif %}{% else %}<span class="muted">—</span>{% endif %}</td>
+    <td class="mono">{% if p.proposed_bid_jpy_k %}<b class="bid">{{ '{:,}'.format(p.proposed_bid_jpy_k) }}</b>{% if p.bid_jpy_k and p.bid_jpy_k != p.proposed_bid_jpy_k %} <span class="muted" title="the grid's amount">(grid {{ '{:,}'.format(p.bid_jpy_k) }})</span>{% elif p.base_jpy_k and p.base_jpy_k != p.bid_jpy_k %} <span class="muted">(base {{ '{:,}'.format(p.base_jpy_k) }})</span>{% endif %}{% else %}<span class="muted">—</span>{% endif %}
+      {% if p.judge %}<div style="margin-top:4px"><span class="pill {{ 'BID' if p.recommendation == 'bid' else ('SKIP' if p.recommendation == 'skip' else 'NEEDS_REVIEW') }}" title="the model's recommendation; you decide">model: {{ p.recommendation }}</span></div>{% endif %}</td>
     <td>{% if p.sheet_src %}<img class="thumb" src="{{ p.sheet_src }}" alt="auction sheet" loading="lazy" style="height:90px; border:1px solid var(--line); border-radius:4px; cursor:zoom-in">{% else %}<span class="muted">no sheet yet</span>{% endif %}</td>
     <td style="max-width:380px; font-size:13px">
+      {% if p.judge %}
+        {% if p.judge.judgement %}<div><b>{{ p.judge.judgement.summary }}</b></div>{% endif %}
+        <div style="margin:3px 0">{% for b in p.badges %}<span class="badge {{ b.cls }}" title="{{ b.evidence }}">{{ b.mark }} {{ b.text }}</span> {% endfor %}</div>
+        {% for f in p.judge.flags[:2] %}<div class="muted">⚑ {{ f }}</div>{% endfor %}
+        {% for n in p.judge.judge_notes[:2] %}<div class="muted">{{ n }}</div>{% endfor %}
+      {% endif %}
       {% set lines = [] %}
       {% if p.hard and p.hard.checks %}{% for c in p.hard.checks if not c.ok %}{% set _ = lines.append(c.name ~ ': ' ~ c.detail) %}{% endfor %}{% endif %}
       {% if p.soft and p.soft.checklist %}{% for c in p.soft.checklist if not c.startswith('Auto-skip') and not c.startswith('Judged from') %}{% set _ = lines.append(c) %}{% endfor %}{% endif %}

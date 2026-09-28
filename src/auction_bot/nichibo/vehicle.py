@@ -124,7 +124,8 @@ def download_evidence(browser: Browser, cfg: Config, facts: VehicleFacts, max_ph
     if cache.enabled:
         saved = load_saved_evidence(cfg, facts.ref_no)
         meta = out_dir / "evidence.json"
-        if saved and saved.get("sheet") and meta.exists() and (time.time() - meta.stat().st_mtime) < cache.max_age:
+        if saved and saved.get("sheet") and meta.exists() and (time.time() - meta.stat().st_mtime) < cache.max_age \
+                and (max_photos == 0 or saved.get("photos") or not facts.photo_urls):
             saved["reused"] = True
             return saved
     result: dict = {"dir": str(out_dir), "sheet": None, "photos": [], "failed": [], "placeholders": 0,

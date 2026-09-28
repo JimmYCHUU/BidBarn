@@ -164,10 +164,24 @@ def propose_skip_lines(rows: list[dict], min_support: int = 2) -> list[SkipPropo
     return out
 
 
-def render(insights: dict[str, ModelInsight], proposals: list[SkipProposal], conflicts_note: bool = True) -> str:
-    if not insights:
+def model_accuracy(feedback_rows: list) -> dict[str, Counter]:
+    """Per model code: how often Jim corrected the model, by requirement id (from judge_feedback)."""
+    out: dict[str, Counter] = {}
+    for r in feedback_rows:
+        out.setdefault(r["model_code"] or "?", Counter())[r["requirement_id"] or "?"] += 1
+    return out
+
+
+def render(insights: dict[str, ModelInsight], proposals: list[SkipProposal], conflicts_note: bool = True,
+           accuracy: dict[str, Counter] | None = None) -> str:
+    if not insights and not accuracy:
         return "No decisions recorded yet. Review some lots first (review.cmd)."
     lines: list[str] = []
+    for code, counts in (accuracy or {}).items():
+        lines.append(f"{code}: the model was corrected {sum(counts.values())} time(s): "
+                     + ", ".join(f"{k} ({n})" for k, n in counts.most_common(6)))
+    if accuracy:
+        lines.append("")
     props = {}
     for p in proposals:
         props.setdefault(p.model_code, []).append(p)

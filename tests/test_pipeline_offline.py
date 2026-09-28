@@ -80,6 +80,7 @@ def cfg(tmp_path) -> Config:
     c.db_path = tmp_path / "bot.sqlite"
     c.evidence_dir = tmp_path / "evidence"
     c.override_dir = tmp_path / "overrides"
+    c.playbook_dir = tmp_path / "playbook"
     c.snapshot_dir = tmp_path / "snapshots"
     c.pace_seconds = (0, 0)
     for d in (c.evidence_dir, c.override_dir, c.snapshot_dir):

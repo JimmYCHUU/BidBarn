@@ -44,6 +44,30 @@
       {% endif %}
     </div>
 
+    {% if p.judge %}
+    {% set j = p.judge.judgement or {} %}
+    <div class="card">
+      <h3>The model's judgement <span class="muted">({{ p.judge.provider or 'no model' }}{% if p.judge.usage %}, {{ p.judge.usage.input }} in / {{ p.judge.usage.output }} out tokens{% endif %})</span></h3>
+      <div style="display:flex; gap:10px; align-items:center; margin-bottom:6px">
+        <span class="pill {{ 'BID' if p.recommendation == 'bid' else ('SKIP' if p.recommendation == 'skip' else 'NEEDS_REVIEW') }}">recommends: {{ p.recommendation }}</span>
+        {% if p.proposed_bid_jpy_k %}<span>proposes <b>{{ '{:,}'.format(p.proposed_bid_jpy_k) }}K</b>{% if p.bid_jpy_k and p.bid_jpy_k != p.proposed_bid_jpy_k %} <span class="muted">(grid {{ '{:,}'.format(p.bid_jpy_k) }}K)</span>{% endif %}</span>{% endif %}
+      </div>
+      {% if j.summary %}<div style="margin-bottom:6px"><b>{{ j.summary }}</b></div>{% endif %}
+      {% for r in p.judge.requirements %}
+        {% set v = (j.requirements or []) | selectattr('id', 'equalto', r.id) | list | first %}
+        {% set c = (j.chips or []) | selectattr('id', 'equalto', r.id) | list | first %}
+        <div class="check"><span class="dot {{ 'ok' if (v and v.verdict == 'pass') or (c and c.applies == 'no') else ('bad' if v and v.verdict == 'fail' else 'unk') }}"></span>
+          <span><b>{{ r.text }}</b>{% if r.amount_k %} ({{ '%+d' % r.amount_k }}K chip){% endif %} <span class="muted">[{{ r.source }}]</span>
+          {% if v %}— <b>{{ v.verdict }}</b> {{ v.evidence }} <span class="muted">({{ v.confidence }})</span>{% elif c %}— chip applies: <b>{{ c.applies }}</b> {{ c.evidence }}{% elif j %}— <span class="muted">no verdict</span>{% endif %}</span></div>
+      {% endfor %}
+      {% for f in p.judge.flags %}<div class="check"><span class="dot unk"></span><span>⚑ {{ f }}</span></div>{% endfor %}
+      {% for o in j.odd_cases or [] %}<div class="check"><span class="dot unk"></span><span>odd: {{ o.what }} — {{ o.recommendation }} <span class="muted">({{ o.confidence }})</span></span></div>{% endfor %}
+      {% if j.sheet_notes %}<div class="muted">sheet notes: {{ j.sheet_notes }}</div>{% endif %}
+      {% for n in p.judge.judge_notes %}<div class="muted">{{ n }}</div>{% endfor %}
+      {% if p.judge.candidates %}<div class="muted" style="margin-top:6px">candidate amounts: {% for c in p.judge.candidates %}{{ '{:,}'.format(c.amount_k) }}K ({{ c.label }}){% if not loop.last %} · {% endif %}{% endfor %}</div>{% endif %}
+      {% if p.judge.unavailable %}<div class="banner">Model unavailable: {{ p.judge.unavailable }}. Judge the sheet and photos yourself, or run <span class="mono">bot judge --pending</span> later.</div>{% endif %}
+    </div>
+    {% endif %}
     {% if s.mode == 'manual' and p.status == 'SKIP' %}
     <div class="card">
       <h3>Skipped from the auction sheet</h3>
@@ -51,7 +75,7 @@
       {% if s.ocr and s.ocr.available %}<div class="muted">Sheet OCR: seats <b>{{ s.ocr.seats }}</b> · model {{ s.ocr.model_code or '?' }} · {{ '{:,}'.format(s.ocr.km) if s.ocr.km else '?' }} km · grade {{ s.ocr.grade or '?' }}</div>{% endif %}
       {% for hint in s.hints or [] %}<div class="check"><span class="dot unk"></span><span>{{ hint.message }} <span class="muted">({{ hint.where }})</span></span></div>{% endfor %}
     </div>
-    {% elif s.mode == 'manual' %}
+    {% elif s.mode in ('manual', 'judge') %}
     <div class="card">
       <h3>Your checklist — judge these from the sheet and photos on the right</h3>
       {% for item in s.checklist or [] %}
@@ -94,7 +118,12 @@
     <div class="card">
       <h3>Your decision</h3>
       <form class="decide" method="post" action="/p/{{ p.id }}/decide">
-        <label>Bid amount (K JPY) <input type="number" name="amount" value="{{ p.bid_jpy_k or '' }}" min="0" step="10"></label>
+        <label>Bid amount (K JPY) <input type="number" name="amount" value="{{ p.proposed_bid_jpy_k or p.bid_jpy_k or '' }}" min="0" step="10"></label>
+        {% if p.judge and p.judge.judgement %}
+        <label>The model was wrong about
+          <select name="feedback_req"><option value="">(nothing to correct)</option>{% for r in p.judge.requirements %}<option value="{{ r.id }}">{{ r.text[:60] }}</option>{% endfor %}</select></label>
+        <input type="text" name="feedback_note" placeholder="because … (goes into the playbook the model reads next time)">
+        {% endif %}
         <label>Reason (required to reject; saved as evidence) <textarea name="reason" rows="2" placeholder="e.g. 10 seats on the sheet; the rule allows 2/3/5/6"></textarea></label>
         <label><input type="checkbox" name="make_rule" value="1"> Also save as a standing instruction for {{ p.model_code }}</label>
         <input type="text" name="rule_text" id="rule_text" placeholder="Standing instruction text (defaults to the reason); a line starting with skip: is applied by the bot">

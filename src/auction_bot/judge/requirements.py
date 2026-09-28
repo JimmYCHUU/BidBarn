@@ -1,0 +1,116 @@
+"""What a guide asks for beyond the grid, and where the answer lives.
+
+Every text rule, reviewer chip and free-text standing instruction becomes a Requirement
+with a stable id and a `source`: `card` (year, km, grade, colour on the listing), `sheet`
+(seats, engine, model code, 4WD on the auction sheet), `photos` (seat colour, leather,
+Pro Pilot button, Autech badges, stickers, body) or `any`. Odd-case flags name what makes
+a lot unusual. Both are deterministic, so the model is told exactly what to look at and
+routine lots never cost a model call.
+"""
+from __future__ import annotations
+
+import hashlib
+import re
+from dataclasses import asdict, dataclass
+
+from auction_bot.carbarn.models import ModelRule
+from auction_bot.nichibo.facts import VehicleFacts
+from auction_bot.rules.hard import HardResult
+from auction_bot.rules.instructions import free_text_lines
+
+_CARD_FIRST = re.compile(r"(colou?r.*grade|grade.*colou?r|minimum grade|min\.? grade)", re.I)
+_PHOTOS = re.compile(r"seat colou?r|colou?red seats?|dark colou?r|beige|leather|captain|pro ?pilot|autech|sticker|wrap|decal|"
+                     r"\bbody\b|roof|badge|steering|\bwheels?\b|bumper|paint|interior|exterior|photo|picture|dent|rust|scratch|alloy|\bkit\b", re.I)
+_SHEET = re.compile(r"\bseat(?:s|er|ers)?\b|engine|\bcc\b|litt?res?|liters?|\b\d(?:\.\d)?\s*l\b|model code|型式|chassis|"
+                    r"\b[24]wd\b|\bawd\b|hybrid|e-power|\bgrade\b|\bkm\b|\bodo|registration|sheet|wheelbase|long", re.I)
+_CARD = re.compile(r"colou?r|grade|year|\bkm\b|\bodo|start", re.I)
+_CHIP = re.compile(r"^(?P<note>.*?)\s*(?P<amount>[+-]\d+)K$")
+
+
+@dataclass
+class Requirement:
+    id: str
+    text: str
+    source: str  # card | sheet | photos | any
+    kind: str  # must | chip | instruction
+    amount_k: int | None = None  # chips: the dashboard's adjustment
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+def classify(text: str) -> str:
+    t = text or ""
+    if _CARD_FIRST.search(t) and not _PHOTOS.search(t):
+        return "card"
+    if _PHOTOS.search(t):
+        return "photos"
+    if _SHEET.search(t):
+        return "sheet"
+    if _CARD.search(t):
+        return "card"
+    return "any"
+
+
+def requirements_for(rule: ModelRule, hard: HardResult | None = None) -> list[Requirement]:
+    out: list[Requirement] = []
+    for i, text in enumerate(rule.text_rules, 1):
+        out.append(Requirement(f"r{i}", text, classify(text), "must"))
+    for t in (hard.toggles if hard else []):
+        m = _CHIP.match(t.strip())
+        note, amount = (m.group("note").strip(), int(m.group("amount"))) if m else (t.strip(), None)
+        out.append(Requirement(f"chip:{note.lower().replace(' ', '-')}", note, classify(note) if classify(note) != "any" else "photos",
+                               "chip", amount))
+    for i, text in enumerate(free_text_lines(rule), 1):
+        out.append(Requirement(f"note:{i}", text, classify(text), "instruction"))
+    return out
+
+
+def needs_photos(reqs: list[Requirement]) -> bool:
+    return any(r.source in ("photos", "any") for r in reqs)
+
+
+def needs_judge(reqs: list[Requirement], flags: list[str]) -> bool:
+    return needs_photos(reqs) or any(r.kind == "chip" for r in reqs) or bool(flags)
+
+
+_HINT_ODD = re.compile(r"repair|accident|welcab|wheelchair|dump|ambulance|\bR\b|corrosion|rust|frame|flood|fire", re.I)
+
+
+def odd_flags(rule: ModelRule, hard: HardResult, facts: VehicleFacts, ocr_hints: list[dict] | None = None,
+              hints: list[dict] | None = None) -> list[str]:
+    """What makes this lot unusual, in words the model and the reviewer both get."""
+    flags: list[str] = []
+    if hard.variant_how in ("trim", "single", "chassis-uncertain", "ambiguous"):
+        note = next((c.detail for c in hard.checks if c.name == "variant"), "")
+        flags.append(f"variant resolved by {hard.variant_how}: {note}"[:200])
+    for m in hard.deferred_modifiers:
+        flags.append(f"modifier needs judgement: {m}"[:200])
+    if facts.chassis_uncertain:
+        flags.append("Nichibo guessed the chassis code (shown with '?')")
+    match = rule.resolve_variant(facts.chassis, facts.variant_text)
+    variant = match.variant
+    if variant is not None and facts.year is not None and facts.km is not None:
+        cell = variant.cell_for(facts.year, facts.km)
+        if cell is not None and facts.km == cell.band.odo_to:
+            flags.append(f"odometer exactly on the band boundary ({facts.km:,} km, band {cell.band.label}); the odometer rises before delivery")
+        elif variant.max_odo and facts.km >= 0.9 * variant.max_odo:
+            flags.append(f"odometer within 10 % of the guide's cap ({facts.km:,} of {variant.max_odo:,} km); the odometer rises before delivery")
+    for h in ocr_hints or []:
+        if h.get("level") == "warn":
+            flags.append(f"sheet disagrees with the listing: {h.get('message')}"[:200])
+    for h in hints or []:
+        msg = h.get("message") or ""
+        if _HINT_ODD.search(msg):
+            flags.append(f"listing mentions: {msg}"[:200])
+    tr = facts.translator or {}
+    for key in ("VehicleCondition", "Comments"):
+        if tr.get(key):
+            flags.append(f"sheet notes ({key}): {str(tr[key])[:120]}")
+            break
+    return flags
+
+
+def requirements_hash(reqs: list[Requirement], flags: list[str]) -> str:
+    blob = "|".join(f"{r.id}={r.text}={r.amount_k}" for r in reqs) + "||" + "|".join(flags)
+    return hashlib.sha1(blob.encode("utf-8")).hexdigest()[:12]

@@ -7,12 +7,37 @@ project_status: testing
 # Safety: while true, `bot place` does everything except the final click.
 dry_run: true
 
-# Auction-sheet check. "none" = you judge the sheet and photos on the review page (no API key).
-# "openai" = an OpenAI-compatible model pre-reads the sheet (needs OPENAI_API_KEY in .env).
-sheet_check: none
+# Judgement. "none" = you judge the sheet and photos on the review page yourself.
+# "judge" = a free hosted vision model (below) reads the photos against the guide's requirements
+# and your playbook, flags odd cases and proposes an amount; you confirm on the review page.
+# "openai" = the opt-in paid path with OPENAI_API_KEY (kept for comparison).
+sheet_check: judge
 model: gpt-5
 model_reasoning_effort: medium
 max_photos_to_model: 12
+
+# Free vision providers, tried in order (the next one takes over when a quota is used up or a
+# call fails). Keys live in .env: GEMINI_API_KEY (Google AI Studio), GROQ_API_KEY (Groq console).
+# rpm/rpd are the free-tier limits to respect; check your consoles, they change. The bot never
+# sends the bid grid: only the lot's facts, the guide's text requirements, your comments, the
+# candidate amounts, the sheet and the photos.
+judge:
+  enabled: true
+  inline: true          # judge during the scan; `bot judge --pending` catches up when false or when a quota ran out
+  max_photos: 8
+  providers:
+    - name: gemini
+      base_url: https://generativelanguage.googleapis.com/v1beta/openai/
+      model: gemini-2.5-flash-lite
+      api_key_env: GEMINI_API_KEY
+      rpm: 10
+      rpd: 400
+    - name: groq
+      base_url: https://api.groq.com/openai/v1
+      model: meta-llama/llama-4-scout-17b-16e-instruct
+      api_key_env: GROQ_API_KEY
+      rpm: 20
+      rpd: 800
 
 # Refuse to propose or place when the rules snapshot is older than this.
 max_rules_age_hours: 12

@@ -14,10 +14,11 @@ ROOT = Path(__file__).resolve().parents[2]
 class Config:
     dry_run: bool = True
     project_status: str = "testing"  # live placement needs exactly "The project is finished"
-    sheet_check: str = "none"  # none | openai
+    sheet_check: str = "none"  # none | judge (free vision providers in `judge`) | openai (opt-in)
     model: str = "gpt-5"
     model_reasoning_effort: str | None = "medium"
     max_photos_to_model: int = 12
+    judge: dict = field(default_factory=dict)  # providers, max_photos, inline (see config.yaml)
     max_rules_age_hours: float = 12
     cache_hours: float = 12
     max_bids_per_run: int = 25
@@ -28,6 +29,7 @@ class Config:
     evidence_dir: Path = ROOT / "data/evidence"
     snapshot_dir: Path = ROOT / "rules/snapshots"
     override_dir: Path = ROOT / "rules/overrides"
+    playbook_dir: Path = ROOT / "rules/playbook"
     carbarn: dict = field(default_factory=dict)
     nichibo: dict = field(default_factory=dict)
     review: dict = field(default_factory=dict)
@@ -53,7 +55,7 @@ class Config:
         return os.environ.get("OPENAI_API_KEY")
 
 
-_PATH_KEYS = ("profile_dir", "db_path", "evidence_dir", "snapshot_dir", "override_dir")
+_PATH_KEYS = ("profile_dir", "db_path", "evidence_dir", "snapshot_dir", "override_dir", "playbook_dir")
 
 
 def cache_dir(cfg: "Config") -> Path:
@@ -75,6 +77,6 @@ def load_config(path: Path | None = None) -> Config:
         if key == "pace_seconds":
             value = (float(value[0]), float(value[1]))
         setattr(cfg, key, value)
-    for d in (cfg.profile_dir, cfg.evidence_dir, cfg.snapshot_dir, cfg.override_dir, cfg.db_path.parent):
+    for d in (cfg.profile_dir, cfg.evidence_dir, cfg.snapshot_dir, cfg.override_dir, cfg.playbook_dir, cfg.db_path.parent):
         d.mkdir(parents=True, exist_ok=True)
     return cfg
