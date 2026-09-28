@@ -84,6 +84,9 @@ def crop_top(path: Path, fraction: float) -> bytes | None:
 # ---- parsing (pure, unit-tested with stubbed engine output) -----------------
 
 _FULLWIDTH = str.maketrans("０１２３４５６７８９，．－", "0123456789,.-")
+_PAINT_CODE = re.compile(r"^(NH|YR)\d{3}[A-Z]?$")
+_CODE_PREFIXED = re.compile(r"[A-Z0-9]{2,4}-([A-Z]{1,4}\d{1,3}[A-Z]{0,2})(?=[^A-Z0-9]|$)")
+_CODE_BARE = re.compile(r"(?<![A-Z0-9-])([A-Z]{2,4}\d{2,3}[A-Z]{0,2})(?=[^A-Z0-9]|$)")
 
 
 def _norm(text: str) -> str:
@@ -121,7 +124,11 @@ def parse_boxes(boxes: list[tuple[list, str, float]]) -> SheetRead:
         read.seats = None
 
     # Model code: "QDF-GDH206K", "3BA-AGH30W", "DBA-ANH20W" (a katakana 改 suffix is dropped).
-    codes = re.findall(r"(?:[A-Z0-9]{2,4}-)?([A-Z]{2,4}\d{2,3}[A-Z]{0,2})(?=[^A-Z0-9]|$)", blob)
+    # The 型式 cell prints an emission prefix and the code ("DBA-RC4", "QDF-GDH206K"); short codes such as
+    # RC4 or GP7 are trusted only with that prefix, longer ones also on their own.
+    codes = _CODE_PREFIXED.findall(blob) + _CODE_BARE.findall(blob)
+    # Honda paint codes (NH788P, YR-xxx) sit in the colour cell and look like model codes; skip them.
+    codes = [c for c in codes if not _PAINT_CODE.match(c)]
     if codes:
         read.model_code = codes[0]
 

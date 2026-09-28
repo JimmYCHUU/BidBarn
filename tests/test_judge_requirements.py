@@ -147,3 +147,14 @@ def test_playbook_files_and_context(tmp_path):
     assert "# How the buyer decides" in text and "# His comments and corrections on this model code" in text and "# His decisions on similar lots" in text
     assert len(ctx.to_text(max_chars=300)) <= 300
     store.close()
+
+
+def test_sheet_requirements_the_ocr_cannot_read_need_the_model():
+    from auction_bot.judge.requirements import Requirement, machine_decided
+    seats = Requirement("r1", "2, 3, 5 or 6 seats", "sheet", "must")
+    hybrid = Requirement("r2", "Hybrid Only", "sheet", "must")
+    engine = Requirement("r3", "S-Hybrid 2 littre 8 seater", "sheet", "must")
+    assert machine_decided(seats) and not machine_decided(hybrid) and not machine_decided(engine)
+    assert machine_decided(Requirement("r4", "8 seater only", "sheet", "must"))
+    assert not needs_judge([seats], []) and needs_judge([hybrid], []) and needs_judge([engine], [])
+    assert not needs_judge([Requirement("r5", "White Minimum 4", "card", "must")], [])

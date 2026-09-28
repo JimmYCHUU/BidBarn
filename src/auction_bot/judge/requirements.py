@@ -70,8 +70,20 @@ def needs_photos(reqs: list[Requirement]) -> bool:
     return any(r.source in ("photos", "any") for r in reqs)
 
 
+_SEAT_ONLY = re.compile(r"^[\d\s,/&+]*(?:or|and)?[\d\s,/&+]*seat(?:s|er|ers|ing)?\s*(?:only)?$", re.I)
+
+
+def machine_decided(r: Requirement) -> bool:
+    """A plain seat-count rule ("2, 3, 5 or 6 seats") is settled by the OCR and the hard rules."""
+    return r.kind == "must" and r.source == "sheet" and bool(_SEAT_ONLY.match(r.text.strip()))
+
+
 def needs_judge(reqs: list[Requirement], flags: list[str]) -> bool:
-    return needs_photos(reqs) or any(r.kind == "chip" for r in reqs) or bool(flags)
+    """Ask the model when something must be read from the photos or the sheet image, a chip exists,
+    or the lot is odd. Card-decidable and plain seat-count rules never cost a call."""
+    if needs_photos(reqs) or any(r.kind == "chip" for r in reqs) or flags:
+        return True
+    return any(r.source == "sheet" and not machine_decided(r) for r in reqs)
 
 
 _HINT_ODD = re.compile(r"repair|accident|welcab|wheelchair|dump|ambulance|\bR\b|corrosion|rust|frame|flood|fire", re.I)

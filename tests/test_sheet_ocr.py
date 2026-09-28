@@ -64,3 +64,10 @@ def test_parse_real_sheets(name, seats, model, km):
     assert r.km == km
     assert r.grade == "4"
     assert r.is_4wd is True
+
+
+def test_paint_codes_are_not_model_codes():
+    r = parse_boxes([(box(0, 0, 60, 20), "NH788P", 0.9), (box(0, 30, 60, 20), "DBA-RC4", 0.9)])
+    assert r.model_code == "RC4"
+    assert parse_boxes([(box(0, 0, 60, 20), "NH883P", 0.9)]).model_code is None
+    assert parse_boxes([(box(0, 0, 60, 20), "DAA-NHP10", 0.9)]).model_code == "NHP10"  # a real Toyota code keeps working
