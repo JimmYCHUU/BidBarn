@@ -152,7 +152,7 @@
     <div class="card sheet"><h3>Auction sheet (not downloaded)</h3><a href="{{ f.sheet_url }}" target="_blank">{{ f.sheet_url }}</a></div>
     {% endif %}
     <div class="card"><h3>Photos {% if p.photo_files %}({{ p.photo_files|length }}){% endif %}</h3>
-      <p><a href="{{ f.url }}" target="_blank" rel="noopener" data-ev="photos_click"><b>Photos on Nichibo ↗</b></a> <span class="muted">— the scan does not download photos; open the lot in your own signed-in browser.</span></p>
+      <p><a href="{{ f.url }}" target="_blank" rel="noopener" data-ev="photos_click"><b>Photos on Nichibo ↗</b></a> <span class="muted">— {% if p.photo_files %}the photos the model looked at, in page order (Photo 1 first); the full set is on Nichibo.{% else %}no photos were downloaded for this lot; open it in your own signed-in browser.{% endif %}</span></p>
       {% if p.photo_files %}<div class="thumbs">
       {% for ph in p.photo_files %}<a href="/evidence/{{ p.evidence_base }}/{{ ph }}" target="_blank"><img src="/evidence/{{ p.evidence_base }}/{{ ph }}" alt="{{ ph }}"></a>{% endfor %}
       </div>{% endif %}

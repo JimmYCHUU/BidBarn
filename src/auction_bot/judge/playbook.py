@@ -29,6 +29,7 @@ GENERAL_SEED = """# BidBarn playbook: how Jim decides, in his words
 - Seats, engine size and model code come from the auction sheet. "S-Hybrid 2 littre 8 seater" means a 2-litre engine and 8 seats.
 - Stock "Buy Now" cards are never touched; only auction lots.
 - Anything not visible in the photos or on the sheet is "unclear", never guessed.
+- Sheet glossary: 乗車定員 = seats; 型式 = model code; 排気量 = engine cc; 評価点 = grade; シフト = gearbox, where F5, F6, 5F, 6F or MT mean a manual (a rule that says AT fails) and AT, FA, IAT, CVT mean an automatic; 4WD is marked next to the grade name; 走行 = odometer.
 """
 
 MAX_CHARS = 6000
