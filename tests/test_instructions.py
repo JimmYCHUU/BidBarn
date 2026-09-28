@@ -241,3 +241,15 @@ def test_cli_skip_line(cfg, monkeypatch):
     assert res.exit_code == 2 and "Not stored" in res.output
     res = runner.invoke(cli.app, ["rules", "GDH206"])
     assert res.exit_code == 0 and "auto-skip: skip: km > 120k" in res.output
+
+
+def test_skip_all_pauses_a_model_code(cfg):
+    ins = parse_instruction("skip: all")
+    assert ins.conditions == [] and fires(ins, _facts()) and fires(parse_instruction("skip: everything"), _facts(km=None))
+    hit = instruction_check(_gdh206("- (2026-09-15, jim) skip: all\n"), _facts())
+    assert hit is not None and "skip: all" in hit.detail
+    _add_line(cfg, "skip: all")
+    store = Store(cfg.db_path)
+    stats = scan(cfg, FakeBrowser(), store, ["GDH206"])
+    assert stats.opened == 0 and stats.skip == stats.cards and stats.errors == []
+    store.close()

@@ -163,6 +163,8 @@ def parse_instruction(text: str) -> Instruction:
     body = text[verb.end():].strip()
     if not body:
         raise InstructionError("nothing after 'skip:'")
+    if body.lower().rstrip(".") in ("all", "everything", "every lot", "all lots"):
+        return Instruction(raw=text.strip(), conditions=[])  # pauses the model code: fires for every lot
     parts = [p for p in re.split(r"\s+and\s+", body, flags=re.I) if p.strip()]
     return Instruction(raw=text.strip(), conditions=[parse_condition(p) for p in parts])
 

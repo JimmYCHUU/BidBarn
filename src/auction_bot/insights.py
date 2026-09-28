@@ -30,7 +30,14 @@ REASON_KEYWORDS: dict[str, str] = {
     "photos": r"photo|image|picture",
     "year": r"\byear\b|\b20[0-3]\d\b",
     "wrong model": r"wrong model|not a|different model|other model",
+    "lot gone": r"bid closed|\bclosed\b|\bsold\b|\bended\b|expired lot|no longer listed",
+    "model paused": r"no bid on|for a while|\bpause|expires in|expiry|\bsev\b|eligib",
 }
+_STALE = re.compile(REASON_KEYWORDS["lot gone"], re.I)
+_PAUSED = re.compile(REASON_KEYWORDS["model paused"], re.I)
+_FIELD_WORDS = {"hall": r"\bhall\b|auction place|\buss\b|\bcaa\b|\btaa\b|\bjaa\b|\bhaa\b|\bnaa\b|\bnps\b",
+                "colour": r"colou?r|\bwhite\b|\bblack\b|\bsilver\b|\bpearl\b|\bred\b|\bblue\b|\bgold\b|\bgrey\b|\bgray\b",
+                "transmission": r"transmission|gearbox|manual|automatic|\bmt\b|\bat\b|\bcvt\b"}
 
 
 def reason_keywords(reason: str | None) -> set[str]:
@@ -132,29 +139,41 @@ def propose_skip_lines(rows: list[dict], min_support: int = 2) -> list[SkipPropo
     out: list[SkipProposal] = []
     for code, rs in sorted(by_model.items()):
         decided = [(r, _facts_of(r)) for r in rs]
-        candidates: dict[str, None] = {}
-        for r, f in decided:
+        candidates: dict[str, set[int] | None] = {}  # line -> rows whose reason grounds it (None: any rejection counts)
+        paused: list[str] = []
+        for i, (r, f) in enumerate(decided):
             if r["action"] == "approve":
                 continue
-            line = suggest_from_reason(r.get("reason") or "", f)
+            reason = r.get("reason") or ""
+            if _STALE.search(reason):
+                continue  # "bid closed": the lot is gone, that says nothing about the car
+            if _PAUSED.search(reason):
+                paused.append(reason)
+            line = suggest_from_reason(reason, f)
             if line:
-                candidates[line] = None
+                candidates.setdefault(line, None)
             for name, value in (("hall", f.auction_place), ("colour", f.colour), ("transmission", f.transmission)):
-                if value and value.strip():
-                    candidates[f"skip: {name} is {value.strip()}"] = None
-        for line in candidates:
+                value = (value or "").strip()
+                if value and (re.search(_FIELD_WORDS[name], reason, re.I) or re.search(r"\b" + re.escape(value) + r"\b", reason, re.I)):
+                    key = f"skip: {name} is {value}"  # only when the reason talks about it
+                    candidates.setdefault(key, set())
+                    if candidates[key] is not None:
+                        candidates[key].add(i)
+        if len(paused) >= 2 and not any(r["action"] == "approve" for r in rs):
+            out.append(SkipProposal(code, "skip: all", len(paused), 0, [p[:60] for p in paused[:3]]))
+        for line, grounded in candidates.items():
             try:
                 ins = parse_instruction(line)
             except InstructionError:
                 continue
             support = conflicts = 0
             examples: list[str] = []
-            for r, f in decided:
+            for i, (r, f) in enumerate(decided):
                 if not fires(ins, f, r.get("bid_jpy_k")):
                     continue
                 if r["action"] == "approve":
                     conflicts += 1
-                else:
+                elif grounded is None or i in grounded:
                     support += 1
                     if len(examples) < 3:
                         examples.append((r.get("summary") or "")[:60])

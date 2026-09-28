@@ -139,3 +139,27 @@ def test_cli_insights(cfg, monkeypatch):
     store.close()
     res = runner.invoke(cli.app, ["insights", "-m", "gdh206", "--days", "1"])
     assert res.exit_code == 0 and "GDH206: 1 decided, 0 approved, 1 rejected" in res.output and "seats 1" in res.output
+
+
+def test_proposals_ignore_gone_lots_and_ground_value_rules_in_the_reason():
+    rows = [
+        _row("reject", "bid closed", auction_place="USS Yokohama", colour="Pearl", transmission="IA"),
+        _row("reject", "Bid closed", auction_place="USS Yokohama", colour="Pearl", transmission="IA"),
+        _row("reject", "bid closed", auction_place="USS Yokohama", colour="Pearl", transmission="IA"),
+    ]
+    assert propose_skip_lines(rows, min_support=2) == []  # a lot that is gone teaches nothing
+    rows = [
+        _row("reject", "USS Yokohama lots are always rough", auction_place="USS Yokohama"),
+        _row("reject", "another rough one from that hall", auction_place="USS Yokohama"),
+        _row("reject", "pearl paint fades", colour="Pearl"),
+        _row("reject", "no reason about colour here", colour="Pearl"),
+    ]
+    lines = {p.line for p in propose_skip_lines(rows, min_support=2)}
+    assert "skip: hall is USS Yokohama" in lines and "skip: colour is Pearl" not in lines  # only one reason mentions the colour
+    rows = [_row("reject", "No bid on TRH200 for a while"), _row("reject", "no bid on TRH200 for a while"),
+            _row("reject", "SEV expires in 62 days")]
+    props = {p.line: p for p in propose_skip_lines(rows, min_support=2)}
+    assert "skip: all" in props and props["skip: all"].support == 3
+    assert "model paused" in reason_keywords("No bid on TRH200 for a while") and "lot gone" in reason_keywords("bid closed")
+    rows.append(_row("approve", None, amount=1000))
+    assert "skip: all" not in {p.line for p in propose_skip_lines(rows, min_support=2)}  # an approval means it is not paused

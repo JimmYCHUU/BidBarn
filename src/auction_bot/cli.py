@@ -332,6 +332,49 @@ def watch(report: Path = typer.Option(None, "--report", exists=True, file_okay=F
     typer.echo(render_session(timeline(load_events(out), str(out))))
 
 
+@app.command()
+@friendly
+def playbook(code: str = typer.Argument(None, help="Model code, e.g. ZWR90; none lists every code with notes")) -> None:
+    """What the judgement model is told about how you decide: your principles, your corrections and comments per model code."""
+    cfg = load_config()
+    from auction_bot.judge.playbook import code_lines, general_lines, playbook_dir
+    from auction_bot.store import Store
+
+    if not code:
+        files = sorted(p for p in playbook_dir(cfg).glob("*.md") if p.stem != "general")
+        typer.echo(f"General principles: {len(general_lines(cfg))} lines ({playbook_dir(cfg) / 'general.md'})")
+        for p in files:
+            typer.echo(f"  {p.stem:10} {len(code_lines(cfg, p.stem))} line(s)")
+        if not files:
+            typer.echo("  no model code has notes yet: they come from learn-mode comments and review-page corrections")
+        return
+    code = code.upper()
+    typer.echo("# Principles (rules/playbook/general.md)")
+    for ln in general_lines(cfg):
+        typer.echo(f"- {ln}")
+    typer.echo(f"\n# Your corrections and comments on {code} (rules/playbook/{code}.md)")
+    lines = code_lines(cfg, code)
+    for ln in lines or ["(none yet)"]:
+        typer.echo(f"- {ln}")
+    store = Store(cfg.db_path)
+    try:
+        notes = store.manual_notes(code)
+        rows = store.decisions_with_facts(code)
+        feedback = store.judge_feedback(code)
+    finally:
+        store.close()
+    typer.echo(f"\n# Learn-mode comments on {code}: {len(notes)}")
+    for n in notes[:10]:
+        typer.echo(f"- {n}")
+    typer.echo(f"\n# Your review decisions on {code}: {len(rows)} ({sum(1 for r in rows if r['action'] == 'approve')} approved); "
+               f"the most similar ones go into every judgement of a {code} lot")
+    for r in rows[:8]:
+        reason = f": {r['reason']}" if r.get("reason") else ""
+        amount = f" at {r['amount_jpy_k']:,}K" if r.get("amount_jpy_k") else ""
+        typer.echo(f"- {r['action']}{amount} {(r.get('summary') or '')[:60]}{reason}")
+    typer.echo(f"\n# Times you overruled the model on {code}: {len(feedback)}")
+
+
 @app.command("skip-line")
 @friendly
 def skip_line(code: str = typer.Argument(..., help="Model code, e.g. GDH206"),

@@ -94,3 +94,19 @@ def test_model_view_for_the_learn_report():
     assert model_view(soft, jim_acted=False, jim_passed=True).endswith("| DISAGREE: you passed, the model would bid")
     assert model_view(soft, jim_acted=True, jim_passed=False).endswith("| agree")
     assert model_view({"mode": "manual"}, True, False) == "" and model_view({}, True, False) == ""
+
+
+def test_playbook_command_lists_and_shows(cfg, monkeypatch):
+    from typer.testing import CliRunner
+    import auction_bot.cli as cli
+    from auction_bot.judge.playbook import append_playbook
+    monkeypatch.setattr(cli, "load_config", lambda: cfg)
+    runner = CliRunner()
+    res = runner.invoke(cli.app, ["playbook"])
+    assert res.exit_code == 0 and "General principles:" in res.output and "no model code has notes yet" in res.output
+    append_playbook(cfg, "gdh206", "leather package looks like this", author="review")
+    res = runner.invoke(cli.app, ["playbook"])
+    assert "GDH206" in res.output and "1 line(s)" in res.output
+    res = runner.invoke(cli.app, ["playbook", "gdh206"])
+    assert res.exit_code == 0 and "leather package looks like this" in res.output and "# Principles" in res.output
+    assert "Your review decisions on GDH206: 0" in res.output
