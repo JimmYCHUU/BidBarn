@@ -35,7 +35,7 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.package-data]
-"auction_bot.review" = ["templates/*.html", "static/*.js"]
+"auction_bot.review" = ["templates/*.html", "static/*.js", "static/*.css", "static/*.svg", "static/vendor/*", "static/vendor/fonts/*", "static/vendor/lucide/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% from "_parts.html" import console, launcher, start_button, entry, status_pill %}
+{% block title %}Overview · BidBarn{% endblock %}
+{% block body %}
+{% set next = state.steps | selectattr('next') | list | first %}
+{% set verbs = {'check-login': 'Check now', 'login': 'Open the sign-in window', 'fetch-rules': 'Fetch the guides', 'scan': 'Start the scan', 'place': 'Place as a dry run'} %}
+<div data-overview data-current="{{ state.current.id if state.current else '' }}">
+
+<section class="next card" aria-labelledby="next-title">
+  <div class="next-main">
+    <div class="next-text">
+      {% if state.current %}
+      <h1 class="next-title" id="next-title">{{ state.current.doing }}</h1>
+      <p class="next-why">Started {{ state.current.started }}. One command runs at a time; the next step follows when it ends.</p>
+      {% elif next %}
+      <h1 class="next-title" id="next-title">{{ next.label }}</h1>
+      <p class="next-why">{{ next.detail }}</p>
+      {% else %}
+      <h1 class="next-title" id="next-title">The day is up to date</h1>
+      <p class="next-why">Signed in, guides fresh, scanned, nothing waiting for you.</p>
+      {% endif %}
+    </div>
+    <div class="next-action">
+      {% if state.current %}
+        <a class="btn btn--primary btn--lg" href="/runs/{{ state.current.id }}">{{ icon('terminal') }} Watch the run</a>
+      {% elif next and next.href %}
+        <a class="btn btn--primary btn--lg" href="{{ next.href }}">{{ icon('list-checks') }} Open the review</a>
+      {% elif next and next.command %}
+        {{ start_button(next.command, verbs.get(next.command, 'Start'), cls='btn--primary btn--lg') }}
+      {% else %}
+        {{ start_button('scan', 'Scan again', cls='btn--lg') }}
+      {% endif %}
+      <div class="form-error" role="alert" data-start-error></div>
+    </div>
+  </div>
+  <ol class="steps" aria-label="The steps of the day">
+    {% for s in state.steps %}
+    <li class="step step--{{ s.state }}{% if s.next %} is-next{% endif %}" title="{{ s.detail }}">
+      {{ icon('circle-check' if s.state == 'done' else ('loader-circle' if s.state == 'running' else ('circle-dashed' if s.state == 'due' else 'circle')), 'spin' if s.state == 'running' else '') }}
+      <span>{{ s.label }}</span>
+      <span class="sr-only">: {{ 'done' if s.state == 'done' else ('running' if s.state == 'running' else ('to do' if s.state == 'due' else 'nothing to do')) }}</span>
+    </li>
+    {% endfor %}
+  </ol>
+</section>
+
+<div class="day">
+  <aside class="day-state" aria-label="State of the day">
+    <div class="tiles tiles--two">
+      <a class="tile{% if state.counts.to_review %} tile--warn{% endif %}" href="/review"><span class="tile-label">To review</span><span class="tile-value num" data-count="to_review">{{ state.counts.to_review }}</span></a>
+      <a class="tile" href="/list?decision=approved&amp;placed=0"><span class="tile-label">Approved, not placed</span><span class="tile-value num" data-count="approved">{{ state.counts.approved }}</span></a>
+      <a class="tile" href="/list?decision=approved&amp;placed=1"><span class="tile-label">Placed</span><span class="tile-value num" data-count="placed">{{ state.counts.placed }}</span></a>
+      <a class="tile" href="/list?decision=pending&amp;status=SKIP"><span class="tile-label">Skipped today</span><span class="tile-value num" data-count="skipped_today">{{ state.counts.skipped_today }}</span></a>
+    </div>
+
+    <section class="card">
+      <div class="card-head"><h2>Sign-in</h2><span class="faint push">{% if state.signin.known %}checked {{ ago(state.signin.checked_at) }}{% else %}not checked yet{% endif %}</span></div>
+      <div class="card-body">
+        <ul class="states">
+          {% for name, ok in [('Nichibo', state.signin.nichibo), ('Carbarn dashboard', state.signin.carbarn)] %}
+          <li><span>{{ name }}</span>
+            {% if ok is none %}<span class="pill pill--plain">{{ icon('circle') }} Unknown</span>
+            {% elif ok and state.signin.ok %}<span class="pill pill--ok">{{ icon('circle-check') }} Signed in</span>
+            {% elif ok %}<span class="pill pill--warn">{{ icon('circle-alert') }} In doubt</span>
+            {% else %}<span class="pill pill--bad">{{ icon('circle-x') }} Signed out</span>{% endif %}</li>
+          {% endfor %}
+        </ul>
+        {% if state.signin.doubt %}<p class="faint">{{ state.signin.doubt }}</p>{% endif %}
+        <div class="row">
+          {{ start_button('check-login', 'Check now', cls='btn--sm') }}
+          {{ start_button('login', 'Sign in', cls='btn--sm') }}
+        </div>
+        <div class="form-error" role="alert"></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Bidding guides</h2>
+        {% if state.rules.snapshot is none %}<span class="pill pill--bad push">{{ icon('circle-x') }} None</span>
+        {% elif state.rules.stale %}<span class="pill pill--warn push">{{ icon('circle-alert') }} Stale</span>
+        {% else %}<span class="pill pill--ok push">{{ icon('circle-check') }} Fresh</span>{% endif %}</div>
+      <div class="card-body">
+        {% if state.rules.snapshot %}
+        <p><b class="num">{{ state.rules.active_guides }}</b> active guide{{ 's' if state.rules.active_guides != 1 }} <span class="faint">of {{ state.rules.guides }} in the snapshot</span></p>
+        <p class="faint">Fetched {{ ago(state.rules.fetched_at) }}. A scan needs a snapshot under {{ '%g' % state.rules.max_age_hours }} h old.</p>
+        {% if state.rules.error %}<p class="entry-error">{{ icon('circle-alert', 'icon--sm') }} {{ state.rules.error }}</p>{% endif %}
+        {% else %}
+        <p>No snapshot on this PC yet.</p>
+        {% endif %}
+        <div class="row">{{ start_button('fetch-rules', 'Fetch the guides', cls='btn--sm') }}</div>
+        <div class="form-error" role="alert"></div>
+      </div>
+    </section>
+  </aside>
+
+  <div class="day-log">
+    <div class="section-title"><h2>Today</h2><span class="faint">{{ today }}</span></div>
+    {% if log.live or log.today %}
+    <ol class="entries">
+      {% for e in log.live %}{{ entry(e) }}{% endfor %}
+      {% for e in log.today %}{{ entry(e) }}{% endfor %}
+    </ol>
+    {% else %}
+    <div class="card">
+      <div class="empty">
+        {{ icon('clock') }}
+        <h3>Nothing has run today</h3>
+        <p>Runs, review sessions and placements are listed here as they happen. Start with the step above.</p>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if log.earlier %}
+    <div class="section-title"><h2>Earlier</h2><span class="faint">the last 7 days</span></div>
+    <ol class="entries entries--earlier">
+      {% for e in log.earlier[:25] %}{{ entry(e, dated=true) }}{% endfor %}
+    </ol>
+    {% if log.earlier|length > 25 %}<p class="faint"><a href="/runs">All runs</a></p>{% endif %}
+    {% endif %}
+  </div>
+
+  <aside class="day-tools" aria-label="Quota and commands">
+    {% if state.judge.providers %}
+    <section class="card">
+      <div class="card-head"><h2>Model calls today</h2><span class="faint push">free tier, per day</span></div>
+      <div class="card-body">
+        {% for p in state.judge.providers %}
+        <div class="meter{% if p.level != 'ok' %} meter--{{ p.level }}{% endif %}">
+          <div class="meter-head"><span>{{ p.name }} <span class="faint">{{ p.model }}</span>{% if not p.has_key %} <span class="pill pill--warn">no key</span>{% endif %}</span><b>{{ p.calls }} / {{ p.rpd }}</b></div>
+          <div class="meter-track"><div class="meter-fill" style="--v: {{ p.share }}"></div></div>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    <section class="card">
+      <div class="card-head"><h2>Commands</h2><a class="push" href="/runs">All runs</a></div>
+      {{ launcher(commands, only=['scan', 'judge', 'replay', 'place', 'insights']) }}
+    </section>
+  </aside>
+</div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="/static/vendor/gsap.min.js?v={{ asset_v }}" defer></script>
+<script src="/static/dashboard.js?v={{ asset_v }}" defer></script>
+{% endblock %}

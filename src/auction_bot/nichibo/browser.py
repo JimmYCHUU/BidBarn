@@ -13,6 +13,7 @@ from urllib.parse import urlsplit
 
 from playwright.sync_api import BrowserContext, Page, Playwright, sync_playwright
 
+from auction_bot import lock, progress
 from auction_bot.config import Config
 
 
@@ -71,29 +72,41 @@ class Browser:
         self._last_nav = 0.0
 
     def __enter__(self) -> "Browser":
-        self._pw = sync_playwright().start()
-        # Headed: the page fills the real window (opened maximised) so nothing is cut off on
-        # Jim's screen. Headless: a fixed page size keeps screenshots comparable.
-        size = {"viewport": {"width": 1400, "height": 900}} if self.headless else {"no_viewport": True}
-        args = ["--disable-blink-features=AutomationControlled"] + ([] if self.headless else ["--start-maximized"])
-        self.context = self._pw.chromium.launch_persistent_context(
-            user_data_dir=str(self.cfg.profile_dir),
-            headless=self.headless,
-            locale="en-AU",
-            args=args,
-            **size,
-        )
-        # Second line of defence: even a page-initiated request to a forbidden Nichibo area is aborted.
-        self.context.route(re.compile(r"https?://[^/]*nichibojapan\.com/(stock|vehicle[-_]?offers?|offers?|buy|purchase|order|checkout|cart|auction/cart|auction/update-image-credit)(/|\?|$)", re.I), _route_guard)
+        # One run at a time on the profile: a second one stops here, before Chromium is started.
+        lock.acquire(self.cfg, lock.command_name())
+        try:
+            self._pw = sync_playwright().start()
+            # Headed: the page fills the real window (opened maximised) so nothing is cut off on
+            # Jim's screen. Headless: a fixed page size keeps screenshots comparable.
+            size = {"viewport": {"width": 1400, "height": 900}} if self.headless else {"no_viewport": True}
+            args = ["--disable-blink-features=AutomationControlled"] + ([] if self.headless else ["--start-maximized"])
+            self.context = self._pw.chromium.launch_persistent_context(
+                user_data_dir=str(self.cfg.profile_dir),
+                headless=self.headless,
+                locale="en-AU",
+                args=args,
+                **size,
+            )
+            # Second line of defence: even a page-initiated request to a forbidden Nichibo area is aborted.
+            self.context.route(re.compile(r"https?://[^/]*nichibojapan\.com/(stock|vehicle[-_]?offers?|offers?|buy|purchase|order|checkout|cart|auction/cart|auction/update-image-credit)(/|\?|$)", re.I), _route_guard)
+        except BaseException:
+            self._close()  # the launch failed: nothing is left open and the lock is given back
+            raise
         return self
 
     def __exit__(self, *exc) -> None:
+        self._close()
+
+    def _close(self) -> None:
         try:
-            if self.context:
-                self.context.close()
+            try:
+                if self.context:
+                    self.context.close()
+            finally:
+                if self._pw:
+                    self._pw.stop()
         finally:
-            if self._pw:
-                self._pw.stop()
+            lock.release(self.cfg)
 
     @property
     def page(self) -> Page:
@@ -104,6 +117,7 @@ class Browser:
         return self._page
 
     def pace(self) -> None:
+        progress.check_cancel()  # a run stopped from the dashboard ends before its next page load
         lo, hi = self.cfg.pace_seconds
         wait = random.uniform(lo, hi) - (time.time() - self._last_nav)
         if wait > 0:

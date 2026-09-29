@@ -28,10 +28,10 @@ def _judged(cfg, monkeypatch, reply=None):
 def test_triage_and_detail_show_the_judgement(cfg, monkeypatch):
     pid = _judged(cfg, monkeypatch)
     client = TestClient(create_app(cfg))
-    r = client.get("/")
+    r = client.get("/review")
     assert r.status_code == 200
     assert "model: bid" in r.text and "dark cloth seats" in r.text and 'title="photo 2: painted body (high)"' in r.text
-    assert "✓ No sticker paint" in r.text and 'data-bid="1240"' in r.text
+    assert 'class="badge ok"' in r.text and "No sticker paint" in r.text and 'data-bid="1240"' in r.text
     r = client.get(f"/p/{pid}")
     assert "The model's judgement" in r.text and "recommends: bid" in r.text and "proposes <b>1,240K</b>" in r.text
     assert "photo 2: painted body" in r.text and "The model was wrong about" in r.text and 'value="1240"' in r.text

@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Review finished · BidBarn{% endblock %}
+{% block finish %}{% endblock %}
+{% block body %}
+<div class="page-head"><h1 class="page-title">Review finished</h1></div>
+<div class="card">
+  <div class="card-body">
+    <p><b class="num">{{ waiting }}</b> approved bid(s) will now be placed by the BidBarn window ({{ lock_label|lower }}).</p>
+    <p class="muted">The result is printed in that window. You can close this tab.</p>
+  </div>
+</div>
+{% endblock %}

@@ -13,11 +13,13 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Callable
 
+from auction_bot import progress
 from auction_bot.carbarn.client import load_rules, snapshot_age_hours
 from auction_bot.carbarn.models import ModelRule, rule_to_summary
 from auction_bot.config import Config, cache_dir
-from auction_bot.nichibo.browser import Browser
+from auction_bot.nichibo.browser import Browser, NotLoggedIn
 from auction_bot.nichibo.cache import NoCache, PageCache
+from auction_bot.progress import Cancelled
 from auction_bot.nichibo.facts import VehicleFacts
 from auction_bot.nichibo.search import search_rule
 from auction_bot.nichibo.sheet_ocr import read_sheet
@@ -155,26 +157,52 @@ def scan(cfg: Config, browser: Browser, store: Store, model_codes: list[str] | N
         raise RuntimeError(f"Rules snapshot {snap_path.name} is {age:.1f}h old (limit {cfg.max_rules_age_hours}h). Run `bot fetch-rules`.")
     cache = NoCache() if fresh else PageCache(cache_dir(cfg), cfg.cache_hours)
     stats = ScanStats()
-    for rule in rules:
-        if not rule.active or not rule.active_variants:
-            continue
+    guides = [r for r in rules if r.active and r.active_variants]  # the ones that are actually searched
+    codes = [r.model_code for r in guides]
+    marks: list[str] = []  # one letter per finished guide: f lots for review, e nothing new, x an error
+    progress.emit(stage="scan", guides=len(guides), guide=0, codes=codes, marks="")
+    told = [0.0]
+    for n, rule in enumerate(guides, 1):
+        progress.check_cancel()
         stats.guides += 1
+
+        def report(quiet: bool = False, n=n, rule=rule) -> None:
+            """The running totals for the dashboard. `quiet`: at most twice a second (cards decided without a download)."""
+            if quiet and time.monotonic() - told[0] < 0.5:
+                return
+            told[0] = time.monotonic()
+            progress.emit(stage="scan", guides=len(guides), guide=n, code=rule.model_code, codes=codes,
+                          marks="".join(marks), **_scan_counters(stats))
+
+        before = (stats.review + stats.bid, len(stats.errors))
+
+        def close_guide(before=before) -> None:
+            marks.append("x" if len(stats.errors) > before[1] else ("f" if stats.review + stats.bid > before[0] else "e"))
+
+        report()
         log.info("== %s %s %s: years %s, odo<=%s, min grade %s", rule.model_code, rule.make, rule.model,
                  rule.search_years, rule.search_max_odo, rule.min_grade)
         for err in split_override_lines(rule)[2]:
             log.warning("   %s: standing instruction not understood, ignored: %s", rule.model_code, err)
         try:
             cards = search_rule(browser, cfg, rule, cache)
+        except (NotLoggedIn, Cancelled):
+            raise  # signed out or stopped: the run ends here, not once per guide
         except Exception as exc:
             stats.errors.append(f"{rule.model_code}: search failed: {exc}")
             log.exception("search failed for %s", rule.model_code)
+            close_guide()
+            report()
             continue
         stats.cards += len(cards)
         log.info("   %d cards", len(cards))
+        report()
         opened = 0
         for card in cards:
+            progress.check_cancel()
             if _should_skip_existing(store, card.ref_no, rule, rescan):
                 stats.reused += 1
+                report(quiet=True)
                 continue
             store.upsert_vehicle(card.ref_no, rule.model_code, card.to_dict())
             pre = card_check(rule, card, cfg)
@@ -185,6 +213,7 @@ def scan(cfg: Config, browser: Browser, store: Store, model_codes: list[str] | N
                                    summary=summary_line(card), facts_json=card.to_dict(),
                                    hard_json={"checks": [pre.__dict__]})
                 stats.skip += 1
+                report(quiet=True)
                 continue
             if limit_per_model is not None and opened >= limit_per_model:
                 break
@@ -204,6 +233,7 @@ def scan(cfg: Config, browser: Browser, store: Store, model_codes: list[str] | N
                                        **pending_images_proposal(rule, card, evidence))
                     stats.review += 1
                     log.info("   %s -> images not published yet | sheet %.1fs, no page opened", summary_line(card), t_sheet)
+                    report()
                     continue
                 # 2. The detail page only when a rule needs something the card does not carry.
                 need, why = needs_detail(rule, card)
@@ -246,11 +276,22 @@ def scan(cfg: Config, browser: Browser, store: Store, model_codes: list[str] | N
                 log.info("   %s %s | sheet %.1fs - ocr %.1fs - page %.1fs (%s) - total %.1fs",
                          proposal["status"], bid_txt, t_sheet, ocr_s, t_page,
                          "opened: " + why if need else "not opened", time.time() - t0)
+            except (NotLoggedIn, Cancelled):
+                raise
             except Exception as exc:
                 stats.errors.append(f"{rule.model_code} {card.ref_no}: {exc}")
                 log.exception("candidate failed %s", card.ref_no)
+            report()
+        close_guide()
+        report()  # the cards skipped or already known since the last lot, and this guide's result
     stats.cache_hits = cache.hits
     return stats
+
+
+def _scan_counters(stats: ScanStats) -> dict:
+    """The running totals the dashboard shows while a scan is going (errors as a count)."""
+    return {"cards": stats.cards, "opened": stats.opened, "review": stats.review, "skip": stats.skip, "bid": stats.bid,
+            "reused": stats.reused, "pending": stats.pending, "model_calls": stats.model_calls, "errors": len(stats.errors)}
 
 
 def _ocr_hints(ocr, facts: VehicleFacts) -> list[dict]:
@@ -464,10 +505,25 @@ def reevaluate(cfg: Config, store: Store, model_codes: list[str] | None = None, 
     wanted = {c.upper() for c in model_codes} if model_codes else None
     st = ReplayStats()
     rows = store.list_proposals(decision="pending", model_code=None, limit=100_000)
+    todo = []  # the rows a current guide covers, in the stored order, so the total is known up front
     for row in rows:
         rule = by_guide.get(row["guide_id"]) or by_code.get(row["model_code"])
         if rule is None or (wanted and rule.model_code.upper() not in wanted):
             continue
+        todo.append((row, rule))
+
+    told = [0.0]
+
+    def report(quiet: bool = False) -> None:
+        """The running totals for the dashboard. `quiet`: at most twice a second (card rows take no time each)."""
+        if quiet and st.checked and time.monotonic() - told[0] < 0.5:
+            return
+        told[0] = time.monotonic()
+        progress.emit(stage="replay", checked=st.checked, total=len(todo), changed=st.changed, applied=st.applied,
+                      unchanged=st.unchanged, needs_fetch=st.needs_fetch)
+
+    for row, rule in todo:
+        report(quiet=True)  # the totals after the rows before this one
         st.checked += 1
         facts = VehicleFacts.from_dict(json.loads(row["facts_json"] or "{}"))
         old = (row["status"], row["bid_jpy_k"])
@@ -517,6 +573,7 @@ def reevaluate(cfg: Config, store: Store, model_codes: list[str] | None = None, 
             store.supersede_pending(row["ref_no"], rule.guide_id)
             store.add_proposal(snapshot=snap_path.name, rule_updated_at=rule.updated_at, **proposal)
             st.applied += 1
+    report()
     return st
 
 
@@ -548,6 +605,7 @@ def judge_pending(cfg: Config, store: Store, model_codes: list[str] | None = Non
     cache = PageCache(cache_dir(cfg), cfg.cache_hours)
     st = JudgeStats()
     wanted = {c.upper() for c in model_codes} if model_codes else None
+    todo = []  # the lots waiting for a judgement, in the stored order, so the total is known up front
     for row in store.list_proposals(decision="pending", status=NEEDS_REVIEW, limit=100_000):
         try:
             soft = json.loads(row["soft_json"] or "{}")
@@ -558,8 +616,19 @@ def judge_pending(cfg: Config, store: Store, model_codes: list[str] | None = Non
         rule = by_guide.get(row["guide_id"]) or by_code.get(row["model_code"])
         if rule is None or (wanted and rule.model_code.upper() not in wanted):
             continue
+        todo.append((row, soft, rule))
+
+    def report(i: int, **extra) -> None:
+        progress.emit(stage="judge", i=i, total=len(todo), judged=st.judged, unavailable=st.unavailable,
+                      checked=st.checked, pages=st.pages, errors=len(st.errors), limit=limit, **extra)
+
+    seen = 0
+    for i, (row, soft, rule) in enumerate(todo, 1):
+        progress.check_cancel()
         if limit is not None and st.judged >= limit:
             break
+        seen = i
+        report(i, ref_no=row["ref_no"], code=rule.model_code)  # the totals after the lots before this one
         st.checked += 1
         facts = VehicleFacts.from_dict(json.loads(row["facts_json"] or "{}"))
         hard = evaluate_hard(facts, rule)
@@ -580,6 +649,8 @@ def judge_pending(cfg: Config, store: Store, model_codes: list[str] | None = Non
                 evidence = download_evidence(browser, cfg, full, judge_photos(cfg), cache)
                 facts = full
                 st.pages += 1
+            except (NotLoggedIn, Cancelled):
+                raise  # signed out or stopped: the pass ends here, not once per lot
             except Exception as exc:
                 st.errors.append(f"{row['ref_no']}: {exc}")
                 continue
@@ -598,4 +669,5 @@ def judge_pending(cfg: Config, store: Store, model_codes: list[str] | None = Non
                 break  # every provider is out for today; the rest stays pending
         else:
             st.judged += 1
+    report(seen, done=True)
     return st

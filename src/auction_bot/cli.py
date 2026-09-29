@@ -1,12 +1,21 @@
-"""Command line: learn | bid | login | fetch-rules | rules | scan | review | place | replay | skip-line | watch."""
+"""Command line: learn | bid | dashboard | login | check-login | fetch-rules | rules | scan | judge | review | place |
+replay | insights | playbook | skip-line | watch.
+
+A command started by the dashboard (`BIDBARN_PROGRESS=1`) also prints `PROGRESS` and `SUMMARY` lines
+(`progress.py`); from a console the output is unchanged.
+"""
 from __future__ import annotations
 
 import json
 import logging
+import socket
+import threading
+import webbrowser
 from pathlib import Path
 
 import typer
 
+from auction_bot import progress
 from auction_bot.config import ROOT, load_config
 
 app = typer.Typer(add_completion=False, no_args_is_help=True, help="BidBarn: Carbarn's Nichibo auction bidding assistant",
@@ -39,10 +48,17 @@ def friendly(fn):
 
 @app.command()
 @friendly
-def login() -> None:
+def login(wait: bool = typer.Option(False, "--wait", help="No keyboard: check the sign-in, open a window only if a site "
+                                                          "is signed out, and continue by itself once you are in")) -> None:
     """Open the bot's browser so you can sign in to Nichibo and the Carbarn dashboard once."""
     _log()
     cfg = load_config()
+    if wait:
+        from auction_bot.run import ensure_signed_in
+
+        ensure_signed_in(cfg, echo=typer.echo)  # returns only when both sites are signed in
+        progress.summary({"nichibo": True, "carbarn": True})
+        return
     from auction_bot.nichibo.browser import Browser
 
     with Browser(cfg, headless=False) as b:
@@ -53,17 +69,35 @@ def login() -> None:
     typer.echo(f"Session saved in {cfg.profile_dir}")
 
 
+@app.command("check-login")
+@friendly
+def check_login() -> None:
+    """Check, without opening a window, whether the bot's browser is signed in to Nichibo and the Carbarn dashboard."""
+    _log()
+    cfg = load_config()
+    from auction_bot.nichibo.browser import Browser
+    from auction_bot.run import carbarn_signed_in, nichibo_signed_in
+
+    with Browser(cfg, headless=True) as b:
+        nichibo_ok = bool(nichibo_signed_in(b, cfg))
+        carbarn_ok = bool(carbarn_signed_in(b, cfg))
+    typer.echo(f"Nichibo: {'signed in' if nichibo_ok else 'NOT signed in'}")
+    typer.echo(f"Carbarn dashboard: {'signed in' if carbarn_ok else 'NOT signed in'}")
+    progress.summary({"nichibo": nichibo_ok, "carbarn": carbarn_ok})
+
+
 @app.command("fetch-rules")
 @friendly
 def fetch_rules(model: list[str] = typer.Option(None, "--model", "-m", help="Only these model codes"),
-                include_inactive: bool = typer.Option(False, help="Also fetch inactive guides")) -> None:
+                include_inactive: bool = typer.Option(False, help="Also fetch inactive guides"),
+                headless: bool = typer.Option(False, help="Do not show the browser window")) -> None:
     """Pull Team Bid bidding guides from Carbarn and save a snapshot."""
     _log()
     cfg = load_config()
     from auction_bot.carbarn.client import CarbarnClient, save_snapshot
     from auction_bot.nichibo.browser import Browser
 
-    with Browser(cfg, headless=False) as b:
+    with Browser(cfg, headless=headless) as b:
         client = CarbarnClient(b, cfg)
         guides = client.fetch_team_guides(model or None, include_inactive)
     path = save_snapshot(cfg, guides)
@@ -71,6 +105,7 @@ def fetch_rules(model: list[str] = typer.Option(None, "--model", "-m", help="Onl
     for g in guides:
         it = g["item"]
         typer.echo(f"  {it['modelCode']:10} {it['make']} {it['model']}  minGrade={it.get('minGrade')}  variants={[(v.get('name') or 'Default') + ('' if v.get('active') else ' (off)') for v in it.get('variants', [])]}")
+    progress.summary({"guides": len(guides), "snapshot": Path(path).name})
 
 
 @app.command()
@@ -139,6 +174,7 @@ def scan(model: list[str] = typer.Option(None, "--model", "-m", help="Only these
         store.close()
     typer.echo(json.dumps(stats.__dict__, indent=1))
     typer.echo(f"Review at http://{cfg.review.get('host', '127.0.0.1')}:{cfg.review.get('port', 8765)}  (bot review)")
+    progress.summary({**stats.__dict__, "errors": [str(e)[:300] for e in stats.errors[:20]], "errors_total": len(stats.errors)})
 
 
 @app.command()
@@ -155,6 +191,7 @@ def judge(pending: bool = typer.Option(True, "--pending/--all", help="Only lots 
 
     if not judge_mode(cfg):
         typer.echo("sheet_check is not 'judge' in config.yaml; nothing to do.")
+        progress.summary({"skipped": "sheet_check is not 'judge' in config.yaml"})
         return
     store = Store(cfg.db_path)
     try:
@@ -171,6 +208,9 @@ def judge(pending: bool = typer.Option(True, "--pending/--all", help="Only lots 
                + (f", errors {len(st.errors)}" if st.errors else ""))
     for e in st.errors[:10]:
         typer.echo("  " + e)
+    progress.summary({"checked": st.checked, "judged": st.judged, "routine": st.routine, "pages": st.pages,
+                      "unavailable": st.unavailable, "errors": [str(e)[:300] for e in st.errors[:20]],
+                      "errors_total": len(st.errors)})
 
 
 def judge_mode(cfg) -> bool:
@@ -187,7 +227,40 @@ def review() -> None:
     from auction_bot.review.app import create_app
 
     host, port = cfg.review.get("host", "127.0.0.1"), int(cfg.review.get("port", 8765))
-    typer.echo(f"Review page: http://{host}:{port}")
+    typer.echo(f"Review page: http://{host}:{port}/review")
+    uvicorn.run(create_app(cfg), host=host, port=port, log_level="warning")
+
+
+def port_in_use(host: str, port: int, timeout: float = 0.5) -> bool:
+    """Does something already accept connections there (a dashboard that is running)?"""
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+@app.command()
+@friendly
+def dashboard(no_browser: bool = typer.Option(False, "--no-browser", help="Do not open the page in your browser")) -> None:
+    """Serve the dashboard (overview, runs, review) and open it in your browser. One per PC: a second start opens a tab."""
+    cfg = load_config()
+    host, port = cfg.review.get("host", "127.0.0.1"), int(cfg.review.get("port", 8765))
+    url = f"http://{host}:{port}/"
+    if port_in_use(host, port):
+        typer.echo(f"BidBarn dashboard is already running: {url}")
+        if not no_browser:
+            webbrowser.open(url)
+        return
+    import uvicorn
+
+    from auction_bot.review.app import create_app
+
+    typer.echo(f"BidBarn dashboard: {url}")
+    if not no_browser:
+        timer = threading.Timer(1.5, webbrowser.open, [url])
+        timer.daemon = True
+        timer.start()
     uvicorn.run(create_app(cfg), host=host, port=port, log_level="warning")
 
 
@@ -200,7 +273,8 @@ def place(live: bool = typer.Option(False, help="Actually submit (also requires 
     cfg = load_config()
     from auction_bot.run import place_approved
 
-    place_approved(cfg, echo=typer.echo, headless=headless, live=live)
+    lines = place_approved(cfg, echo=typer.echo, headless=headless, live=live)
+    progress.summary({"dry_run": cfg.placement_mode(live)[0], "lines": [str(ln)[:300] for ln in (lines or [])]})
 
 
 @app.command()
@@ -239,6 +313,9 @@ def replay(model: list[str] = typer.Option(None, "--model", "-m", help="Only the
         typer.echo("  " + line)
     typer.echo(f"checked {st.checked}: unchanged {st.unchanged}, changed {st.changed}, need a fetch {st.needs_fetch}"
                + (f", applied {st.applied}" if apply else "  (dry: add --apply to store the new outcomes)"))
+    progress.summary({"checked": st.checked, "unchanged": st.unchanged, "changed": st.changed, "needs_fetch": st.needs_fetch,
+                      "applied": st.applied, "apply": bool(apply), "changes": [str(c)[:300] for c in st.changes[:20]],
+                      "changes_total": len(st.changes)})
 
 
 @app.command()
@@ -266,7 +343,9 @@ def insights(model: list[str] = typer.Option(None, "--model", "-m", help="Only t
         wanted = {m.upper() for m in model}
         rows = [r for r in rows if r["model_code"].upper() in wanted]
         feedback = [r for r in feedback if (r["model_code"] or "").upper() in wanted]
-    typer.echo(render(summarise(rows), propose_skip_lines(rows, min_support=min_support), accuracy=model_accuracy(feedback)))
+    report = render(summarise(rows), propose_skip_lines(rows, min_support=min_support), accuracy=model_accuracy(feedback))
+    typer.echo(report)
+    progress.summary({"lines": len(report.splitlines()), "decisions": len(rows)})
 
 
 @app.command()

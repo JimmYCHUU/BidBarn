@@ -29,17 +29,17 @@ def test_triage_order_and_content(cfg):
     _seed(store, "E", "GDH206", "4", 10_000, status="SKIP")  # not for triage
     store.close()
     client = TestClient(create_app(cfg))
-    r = client.get("/")
+    r = client.get("/review")
     assert r.status_code == 200
     order = [int(x) for x in re.findall(r'data-pid="(\d+)"', r.text)]
     assert order == [d, b, c, a]  # models alphabetically; within GDH206: grade 4.5 first, then fewest km
     assert "2020 Toyota Hiace" in r.text and "https://img.example/A.jpg" in r.text  # sheet straight from Nichibo when not downloaded
-    assert "photos ↗" in r.text and "/evidence/" not in r.text.split("data-pid")[1]
+    assert 'data-ev="photos_click"' in r.text and "/evidence/" not in r.text.split("data-pid")[1]
     assert 'data-bid="1000"' in r.text and "review.js" in r.text
     assert client.get("/static/review.js").status_code == 200 and "triageKeys" in client.get("/static/review.js").text
     assert client.get("/list").status_code == 200  # the old table still exists
     # Filter by model.
-    r = client.get("/?model=ANH20W")
+    r = client.get("/review?model=ANH20W")
     assert [int(x) for x in re.findall(r'data-pid="(\d+)"', r.text)] == [d]
 
 
@@ -68,9 +68,9 @@ def test_json_decide_from_triage_logs_open_and_via(cfg):
     assert d["via"] == "triage" and d["decide_seconds"] is not None and d["amount_edited"] == 0
     assert store.proposal(pids[1])["decision"] == "pending"
     store.close()
-    # Without the JSON accept header the form flow redirects as before.
+    # Without the JSON accept header the form flow redirects to the triage list.
     r = client.post(f"/p/{pids[1]}/decide", data={"action": "reject", "reason": "no"}, follow_redirects=False)
-    assert r.status_code == 303 and r.headers["location"] == "/"
+    assert r.status_code == 303 and r.headers["location"] == "/review"
 
 
 def test_triage_shows_suggested_skip_rules(cfg):
@@ -83,7 +83,7 @@ def test_triage_shows_suggested_skip_rules(cfg):
     keep = _seed(store, "K", "GDH206", "4", 70_000)
     store.close()
     client = TestClient(create_app(cfg))
-    r = client.get("/")
+    r = client.get("/review")
     assert "skip: variant contains DUMP" in r.text and "3 rejections" in r.text
     r = client.post("/rules/GDH206/skip", data={"line": "skip: variant contains DUMP", "next": "/"}, follow_redirects=False)
     assert r.status_code == 303

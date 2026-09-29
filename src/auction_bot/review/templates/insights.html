@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Insights · BidBarn{% endblock %}
+{% block body %}
+<div class="page-head">
+  <h1 class="page-title">Insights</h1>
+  <span class="page-sub">How you decide, per model, from {{ decisions }} decision{{ 's' if decisions != 1 }}{% if days %} in the last {{ days }} days{% endif %}.</span>
+  <div class="end">
+    <form method="get" class="form-row form-row--tight">
+      <div class="field field--narrow"><label for="i-days">Days to look back</label><input id="i-days" type="number" name="days" min="1" max="3650" value="{{ days or '' }}"></div>
+      <div class="field field--narrow"><label for="i-min">Rejections per rule</label><input id="i-min" type="number" name="min_support" min="1" max="50" value="{{ min_support }}"></div>
+      <button>Apply</button>
+    </form>
+  </div>
+</div>
+
+{% if not insights and not accuracy %}
+<div class="card">
+  <div class="empty">
+    {{ icon('chart-column') }}
+    <h3>No decisions recorded yet</h3>
+    <p>Once you have approved or rejected some lots, this page shows how long a decision takes, what you look at, and the skip rules your rejections justify.</p>
+    <a class="btn" href="/review">Open the review</a>
+  </div>
+</div>
+{% endif %}
+
+{% if accuracy %}
+<section class="card">
+  <div class="card-head"><h2>Where the model was corrected</h2></div>
+  <div class="table-wrap">
+  <table class="lots">
+    <thead><tr><th>Model code</th><th class="num">Corrections</th><th>By requirement</th></tr></thead>
+    <tbody>
+    {% for code, counts in accuracy.items() %}
+      <tr><td class="mono">{{ code }}</td><td class="num"><b>{{ counts.values()|sum }}</b></td>
+        <td>{% for k, n in counts.most_common(8) %}<span class="pill pill--plain">{{ k }} <b class="num">{{ n }}</b></span> {% endfor %}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+
+{% for code, mi in insights.items() %}
+<section class="card">
+  <div class="card-head">
+    <h2 class="mono">{{ code }}</h2>
+    <span class="faint num">{{ mi.decided }} decided</span>
+    {% if mi.photos_never_consulted %}<span class="pill pill--info push">{{ icon('info') }} Photos never opened</span>{% endif %}
+  </div>
+  <div class="card-body">
+    <div class="tiles">
+      <div class="tile tile--ok"><span class="tile-label">Approved</span><span class="tile-value num">{{ mi.approved }}</span></div>
+      <div class="tile"><span class="tile-label">Rejected</span><span class="tile-value num">{{ mi.rejected }}</span></div>
+      <div class="tile"><span class="tile-label">Time to decide, median</span><span class="tile-value num">{% if mi.median_seconds is not none %}{{ '%g' % mi.median_seconds }} s{% else %}<span class="muted">no data</span>{% endif %}</span>{% if mi.p90_seconds is not none %}<span class="tile-note num">9 in 10 under {{ '%g' % mi.p90_seconds }} s</span>{% endif %}</div>
+      <div class="tile"><span class="tile-label">Amount changed</span><span class="tile-value num">{% if mi.amount_edit_share is not none %}{{ '%.0f' % (mi.amount_edit_share * 100) }}%{% else %}<span class="muted">no data</span>{% endif %}</span>{% if mi.median_amount_delta_k is not none %}<span class="tile-note num">median change {{ '%+g' % mi.median_amount_delta_k }}K</span>{% endif %}</div>
+    </div>
+
+    <div class="looked">
+      {% for label, share in [('Sheet zoomed', mi.sheet_zoom_share), ('Photos opened', mi.photos_share), ('Nichibo opened', mi.nichibo_share)] if share is not none %}
+      <div class="meter">
+        <div class="meter-head"><span>{{ label }}</span><b>{{ '%.0f' % (share * 100) }}%</b></div>
+        <div class="meter-track"><div class="meter-fill" style="--v: {{ share }}"></div></div>
+      </div>
+      {% endfor %}
+    </div>
+
+    {% if mi.rejection_keywords %}
+    <div>
+      <h3>Rejections by theme</h3>
+      <p>{% for k, n in mi.rejection_keywords.most_common(8) %}<span class="pill pill--plain">{{ k }} <b class="num">{{ n }}</b></span> {% endfor %}</p>
+    </div>
+    {% endif %}
+    {% if mi.top_reasons %}
+    <div>
+      <h3>Reasons you gave most</h3>
+      <ul class="reasons">{% for reason, n in mi.top_reasons %}<li><b class="num">{{ n }}</b> {{ reason }}</li>{% endfor %}</ul>
+    </div>
+    {% endif %}
+  </div>
+  {% if proposals.get(code) %}
+  <div class="suggest suggest--foot">
+    <div><b>Skip rules these rejections justify.</b> Each would have skipped no lot you approved. Nothing is stored until you add it.</div>
+    {% for sg in proposals[code] %}
+    <form method="post" action="/rules/{{ code }}/skip">
+      <input type="hidden" name="line" value="{{ sg.line }}"><input type="hidden" name="next" value="/insights">
+      <span class="mono">{{ sg.line }}</span> <span class="faint">({{ sg.support }} rejection{{ 's' if sg.support != 1 }})</span>
+      <button class="btn--sm">Add rule</button>
+    </form>
+    {% endfor %}
+    <div class="faint">After adding a rule, run Replay from the <a href="/">overview</a> to apply it to the stored lots.</div>
+  </div>
+  {% endif %}
+</section>
+{% endfor %}
+{% endblock %}

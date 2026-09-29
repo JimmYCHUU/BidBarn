@@ -8,12 +8,14 @@ reviewer looks at and how long a decision takes is logged for `bot insights`.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from markupsafe import Markup
 
 from auction_bot.carbarn.client import append_override, load_rules
 from auction_bot.config import Config
@@ -86,6 +88,39 @@ def _wants_json(request: Request) -> bool:
     return "application/json" in (request.headers.get("accept") or "")
 
 
+STATUS_LABELS = {"BID": "Bid", "NEEDS_REVIEW": "Needs review", "SKIP": "Skip"}
+_ICON_NAME = re.compile(r"^[a-z0-9-]{1,40}$")
+_ICON_CLASS = re.compile(r"^[A-Za-z0-9_ -]{0,60}$")
+
+
+def status_label(status: str | None) -> str:
+    """The proposal status as the page words it; the stored values stay BID, SKIP, NEEDS_REVIEW."""
+    return STATUS_LABELS.get(status or "", status or "")
+
+
+_asset_v = ""
+
+
+def asset_version() -> str:
+    """Changes whenever a file under static/ changes, so a browser never shows an old stylesheet, script or icon."""
+    newest = max((p.stat().st_mtime for p in STATIC.rglob("*") if p.is_file()), default=0)
+    return format(int(newest), "x")
+
+
+def lot_title(summary: str | None) -> str:
+    """The lot's name from its stored one-line summary ("2020 Toyota Hiace Van | GDH206V | ..."): the first part."""
+    return (summary or "").split("|", 1)[0].strip()
+
+
+def icon(name: str, cls: str = "") -> Markup:
+    """One icon from the Lucide sprite (`static/icons.svg`), sized and coloured by CSS."""
+    if not _ICON_NAME.match(name) or not _ICON_CLASS.match(cls):
+        raise ValueError(f"bad icon {name!r} {cls!r}")
+    classes = "icon" + (f" {cls}" if cls else "")
+    return Markup(f'<svg class="{classes}" aria-hidden="true" focusable="false">'
+                  f'<use href="/static/icons.svg?v={_asset_v}#i-{name}"></use></svg>')
+
+
 def feedback_lines(loaded: dict, action: str, amount: int | None, reason: str, req_id: str, note: str) -> list[tuple[str, str, str, str]]:
     """(requirement id, what the model said, what Jim said, playbook line) for a judged lot Jim overruled or corrected."""
     judge = loaded.get("judge") or {}
@@ -122,12 +157,33 @@ def record_feedback(s: Store, loaded: dict, action: str, amount: int | None, rea
         append_playbook(s.cfg, loaded["model_code"], line, author="review") if getattr(s, "cfg", None) else None
 
 
-def create_app(cfg: Config, finish_event=None) -> FastAPI:
-    """`finish_event` is set by `bot run`: the page then shows "Finish review", which hands control
-    back to the console so the approved bids can be placed."""
-    app = FastAPI(title="Bid review")
+def create_app(cfg: Config, finish_event=None, jobs=None) -> FastAPI:
+    """The whole local page: the overview and runs (`dashboard/routes.py`) and the review pages here.
+
+    `finish_event` is set by `bot bid`: the page then shows "Finish review", which hands control
+    back to the console so the approved bids can be placed. `jobs` runs the commands started from
+    the page; `bot bid` passes a manager that starts nothing, tests pass a fake one."""
+    from contextlib import asynccontextmanager
+
+    from auction_bot.dashboard import routes as dashboard_routes
+    from auction_bot.dashboard.jobs import JobManager
+
+    jobs = jobs if jobs is not None else JobManager(cfg)
+
+    @asynccontextmanager
+    async def lifespan(_app):
+        yield
+        jobs.close()  # stops watching; a run that is going finishes by itself
+
+    app = FastAPI(title="BidBarn", lifespan=lifespan)
+    app.state.jobs = jobs
     templates = Jinja2Templates(directory=str(TEMPLATES))
     templates.env.globals["can_finish"] = finish_event is not None
+    templates.env.globals["icon"] = icon
+    templates.env.globals["status_label"] = status_label
+    templates.env.globals["lot_title"] = lot_title
+    global _asset_v
+    _asset_v = templates.env.globals["asset_v"] = asset_version()
     app.mount("/evidence", StaticFiles(directory=str(cfg.evidence_dir)), name="evidence")
     app.mount("/static", StaticFiles(directory=str(STATIC)), name="static")
 
@@ -154,7 +210,20 @@ def create_app(cfg: Config, finish_event=None) -> FastAPI:
             "ORDER BY CASE status WHEN 'BID' THEN 0 ELSE 1 END, id DESC LIMIT 1", (exclude or -1,)).fetchone()
         return row["id"] if row else None
 
-    @app.get("/", response_class=HTMLResponse)
+    def page(request: Request, name: str, nav: str, **context):
+        """A template inside the shell: the counts for the nav and the lock for the header."""
+        if "counts" not in context:
+            s = store()
+            try:
+                context["counts"] = s.counts()
+            finally:
+                s.close()
+        context.update(nav=nav, lock_label=lock_label(), dry_run=cfg.dry_run)
+        return templates.TemplateResponse(request, name, context)
+
+    dashboard_routes.register(app, templates, cfg, jobs, store, page)
+
+    @app.get("/review", response_class=HTMLResponse)
     def triage(request: Request, model: str | None = None):
         s = store()
         try:
@@ -173,13 +242,17 @@ def create_app(cfg: Config, finish_event=None) -> FastAPI:
             s.close()
         return templates.TemplateResponse(request, "triage.html", {
             "groups": groups, "counts": counts, "model": model or "", "lock_label": lock_label(), "dry_run": cfg.dry_run,
+            "nav": "review",
         })
 
     @app.get("/list", response_class=HTMLResponse)
-    def index(request: Request, decision: str = "pending", status: str | None = None, model: str | None = None):
+    def index(request: Request, decision: str = "pending", status: str | None = None, model: str | None = None,
+              placed: str | None = None):
         s = store()
         try:
             rows = [_load(r) for r in s.list_proposals(decision or None, status or None, model or None)]
+            if placed in ("0", "1"):  # approved lots: the ones a placement has been recorded for, or the others
+                rows = [r for r in rows if bool(r.get("placed_at")) == (placed == "1")]
             counts = s.counts()
             multi = s.multi_guide_refs()
         finally:
@@ -188,7 +261,7 @@ def create_app(cfg: Config, finish_event=None) -> FastAPI:
             row["multi_guide"] = row["ref_no"] in multi
         return templates.TemplateResponse(request, "index.html", {
             "rows": rows, "counts": counts, "decision": decision, "status": status or "", "model": model or "",
-            "dry_run": cfg.dry_run, "lock_label": lock_label(),
+            "placed": placed if placed in ("0", "1") else "", "dry_run": cfg.dry_run, "lock_label": lock_label(), "nav": "list",
         })
 
     @app.get("/p/{pid}", response_class=HTMLResponse)
@@ -209,7 +282,7 @@ def create_app(cfg: Config, finish_event=None) -> FastAPI:
                 s.log_event(pid, "open", "detail")
         finally:
             s.close()
-        return templates.TemplateResponse(request, "detail.html", {"p": p, "next_id": nxt, "counts": counts,
+        return templates.TemplateResponse(request, "detail.html", {"p": p, "next_id": nxt, "counts": counts, "nav": "review",
                                                                     "dry_run": cfg.dry_run, "lock_label": lock_label()})
 
     @app.post("/p/{pid}/event")
@@ -274,7 +347,7 @@ def create_app(cfg: Config, finish_event=None) -> FastAPI:
             s.close()
         if _wants_json(request):
             return JSONResponse({"ok": True, "decision": decision, "amount": amt, "next_id": nxt})
-        return RedirectResponse(f"/p/{nxt}" if nxt else "/", status_code=303)
+        return RedirectResponse(f"/p/{nxt}" if nxt else "/review", status_code=303)
 
     @app.get("/p/{pid}/suggest")
     def suggest(pid: int, reason: str = ""):
@@ -290,24 +363,22 @@ def create_app(cfg: Config, finish_event=None) -> FastAPI:
         return JSONResponse({"line": suggest_from_reason(reason, facts)})
 
     @app.post("/finish", response_class=HTMLResponse)
-    def finish():
+    def finish(request: Request):
         """Hand control back to `bot run`, which then places the approved bids."""
         if finish_event is None:
             raise HTTPException(404, "not started by bot run")
         s = store()
         try:
-            waiting = s.counts()["approved"]
+            counts = s.counts()
         finally:
             s.close()
         finish_event.set()
-        return HTMLResponse(
-            "<!doctype html><meta charset='utf-8'><title>BidBarn</title>"
-            "<body style='font:16px system-ui;padding:40px;max-width:640px'>"
-            f"<h2>Review finished.</h2><p>{waiting} approved bid(s) will now be placed by the BidBarn window "
-            f"({lock_label().lower()}). You can close this tab.</p></body>")
+        return templates.TemplateResponse(request, "finished.html", {
+            "waiting": counts["approved"], "counts": counts, "lock_label": lock_label(), "nav": "review",
+        })
 
     @app.post("/rules/{code}/skip")
-    def add_skip_line(code: str, line: str = Form(...), next: str = Form("/")):
+    def add_skip_line(code: str, line: str = Form(...), next: str = Form("/review")):
         """Store a structured standing instruction for a model code (validated first)."""
         text = line.strip()
         if not is_structured(text):
@@ -317,6 +388,6 @@ def create_app(cfg: Config, finish_event=None) -> FastAPI:
         except InstructionError as exc:
             raise HTTPException(400, f"standing instruction not understood: {exc}")
         append_override(cfg, code.upper(), text)
-        return RedirectResponse(next if next.startswith("/") else "/", status_code=303)
+        return RedirectResponse(next if next.startswith("/") and not next.startswith("//") else "/review", status_code=303)
 
     return app

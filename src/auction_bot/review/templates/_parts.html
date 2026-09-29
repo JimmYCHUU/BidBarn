@@ -1,0 +1,124 @@
+{# Pieces shared by the overview, the runs list and the run page. #}
+
+{% macro status_pill(status) -%}
+<span class="pill {{ status }}" data-state>{{ icon(status_icon(status), 'spin' if status == 'running' else '') }}<span data-state-text>{{ status_word(status) }}</span></span>
+{%- endmacro %}
+
+{% macro start_button(command, label, options=none, cls='btn--primary', confirm=none) -%}
+<button type="button" class="{{ cls }}" data-start='{{ {"command": command, "options": options or {}}|tojson }}'{% if confirm %} data-confirm="{{ confirm }}"{% endif %}>{{ icon(command_icon(command)) }} {{ label }}</button>
+{%- endmacro %}
+
+{# The live console of one run. JS (dashboard.js) fills it: the guide row, the counters, the log. #}
+{% macro console(run, compact=false) %}
+<section class="console{% if compact %} console--compact{% endif %}" data-console data-run-id="{{ run.id }}" data-status="{{ run.status }}" data-command="{{ run.command }}" aria-label="Run {{ run.id }}, {{ command_label(run.command) }}">
+  <script type="application/json" data-initial>{{ {"progress": run.progress, "started_at": run.started_at, "finished_at": run.finished_at, "cancel_requested": run.cancel_requested}|tojson }}</script>
+  <div class="console-bar">
+    {{ status_pill(run.status) }}
+    <span class="console-where" data-where></span>
+    <span class="faint push" data-elapsed></span>
+    {% if run.status == 'running' %}<button type="button" class="btn--danger btn--sm" data-stop data-confirm="Confirm stop"{% if run.cancel_requested %} disabled{% endif %}>{{ icon('square', 'icon--sm') }} {{ 'Stopping' if run.cancel_requested else 'Stop' }}</button>{% endif %}
+  </div>
+  <div class="guides" data-guides hidden>
+    <div class="guide-row" data-guide-row role="img" aria-label="One cell per guide"></div>
+    <div class="guide-legend faint">
+      <span><i class="g is-found"></i> lots for review <b class="num" data-n-found>0</b></span>
+      <span><i class="g is-empty"></i> nothing new <b class="num" data-n-empty>0</b></span>
+      <span><i class="g is-error"></i> error <b class="num" data-n-error>0</b></span>
+      <span class="legend-live"><i class="g is-now"></i> scanning now</span>
+      <span data-legend-rest><i class="g"></i> <span data-legend-rest-text>to come</span></span>
+    </div>
+  </div>
+  <div class="meter" data-meter hidden>
+    <div class="meter-head"><span data-meter-label></span><b data-meter-value></b></div>
+    <div class="meter-track"><div class="meter-fill" data-meter-fill></div></div>
+  </div>
+  <dl class="counters num" data-counters hidden></dl>
+  <div class="log" data-log role="log" aria-label="Log of run {{ run.id }}" tabindex="0"></div>
+  <div class="console-foot">
+    <label class="check-row"><input type="checkbox" data-follow checked> <span>Follow the log</span></label>
+    <span class="faint" data-log-note></span>
+    {% if compact %}<a class="push" href="/runs/{{ run.id }}">Open the run</a>{% else %}<a class="push" href="/runs/{{ run.id }}/log.txt">Download the log</a>{% endif %}
+  </div>
+</section>
+{% endmacro %}
+
+{# One command with its options, started from the page. #}
+{% macro launcher(commands, only=none, open=none) %}
+<div class="launcher">
+{% for c in commands if (only is none or c.name in only) %}
+  <details class="cmd"{% if open == c.name %} open{% endif %}>
+    <summary>{{ icon(command_icon(c.name)) }} <span>{{ c.label }}</span> {{ icon('chevron-down', 'icon--sm chev') }}</summary>
+    <form data-run-command="{{ c.name }}" class="cmd-form">
+      <p class="faint">{{ c.help }}</p>
+      {% for o in c.options %}
+        {% if o.kind == 'bool' %}
+        <label class="check-row"><input type="checkbox" name="{{ o.name }}" data-kind="bool"{% if o.default %} checked{% endif %}> <span>{{ o.label }}<span class="help">{{ o.help }}</span></span></label>
+        {% elif o.kind == 'int' %}
+        <div class="field"><label for="{{ c.name }}-{{ o.name }}">{{ o.label }}</label><input id="{{ c.name }}-{{ o.name }}" type="number" name="{{ o.name }}" data-kind="int" min="1" max="100000" step="1" inputmode="numeric"{% if o.default %} value="{{ o.default }}"{% endif %}><span class="help">{{ o.help }}</span></div>
+        {% elif o.kind == 'list' %}
+        <div class="field"><label for="{{ c.name }}-{{ o.name }}">{{ o.label }}</label><input id="{{ c.name }}-{{ o.name }}" type="text" name="{{ o.name }}" data-kind="list" autocomplete="off" spellcheck="false"><span class="help">{{ o.help }} Separate several with a comma.</span></div>
+        {% else %}
+        <div class="field"><label for="{{ c.name }}-{{ o.name }}">{{ o.label }}</label><input id="{{ c.name }}-{{ o.name }}" type="text" name="{{ o.name }}" data-kind="str" autocomplete="off"><span class="help">{{ o.help }}</span></div>
+        {% endif %}
+      {% endfor %}
+      <div class="row">
+        <button class="btn--primary btn--sm" type="submit">{{ icon('play', 'icon--sm') }} Start</button>
+        {% if c.needs_profile %}<span class="faint">Uses the bot's browser. One at a time.</span>{% else %}<span class="faint">Offline. No Nichibo traffic.</span>{% endif %}
+      </div>
+      <div class="form-error" role="alert"></div>
+    </form>
+  </details>
+{% endfor %}
+</div>
+{% endmacro %}
+
+{# One entry of the day log. #}
+{% macro entry(e, dated=false) %}
+{% if e.kind == 'run' %}
+{% set r = e.run %}
+<li class="entry{% if r.status == 'running' %} is-live{% endif %}">
+  <time class="entry-time num" datetime="{{ r.started_at }}">{{ local_time(r.started_at) if dated else local_time(r.started_at, false)[:5] }}</time>
+  <span class="entry-icon entry-icon--{{ r.status }}">{{ icon(command_icon(r.command)) }}</span>
+  <div class="entry-body">
+    <div class="entry-head">
+      <a class="entry-title" href="/runs/{{ r.id }}">{{ command_label(r.command) }}</a>
+      {% if options_words(r) %}<span class="opts" title="{{ options_text(r) }}">{{ options_words(r) }}</span>{% endif %}
+      {{ status_pill(r.status) }}
+      <span class="faint push">{% if r.status != 'running' %}took {{ duration(r.started_at, r.finished_at) }}{% endif %}</span>
+    </div>
+    {% if r.status == 'running' %}
+      {{ console(r, compact=true) }}
+    {% else %}
+      {% if r.error %}<p class="entry-error{% if r.status == 'stopped' %} entry-error--stopped{% endif %}">{{ icon('square' if r.status == 'stopped' else 'circle-alert', 'icon--sm') }} {{ r.error|capitalize }}</p>
+      {% elif r.status == 'stopped' %}<p class="entry-error entry-error--stopped">{{ icon('square', 'icon--sm') }} Stopped from the dashboard</p>{% endif %}
+      {% set pairs = summary_pairs(r) %}
+      {% if pairs %}<p class="entry-facts num">{% for k, v in pairs[:7] %}<span>{{ k }} <b>{{ v }}</b></span>{% endfor %}</p>{% endif %}
+    {% endif %}
+  </div>
+</li>
+{% else %}
+<li class="entry">
+  <time class="entry-time num" datetime="{{ e.at }}">{{ local_time(e.at) if dated else local_time(e.at, false)[:5] }}</time>
+  <span class="entry-icon">{{ icon('list-checks') }}</span>
+  <div class="entry-body">
+    <div class="entry-head">
+      <span class="entry-title">Reviewed {{ e.count }} lot{{ 's' if e.count != 1 }}</span>
+      {% if e.approved %}<span class="pill pill--ok">{{ e.approved }} approved</span>{% endif %}
+      {% if e.rejected %}<span class="pill pill--plain">{{ e.rejected }} rejected</span>{% endif %}
+    </div>
+    <details class="entry-more">
+      <summary>The decisions {{ icon('chevron-down', 'icon--sm chev') }}</summary>
+      <ul class="decisions">
+        {% for d in e['items'][:40] %}
+        <li><span class="pill {{ 'approved' if d.action == 'approve' else 'rejected' }}">{{ 'Approved' if d.action == 'approve' else 'Rejected' }}</span>
+          <a href="/p/{{ d.proposal_id }}">{{ lot_title(d.summary) or d.ref_no }}</a>
+          {% if d.amount %}<b class="num">{{ '{:,}'.format(d.amount) }}K</b>{% endif %}
+          {% if d.reason %}<span class="muted">{{ d.reason }}</span>{% endif %}</li>
+        {% endfor %}
+        {% if e['items']|length > 40 %}<li class="faint">and {{ e['items']|length - 40 }} more under <a href="/list?decision=">All lots</a></li>{% endif %}
+      </ul>
+    </details>
+  </div>
+</li>
+{% endif %}
+{% endmacro %}

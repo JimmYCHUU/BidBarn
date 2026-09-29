@@ -98,7 +98,27 @@ CREATE TABLE IF NOT EXISTS judge_feedback (
   note TEXT,
   at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS runs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  command TEXT NOT NULL,
+  args_json TEXT NOT NULL,
+  source TEXT NOT NULL DEFAULT 'dashboard',
+  pid INTEGER,
+  started_at TEXT NOT NULL,
+  finished_at TEXT,
+  status TEXT NOT NULL,
+  exit_code INTEGER,
+  error TEXT,
+  progress_json TEXT,
+  summary_json TEXT,
+  log_path TEXT,
+  cancel_requested_at TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_runs_command ON runs(command, id);
 """
+
+# A run started from the dashboard: running until its process ends, then one of the other three.
+RUN_STATUSES = ("running", "ok", "failed", "stopped")
 
 # What the reviewer did on the page, summarised per decision (added to `decisions` on first run).
 DECISION_COLUMNS = {
@@ -118,6 +138,14 @@ class Store:
         self.path = path
         self.conn = sqlite3.connect(str(path))
         self.conn.row_factory = sqlite3.Row
+        # The dashboard reads while a run writes: wait for a lock instead of failing, and let
+        # readers and the writer work side by side (WAL). A database that cannot switch (in
+        # memory, read only, busy at this moment) keeps the journal it has.
+        self.conn.execute("PRAGMA busy_timeout=5000")
+        try:
+            self.conn.execute("PRAGMA journal_mode=WAL").fetchall()
+        except sqlite3.Error:
+            pass
         self.conn.executescript(SCHEMA)
         self._ensure_columns("proposals", {"guide_id": "INTEGER"})  # databases created before guide_id existed
         self._ensure_columns("decisions", DECISION_COLUMNS)
@@ -420,3 +448,70 @@ class Store:
             "SELECT SUM(decision='pending' AND status='BID') AS bid, SUM(decision='pending' AND status='NEEDS_REVIEW') AS review, "
             "SUM(decision='approved' AND placed_at IS NULL) AS approved, (SELECT COUNT(*) FROM bids) AS placed FROM proposals").fetchone()
         return {k: (row[k] or 0) for k in row.keys()}
+
+    def recent_decisions(self, limit: int = 10) -> list[dict]:
+        """The latest human decisions, newest first, with the lot in brief (read only, for the overview)."""
+        rows = self.conn.execute(
+            "SELECT d.action, d.amount_jpy_k AS amount, d.reason, d.ref_no, d.model_code, d.at, d.proposal_id, p.summary "
+            "FROM decisions d LEFT JOIN proposals p ON p.id=d.proposal_id ORDER BY d.id DESC LIMIT ?", (limit,)).fetchall()
+        return [dict(r) for r in rows]
+
+    # -- runs (commands started from the dashboard) ------------------------------
+    def start_run(self, command: str, args: list[str], pid: int | None = None, source: str = "dashboard") -> int:
+        cur = self.conn.execute(
+            "INSERT INTO runs(command, args_json, source, pid, started_at, status) VALUES(?,?,?,?,?,'running')",
+            (command, json.dumps(list(args), ensure_ascii=False), source, pid, now()))
+        self.conn.commit()
+        return int(cur.lastrowid)
+
+    def set_run_pid(self, run_id: int, pid: int | None) -> None:
+        self.conn.execute("UPDATE runs SET pid=? WHERE id=?", (pid, run_id))
+        self.conn.commit()
+
+    def set_run_log(self, run_id: int, path: Path | str) -> None:
+        self.conn.execute("UPDATE runs SET log_path=? WHERE id=?", (str(path), run_id))
+        self.conn.commit()
+
+    def update_run_progress(self, run_id: int, progress: dict) -> None:
+        self.conn.execute("UPDATE runs SET progress_json=? WHERE id=?",
+                          (json.dumps(progress, ensure_ascii=False, default=str), run_id))
+        self.conn.commit()
+
+    def request_run_cancel(self, run_id: int) -> None:
+        """Note when Stop was clicked (the first click counts). The run itself ends through `finish_run`."""
+        self.conn.execute("UPDATE runs SET cancel_requested_at=COALESCE(cancel_requested_at, ?) WHERE id=? AND status='running'",
+                          (now(), run_id))
+        self.conn.commit()
+
+    def finish_run(self, run_id: int, status: str, exit_code: int | None = None, summary: dict | None = None,
+                   error: str | None = None) -> bool:
+        """Close a running run as ok, failed or stopped. A run that is already closed is left as it is."""
+        if status not in RUN_STATUSES or status == "running":
+            raise ValueError(f"a run finishes as ok, failed or stopped, not {status!r}")
+        cur = self.conn.execute(
+            "UPDATE runs SET status=?, finished_at=?, exit_code=?, error=?, summary_json=COALESCE(?, summary_json) "
+            "WHERE id=? AND status='running'",
+            (status, now(), exit_code, error, None if summary is None else json.dumps(summary, ensure_ascii=False, default=str),
+             run_id))
+        self.conn.commit()
+        return cur.rowcount > 0
+
+    def run(self, run_id: int) -> sqlite3.Row | None:
+        return self.conn.execute("SELECT * FROM runs WHERE id=?", (run_id,)).fetchone()
+
+    def list_runs(self, limit: int = 50, command: str | None = None) -> list[sqlite3.Row]:
+        q = "SELECT * FROM runs"
+        args: list = []
+        if command:
+            q += " WHERE command=?"; args.append(command)
+        q += " ORDER BY id DESC LIMIT ?"; args.append(limit)
+        return self.conn.execute(q, args).fetchall()
+
+    def last_runs_by_command(self, status: str | None = None) -> dict[str, sqlite3.Row]:
+        """The newest run of every command; with `status`, the newest one that ended that way."""
+        q = "SELECT * FROM runs WHERE id IN (SELECT MAX(id) FROM runs" + (" WHERE status=?" if status else "") + " GROUP BY command)"
+        rows = self.conn.execute(q, (status,) if status else ()).fetchall()
+        return {r["command"]: r for r in rows}
+
+    def running_runs(self) -> list[sqlite3.Row]:
+        return self.conn.execute("SELECT * FROM runs WHERE status='running' ORDER BY id").fetchall()

@@ -1,0 +1,225 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-29T11:13:32+06:00",
+  "title": "Design System: BidBarn",
+  "extensions": {
+    "colorMeta": {
+      "blue": { "role": "primary", "displayName": "Carbarn Blue", "canonical": "#0473ea", "tonalRamp": ["#061d33", "#0c3a66", "#035bbb", "#0366d0", "#0473ea", "#b9d6fb", "#e7f1ff", "#f5f9ff"] },
+      "blue-hover": { "role": "primary", "displayName": "Blue Hover", "canonical": "#0366d0" },
+      "blue-press": { "role": "primary", "displayName": "Blue Press", "canonical": "#035bbb" },
+      "blue-soft": { "role": "primary", "displayName": "Blue Soft", "canonical": "#e7f1ff" },
+      "blue-line": { "role": "primary", "displayName": "Blue Line", "canonical": "#b9d6fb" },
+      "link": { "role": "primary", "displayName": "Link Blue", "canonical": "#0366d0" },
+      "navy": { "role": "secondary", "displayName": "Carbarn Navy", "canonical": "#061d33" },
+      "navy-2": { "role": "secondary", "displayName": "Navy 2", "canonical": "#0c3a66" },
+      "ground": { "role": "neutral", "displayName": "Ground", "canonical": "#f1f4f8" },
+      "surface": { "role": "neutral", "displayName": "Surface", "canonical": "#ffffff" },
+      "surface-2": { "role": "neutral", "displayName": "Surface 2", "canonical": "#f8fafc" },
+      "surface-3": { "role": "neutral", "displayName": "Surface 3", "canonical": "#eef2f6" },
+      "ink": { "role": "neutral", "displayName": "Ink", "canonical": "#101828", "tonalRamp": ["#101828", "#344054", "#5f6f82", "#8692a3", "#98a2b3", "#d0d8e2", "#eaecf0", "#f8fafc"] },
+      "ink-2": { "role": "neutral", "displayName": "Ink 2", "canonical": "#344054" },
+      "ink-3": { "role": "neutral", "displayName": "Ink 3", "canonical": "#5f6f82" },
+      "ink-4": { "role": "neutral", "displayName": "Ink 4", "canonical": "#667085" },
+      "ink-faint": { "role": "neutral", "displayName": "Faint Ink", "canonical": "#98a2b3" },
+      "line": { "role": "neutral", "displayName": "Line", "canonical": "#eaecf0" },
+      "line-2": { "role": "neutral", "displayName": "Line 2", "canonical": "#e5e7eb" },
+      "line-strong": { "role": "neutral", "displayName": "Line Strong", "canonical": "#d0d8e2" },
+      "line-field": { "role": "neutral", "displayName": "Field Line", "canonical": "#8692a3" },
+      "ok-ink": { "role": "tertiary", "displayName": "Ok Ink", "canonical": "#067647", "tonalRamp": ["#085d3a", "#067647", "#079455", "#abefc6", "#ecfdf3"] },
+      "ok-bg": { "role": "tertiary", "displayName": "Ok Ground", "canonical": "#ecfdf3" },
+      "ok-line": { "role": "tertiary", "displayName": "Ok Line", "canonical": "#abefc6" },
+      "ok": { "role": "tertiary", "displayName": "Ok Solid", "canonical": "#079455" },
+      "warn-ink": { "role": "tertiary", "displayName": "Warn Ink", "canonical": "#b54708", "tonalRamp": ["#7a3306", "#b54708", "#dc6803", "#f4d9b0", "#fbe3bf", "#fef6e7"] },
+      "warn-bg": { "role": "tertiary", "displayName": "Warn Ground", "canonical": "#fef6e7" },
+      "warn-line": { "role": "tertiary", "displayName": "Warn Line", "canonical": "#f4d9b0" },
+      "warn": { "role": "tertiary", "displayName": "Warn Solid", "canonical": "#dc6803" },
+      "bad-ink": { "role": "tertiary", "displayName": "Bad Ink", "canonical": "#b42318", "tonalRamp": ["#8a1c13", "#b42318", "#d92d20", "#fda29b", "#fecdca", "#fff6f5"] },
+      "bad-bg": { "role": "tertiary", "displayName": "Bad Ground", "canonical": "#fff6f5" },
+      "bad-line": { "role": "tertiary", "displayName": "Bad Line", "canonical": "#fecdca" },
+      "bad": { "role": "tertiary", "displayName": "Bad Solid", "canonical": "#d92d20" },
+      "info-ink": { "role": "tertiary", "displayName": "Info Ink", "canonical": "#175cd3", "tonalRamp": ["#184b91", "#175cd3", "#b2ddff", "#eff8ff"] },
+      "info-bg": { "role": "tertiary", "displayName": "Info Ground", "canonical": "#eff8ff" },
+      "info-line": { "role": "tertiary", "displayName": "Info Line", "canonical": "#b2ddff" },
+      "violet-ink": { "role": "tertiary", "displayName": "Violet Ink", "canonical": "#5925dc", "tonalRamp": ["#5925dc", "#d9d6fe", "#f4f3ff"] },
+      "violet-bg": { "role": "tertiary", "displayName": "Violet Ground", "canonical": "#f4f3ff" },
+      "violet-line": { "role": "tertiary", "displayName": "Violet Line", "canonical": "#d9d6fe" },
+      "tan-ink": { "role": "tertiary", "displayName": "Tan Ink", "canonical": "#8a4b1c", "tonalRamp": ["#8a4b1c", "#cf9963", "#faead7"] },
+      "tan-bg": { "role": "tertiary", "displayName": "Tan Ground", "canonical": "#faead7" },
+      "tan-line": { "role": "tertiary", "displayName": "Tan Line", "canonical": "#cf9963" },
+      "slate-bg": { "role": "tertiary", "displayName": "Slate Ground", "canonical": "#e9eef4", "tonalRamp": ["#b4c2d2", "#e9eef4"] },
+      "slate-line": { "role": "tertiary", "displayName": "Slate Line", "canonical": "#b4c2d2" }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "The bid amount on the lot's detail page, with its unit at 14px and the grid cell it came from on the line below." },
+      "headline": { "displayName": "Headline", "purpose": "The page title, one per page. The name of the next step on the overview uses the same size with line-height 1.3 and letter-spacing -0.015em." },
+      "title": { "displayName": "Title", "purpose": "Card heads, the title of a lot, the title of a log entry." },
+      "body": { "displayName": "Body", "purpose": "Running text. The sentence under the next step is held to 72ch." },
+      "control": { "displayName": "Control", "purpose": "Button text." },
+      "meta": { "displayName": "Meta", "purpose": "The facts line of a log entry or a lot, and the options of a run. Entry times and field labels use the same size at weight 600." },
+      "label": { "displayName": "Label", "purpose": "Pills." },
+      "table-head": { "displayName": "Table head", "purpose": "Uppercase. Column heads, the term of a fact pair, the label of a counter. Never above a heading." },
+      "mono": { "displayName": "Mono", "purpose": "The log of a run, model codes, chassis codes, file paths, key caps." }
+    },
+    "shadows": [
+      { "name": "shadow-header", "value": "0 8px 28px rgba(16, 24, 40, 0.05)", "purpose": "Under the sticky header, so that the page passes beneath it." },
+      { "name": "shadow-xs", "value": "0 1px 2px rgba(16, 24, 40, 0.06)", "purpose": "The chosen item of a segmented control." },
+      { "name": "field-focus", "value": "0 0 0 3px rgba(4, 115, 234, 0.18)", "purpose": "The ring around a focused input, with a blue border. A focus mark, not depth." }
+    ],
+    "motion": [
+      { "name": "ease-out", "value": "cubic-bezier(0.23, 1, 0.32, 1)", "purpose": "The curve for movement: a press, a meter, a chevron, the decision row." },
+      { "name": "colour", "value": "150ms ease", "purpose": "Background, border and text colour of buttons, nav items, tiles and inputs." },
+      { "name": "press", "value": "transform scale(0.98), 120ms ease-out", "purpose": "A button while it is pressed." },
+      { "name": "meter", "value": "transform scaleX, 300ms ease-out", "purpose": "A meter's fill growing to its share. The longest CSS transition." },
+      { "name": "chevron", "value": "transform rotate(180deg), 150ms ease-out", "purpose": "The chevron of an opened disclosure." },
+      { "name": "decision-row-enter", "value": "opacity 0 to 1 and scale 0.97 to 1, 150ms ease-out, origin top right", "purpose": "The decision row opened with the pointer. Opened with a key it does not animate." },
+      { "name": "log-line-enter", "value": "opacity 0 to 1, 150ms ease", "purpose": "A new log line. Skipped when more than five lines arrive together." },
+      { "name": "number-tween", "value": "GSAP, 0.4s, power2.out, snapped to whole numbers", "purpose": "A counter or a count tile reaching its new value." },
+      { "name": "share-tween", "value": "GSAP, 0.3s, power3.out", "purpose": "The meter inside the run console." },
+      { "name": "completion-sweep", "value": "GSAP, opacity 0.3 to 1, 0.3s, stagger 0.012s, power2.out", "purpose": "The guide row, once, when a scan ends well. The page reloads after it." },
+      { "name": "now-pulse", "value": "opacity to 0.35 and back, 1.2s ease-in-out, repeating", "purpose": "The guide cell being scanned, while the run is running." },
+      { "name": "spin", "value": "rotate 360deg, 1s linear, repeating", "purpose": "The icon of a running run or step." },
+      { "name": "confirm-disarm", "value": "5000ms", "purpose": "An armed button returns to its first label." },
+      { "name": "reduced-motion", "value": "durations 0.01ms, one iteration, no press movement; scripts write the final value", "purpose": "Applied when the reader asks for reduced motion." }
+    ],
+    "breakpoints": [
+      { "name": "nav-strip", "value": "max-width: 1279px" },
+      { "name": "overview-one-column", "value": "max-width: 1279px" },
+      { "name": "review-lot-as-block", "value": "container triage, max-width: 1129px" },
+      { "name": "review-lot-stacked", "value": "container triage, max-width: 829px" },
+      { "name": "columns-stack", "value": "max-width: 860px" },
+      { "name": "evidence-sticky", "value": "min-width: 861px" },
+      { "name": "phone", "value": "max-width: 640px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The action that moves the day forward: start a command, approve, open the review. 34px by default, 40px on the overview's next step.",
+      "html": "<div class='ds-pbtn-row'><button type='button' class='ds-pbtn'>Approve</button><button type='button' class='ds-pbtn ds-pbtn-lg'><svg viewBox='0 0 24 24' aria-hidden='true'><path d='M3 7V5a2 2 0 0 1 2-2h2'/><path d='M17 3h2a2 2 0 0 1 2 2v2'/><path d='M21 17v2a2 2 0 0 1-2 2h-2'/><path d='M7 21H5a2 2 0 0 1-2-2v-2'/><circle cx='12' cy='12' r='3'/><path d='m16 16-1.9-1.9'/></svg>Start the scan</button></div>",
+      "css": ".ds-pbtn-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; } .ds-pbtn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 34px; padding: 0 14px; border: 1px solid var(--blue, #0473ea); border-radius: var(--r-sm, 8px); background: var(--blue, #0473ea); color: #fff; font: 600 13px/1.3 var(--font, 'Manrope', 'Segoe UI', system-ui, sans-serif); white-space: nowrap; cursor: pointer; transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, transform 120ms var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1)); } .ds-pbtn-lg { height: 40px; padding: 0 18px; font-size: 14px; } .ds-pbtn svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; } .ds-pbtn:active { transform: scale(0.98); } .ds-pbtn:focus-visible { outline: 2px solid var(--blue, #0473ea); outline-offset: 2px; } @media (hover: hover) and (pointer: fine) { .ds-pbtn:hover { background: var(--blue-hover, #0366d0); border-color: var(--blue-hover, #0366d0); } } @media (prefers-reduced-motion: reduce) { .ds-pbtn { transition-duration: 0.01ms; } .ds-pbtn:active { transform: none; } }"
+    },
+    {
+      "name": "Default Button",
+      "kind": "button",
+      "refersTo": "button",
+      "description": "Every other action. Shown at 34px, small at 28px with an icon, and quiet for Cancel.",
+      "html": "<div class='ds-btn-row'><button type='button' class='ds-btn'>Filter</button><button type='button' class='ds-btn ds-btn-sm'><svg viewBox='0 0 24 24' aria-hidden='true'><path d='M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z'/><path d='m9 12 2 2 4-4'/></svg>Check now</button><button type='button' class='ds-btn ds-btn-quiet'>Cancel</button></div>",
+      "css": ".ds-btn-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; } .ds-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 34px; padding: 0 14px; border: 1px solid var(--line-strong, #d0d8e2); border-radius: var(--r-sm, 8px); background: var(--surface, #ffffff); color: var(--ink-2, #344054); font: 600 13px/1.3 var(--font, 'Manrope', 'Segoe UI', system-ui, sans-serif); white-space: nowrap; cursor: pointer; transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, transform 120ms var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1)); } .ds-btn svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; } .ds-btn-sm { height: 28px; padding: 0 10px; font-size: 12.5px; border-radius: 7px; } .ds-btn-sm svg { width: 14px; height: 14px; } .ds-btn-quiet { border-color: transparent; background: transparent; color: var(--ink-3, #5f6f82); } .ds-btn:active { transform: scale(0.98); } .ds-btn:focus-visible { outline: 2px solid var(--blue, #0473ea); outline-offset: 2px; } @media (hover: hover) and (pointer: fine) { .ds-btn:hover { background: var(--surface-2, #f8fafc); border-color: #b9c4d2; } .ds-btn-quiet:hover { background: var(--surface-3, #eef2f6); border-color: transparent; color: var(--ink-2, #344054); } } @media (prefers-reduced-motion: reduce) { .ds-btn { transition-duration: 0.01ms; } .ds-btn:active { transform: none; } }"
+    },
+    {
+      "name": "Danger Button and Armed State",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "Reject and Stop. The third button shows Stop after its first click: armed, navy, with the confirm words. The second click acts. It disarms after 5 seconds.",
+      "html": "<div class='ds-dbtn-row'><button type='button' class='ds-dbtn'>Reject</button><button type='button' class='ds-dbtn ds-dbtn-sm'><svg viewBox='0 0 24 24' aria-hidden='true'><rect width='18' height='18' x='3' y='3' rx='2'/></svg>Stop</button><button type='button' class='ds-dbtn ds-dbtn-sm ds-dbtn-armed'>Confirm stop</button></div>",
+      "css": ".ds-dbtn-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; } .ds-dbtn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 34px; padding: 0 14px; border: 1px solid var(--bad-line, #fecdca); border-radius: var(--r-sm, 8px); background: var(--surface, #ffffff); color: var(--bad-ink, #b42318); font: 600 13px/1.3 var(--font, 'Manrope', 'Segoe UI', system-ui, sans-serif); white-space: nowrap; cursor: pointer; transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, transform 120ms var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1)); } .ds-dbtn svg { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; } .ds-dbtn-sm { height: 28px; padding: 0 10px; font-size: 12.5px; border-radius: 7px; } .ds-dbtn:active { transform: scale(0.98); } .ds-dbtn:focus-visible { outline: 2px solid var(--blue, #0473ea); outline-offset: 2px; } @media (hover: hover) and (pointer: fine) { .ds-dbtn:hover { background: var(--bad-bg, #fff6f5); border-color: #fda29b; } } .ds-dbtn.ds-dbtn-armed, .ds-dbtn.ds-dbtn-armed:hover { background: var(--navy, #061d33); border-color: var(--navy, #061d33); color: #fff; } @media (prefers-reduced-motion: reduce) { .ds-dbtn { transition-duration: 0.01ms; } .ds-dbtn:active { transform: none; } }"
+    },
+    {
+      "name": "Status Pill",
+      "kind": "chip",
+      "refersTo": "pill",
+      "description": "A state with its word. Ok, info, warn, bad, tan, violet and plain variants. A pill that reports a run carries its icon.",
+      "html": "<div class='ds-pill-row'><span class='ds-pill ds-pill-ok'><svg viewBox='0 0 24 24' aria-hidden='true'><circle cx='12' cy='12' r='10'/><path d='m16 9-5.5 5.5L8 12'/></svg>Finished</span><span class='ds-pill ds-pill-info'><svg class='ds-pill-spin' viewBox='0 0 24 24' aria-hidden='true'><path d='M21 12a9 9 0 1 1-6.219-8.56'/></svg>Running</span><span class='ds-pill ds-pill-warn'>Needs review</span><span class='ds-pill ds-pill-bad'><svg viewBox='0 0 24 24' aria-hidden='true'><circle cx='12' cy='12' r='10'/><path d='m15 9-6 6'/><path d='m9 9 6 6'/></svg>Failed</span><span class='ds-pill ds-pill-tan'>Grade 4.5</span><span class='ds-pill ds-pill-violet'>&times;2 guides</span><span class='ds-pill ds-pill-plain'>Rejected</span></div>",
+      "css": ".ds-pill-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; } .ds-pill { display: inline-flex; align-items: center; gap: 5px; min-height: 22px; padding: 1px 10px; border: 1px solid var(--slate-line, #b4c2d2); border-radius: var(--r-pill, 999px); background: var(--slate-bg, #e9eef4); color: var(--ink, #101828); font: 600 12px/1.3 var(--font, 'Manrope', 'Segoe UI', system-ui, sans-serif); white-space: nowrap; } .ds-pill svg { width: 13px; height: 13px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; } .ds-pill-ok { background: var(--ok-bg, #ecfdf3); border-color: var(--ok-line, #abefc6); color: var(--ok-ink, #067647); } .ds-pill-info { background: var(--info-bg, #eff8ff); border-color: var(--info-line, #b2ddff); color: var(--info-ink, #175cd3); } .ds-pill-warn { background: var(--warn-bg, #fef6e7); border-color: var(--warn-line, #f4d9b0); color: var(--warn-ink, #b54708); } .ds-pill-bad { background: var(--bad-bg, #fff6f5); border-color: var(--bad-line, #fecdca); color: var(--bad-ink, #b42318); } .ds-pill-tan { background: var(--tan-bg, #faead7); border-color: var(--tan-line, #cf9963); color: var(--tan-ink, #8a4b1c); } .ds-pill-violet { background: var(--violet-bg, #f4f3ff); border-color: var(--violet-line, #d9d6fe); color: var(--violet-ink, #5925dc); } .ds-pill-plain { background: var(--surface, #ffffff); border-color: var(--line-strong, #d0d8e2); color: var(--ink-3, #5f6f82); } .ds-pill-spin { animation: ds-pill-spin 1s linear infinite; } @keyframes ds-pill-spin { to { transform: rotate(360deg); } } @media (prefers-reduced-motion: reduce) { .ds-pill-spin { animation-duration: 0.01ms; animation-iteration-count: 1; } }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "The container of every page. White, 12px radius, a 1px line, no shadow. The head holds the title and the card's state.",
+      "html": "<section class='ds-card'><div class='ds-card-head'><h2>Bidding guides</h2><span class='ds-card-pill'><svg viewBox='0 0 24 24' aria-hidden='true'><circle cx='12' cy='12' r='10'/><path d='m16 9-5.5 5.5L8 12'/></svg>Fresh</span></div><div class='ds-card-body'><p><b>1</b> active guide <span class='ds-card-faint'>of 1 in the snapshot</span></p><p class='ds-card-faint'>Fetched 2 min ago. A scan needs a snapshot under 12 h old.</p></div><div class='ds-card-foot'>Keys live in the .env file and are never shown.</div></section>",
+      "css": ".ds-card { max-width: 420px; background: var(--surface, #ffffff); border: 1px solid var(--line, #eaecf0); border-radius: var(--r-md, 12px); font: 500 14px/1.5 var(--font, 'Manrope', 'Segoe UI', system-ui, sans-serif); color: var(--ink-2, #344054); } .ds-card p { margin: 0; } .ds-card b { color: var(--ink, #101828); font-variant-numeric: tabular-nums; } .ds-card-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 16px; border-bottom: 1px solid var(--line, #eaecf0); } .ds-card-head h2 { margin: 0; font-size: 14px; font-weight: 700; letter-spacing: -0.01em; color: var(--ink, #101828); } .ds-card-pill { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; min-height: 22px; padding: 1px 10px; border: 1px solid var(--ok-line, #abefc6); border-radius: var(--r-pill, 999px); background: var(--ok-bg, #ecfdf3); color: var(--ok-ink, #067647); font-size: 12px; font-weight: 600; line-height: 1.3; } .ds-card-pill svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; } .ds-card-body { padding: 14px 16px; } .ds-card-body > * + * { margin-top: 10px; } .ds-card-faint { color: var(--ink-3, #5f6f82); font-size: 12px; } .ds-card-foot { padding: 9px 16px; border-top: 1px solid var(--line, #eaecf0); background: var(--surface-2, #f8fafc); border-radius: 0 0 var(--r-md, 12px) var(--r-md, 12px); font-size: 12px; color: var(--ink-3, #5f6f82); }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "A label, the field, and a line of help. The focus mark is a blue border with a 3px ring.",
+      "html": "<div class='ds-field'><label for='ds-field-reason'>Reason for rejecting</label><input id='ds-field-reason' type='text' autocomplete='off'><span class='ds-field-help'>Saved as evidence. For example: 10 seats on the sheet.</span></div>",
+      "css": ".ds-field { display: grid; gap: 5px; max-width: 420px; font-family: var(--font, 'Manrope', 'Segoe UI', system-ui, sans-serif); } .ds-field label { font-size: 12.5px; font-weight: 600; color: var(--ink-2, #344054); } .ds-field input { width: 100%; min-height: 36px; padding: 7px 11px; border: 1px solid var(--line-field, #8692a3); border-radius: var(--r-sm, 8px); background: var(--surface, #ffffff); color: var(--ink, #101828); font: 500 14px/1.4 var(--font, 'Manrope', 'Segoe UI', system-ui, sans-serif); caret-color: var(--blue, #0473ea); transition: border-color 150ms ease, box-shadow 150ms ease; } .ds-field input::placeholder { color: var(--ink-4, #667085); opacity: 1; } .ds-field input:hover { border-color: #667085; } .ds-field input:focus-visible { outline: none; border-color: var(--blue, #0473ea); box-shadow: 0 0 0 3px rgba(4, 115, 234, 0.18); } .ds-field-help { font-size: 12px; font-weight: 500; color: var(--ink-3, #5f6f82); } @media (prefers-reduced-motion: reduce) { .ds-field input { transition-duration: 0.01ms; } }"
+    },
+    {
+      "name": "Nav Item",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "The nav panel with the current item and an item that carries a count of lots waiting.",
+      "html": "<nav class='ds-nav' aria-label='Sections'><a href='#' aria-current='page'><svg viewBox='0 0 24 24' aria-hidden='true'><rect width='7' height='9' x='3' y='3' rx='1'/><rect width='7' height='5' x='14' y='3' rx='1'/><rect width='7' height='9' x='14' y='12' rx='1'/><rect width='7' height='5' x='3' y='16' rx='1'/></svg>Overview</a><a href='#'><svg viewBox='0 0 24 24' aria-hidden='true'><path d='M13 5h8'/><path d='M13 12h8'/><path d='M13 19h8'/><path d='m3 17 2 2 4-4'/><path d='m3 7 2 2 4-4'/></svg>Review <span class='ds-nav-count'>7</span></a><a href='#'><svg viewBox='0 0 24 24' aria-hidden='true'><path d='M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8'/><path d='M3 3v5h5'/><path d='M12 7v5l4 2'/></svg>Runs</a></nav>",
+      "css": ".ds-nav { display: flex; flex-direction: column; gap: 2px; width: 238px; padding: 10px 8px; background: var(--surface, #ffffff); border-radius: var(--r-md, 12px); font-family: var(--font, 'Manrope', 'Segoe UI', system-ui, sans-serif); } .ds-nav a { display: flex; align-items: center; gap: 10px; padding: 11px 12px; border-radius: var(--r-sm, 8px); font-size: 15px; font-weight: 500; color: var(--navy, #061d33); text-decoration: none; transition: background-color 150ms ease, color 150ms ease; } .ds-nav a svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; color: var(--navy-2, #0c3a66); } .ds-nav a[aria-current='page'] { background: var(--blue-soft, #e7f1ff); color: var(--blue-press, #035bbb); font-weight: 600; } .ds-nav a[aria-current='page'] svg { color: var(--blue-press, #035bbb); } .ds-nav a:focus-visible { outline: 2px solid var(--blue, #0473ea); outline-offset: 2px; } .ds-nav-count { margin-left: auto; display: inline-block; min-width: 22px; padding: 0 7px; border-radius: var(--r-pill, 999px); background: var(--warn-bg, #fef6e7); color: var(--warn-ink, #b54708); box-shadow: inset 0 0 0 1px var(--warn-line, #f4d9b0); font-size: 11.5px; font-weight: 700; line-height: 19px; text-align: center; font-variant-numeric: tabular-nums; } @media (hover: hover) and (pointer: fine) { .ds-nav a:not([aria-current='page']):hover { background: var(--surface-2, #f8fafc); } } @media (prefers-reduced-motion: reduce) { .ds-nav a { transition-duration: 0.01ms; } }"
+    },
+    {
+      "name": "Table",
+      "kind": "custom",
+      "refersTo": "table-head",
+      "description": "Uppercase 11px column heads, top aligned rows with a 1px line between them, numbers right aligned and tabular. The first row is selected.",
+      "html": "<div class='ds-table-card'><table class='ds-table'><thead><tr><th>Status</th><th>Lot</th><th class='ds-table-num'>Bid (K JPY)</th></tr></thead><tbody><tr class='ds-table-selected'><td><span class='ds-table-pill'>Needs review</span></td><td><b>2012 Toyota Alphard</b> <span class='ds-table-muted'>240S</span></td><td class='ds-table-num'><b>710</b></td></tr><tr><td><span class='ds-table-pill'>Needs review</span></td><td><b>2011 Toyota Alphard</b> <span class='ds-table-muted'>240X</span></td><td class='ds-table-num'><b>640</b></td></tr></tbody></table></div>",
+      "css": ".ds-table-card { max-width: 640px; background: var(--surface, #ffffff); border: 1px solid var(--line, #eaecf0); border-radius: var(--r-md, 12px); overflow-x: auto; font: 500 14px/1.5 var(--font, 'Manrope', 'Segoe UI', system-ui, sans-serif); color: var(--ink-2, #344054); } .ds-table { width: 100%; border-collapse: collapse; } .ds-table th, .ds-table td { padding: 10px 12px; text-align: left; vertical-align: top; } .ds-table th:first-child, .ds-table td:first-child { padding-left: 16px; } .ds-table th:last-child, .ds-table td:last-child { padding-right: 16px; } .ds-table th { border-bottom: 1px solid #e1e8f1; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #4b5a6c; white-space: nowrap; } .ds-table td { border-bottom: 1px solid var(--line, #eaecf0); } .ds-table tbody tr:last-child td { border-bottom: 0; } .ds-table b { font-weight: 700; color: var(--ink, #101828); } .ds-table .ds-table-num { text-align: right; font-variant-numeric: tabular-nums; } .ds-table-muted { color: var(--ink-4, #667085); } .ds-table-pill { display: inline-flex; align-items: center; min-height: 22px; padding: 1px 10px; border: 1px solid var(--warn-line, #f4d9b0); border-radius: var(--r-pill, 999px); background: var(--warn-bg, #fef6e7); color: var(--warn-ink, #b54708); font-size: 12px; font-weight: 600; line-height: 1.3; white-space: nowrap; } .ds-table-selected td { background: #f5f9ff; box-shadow: inset 0 1px 0 var(--blue, #0473ea), inset 0 -1px 0 var(--blue, #0473ea); } .ds-table-selected td:first-child { box-shadow: inset 0 1px 0 var(--blue, #0473ea), inset 0 -1px 0 var(--blue, #0473ea), inset 1px 0 0 var(--blue, #0473ea); } .ds-table-selected td:last-child { box-shadow: inset 0 1px 0 var(--blue, #0473ea), inset 0 -1px 0 var(--blue, #0473ea), inset -1px 0 0 var(--blue, #0473ea); }"
+    },
+    {
+      "name": "Guide Row and Counters",
+      "kind": "custom",
+      "refersTo": "guide-cell",
+      "description": "The signature of the run console. One cell per guide in a single row; the outlined cell is where the scan is now. Height changes with state as well as colour. The cells to come are the named contrast exception.",
+      "html": "<div class='ds-guides'><div class='ds-guide-row' role='img' aria-label='24 guides: 4 with lots for review, 3 with nothing new, 0 with an error, 17 to come'><i class='ds-g ds-g-found'></i><i class='ds-g ds-g-found'></i><i class='ds-g ds-g-empty'></i><i class='ds-g ds-g-empty'></i><i class='ds-g ds-g-empty'></i><i class='ds-g ds-g-found'></i><i class='ds-g ds-g-found'></i><i class='ds-g ds-g-now'></i><i class='ds-g'></i><i class='ds-g'></i><i class='ds-g'></i><i class='ds-g'></i><i class='ds-g'></i><i class='ds-g'></i><i class='ds-g'></i><i class='ds-g'></i><i class='ds-g'></i><i class='ds-g'></i><i class='ds-g'></i><i class='ds-g'></i><i class='ds-g'></i><i class='ds-g'></i><i class='ds-g'></i><i class='ds-g'></i></div><div class='ds-guide-legend'><span><i class='ds-g ds-g-found'></i> lots for review <b>4</b></span><span><i class='ds-g ds-g-empty'></i> nothing new <b>3</b></span><span><i class='ds-g ds-g-error'></i> error <b>0</b></span><span><i class='ds-g ds-g-now'></i> scanning now</span><span><i class='ds-g'></i> to come</span></div><dl class='ds-counters'><div><dt>Cards read</dt><dd>44</dd></div><div><dt>Lots opened</dt><dd>5</dd></div><div><dt>For review</dt><dd>5</dd></div><div><dt>Skipped</dt><dd>24</dd></div></dl></div>",
+      "css": ".ds-guides { display: grid; gap: 10px; max-width: 640px; padding: 14px 16px; background: var(--surface, #ffffff); border: 1px solid var(--line, #eaecf0); border-radius: var(--r-md, 12px); font: 500 14px/1.5 var(--font, 'Manrope', 'Segoe UI', system-ui, sans-serif); color: var(--ink-2, #344054); } .ds-guide-row { display: flex; align-items: flex-end; gap: 2px; height: 28px; } .ds-g { flex: 1 1 0; min-width: 3px; max-width: 30px; height: 4px; border-radius: 2px; background: #a3afbf; } .ds-g-found { height: 100%; background: var(--blue, #0473ea); } .ds-g-empty { height: 46%; background: #7d93ad; } .ds-g-error { height: 100%; background: var(--bad, #d92d20); } .ds-g-now { height: 100%; background: var(--blue-soft, #e7f1ff); box-shadow: inset 0 0 0 2px var(--blue, #0473ea); animation: ds-g-now 1.2s ease-in-out infinite; } @keyframes ds-g-now { 50% { opacity: 0.35; } } .ds-guide-legend { display: flex; flex-wrap: wrap; gap: 3px 16px; margin-top: -3px; color: var(--ink-3, #5f6f82); font-size: 12px; } .ds-guide-legend span { display: inline-flex; align-items: flex-end; gap: 5px; } .ds-guide-legend b { font-weight: 700; color: var(--ink-2, #344054); font-variant-numeric: tabular-nums; } .ds-guide-legend .ds-g { flex: none; width: 9px; max-height: 12px; margin-bottom: 3px; animation: none; } .ds-guide-legend .ds-g-found, .ds-guide-legend .ds-g-error, .ds-guide-legend .ds-g-now { height: 12px; } .ds-guide-legend .ds-g-empty { height: 6px; } .ds-guide-legend .ds-g-now { box-shadow: inset 0 0 0 1.5px var(--blue, #0473ea); } .ds-counters { display: flex; flex-wrap: wrap; gap: 1px; margin: 0; background: var(--surface, #ffffff); border: 1px solid var(--line, #eaecf0); border-radius: var(--r-sm, 8px); overflow: hidden; font-variant-numeric: tabular-nums; } .ds-counters > div { flex: 1 1 104px; padding: 7px 12px 8px; box-shadow: 0 0 0 1px var(--line, #eaecf0); } .ds-counters dt { font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #4b5a6c; } .ds-counters dd { margin: 0; font-size: 18px; font-weight: 700; line-height: 1.3; color: var(--ink, #101828); } @media (prefers-reduced-motion: reduce) { .ds-g-now { animation-duration: 0.01ms; animation-iteration-count: 1; } }"
+    },
+    {
+      "name": "Day Log Entry",
+      "kind": "custom",
+      "refersTo": "entry",
+      "description": "One thing that happened today: the time, an icon tile in the colour of the outcome, the title with its pill and duration, then the numbers it ended on or the line that stopped it.",
+      "html": "<ol class='ds-entries'><li class='ds-entry'><time datetime='09:27'>09:27</time><span class='ds-entry-icon ds-entry-icon-ok'><svg viewBox='0 0 24 24' aria-hidden='true'><path d='M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8'/><path d='M3 3v5h5'/></svg></span><div><div class='ds-entry-head'><a href='#' class='ds-entry-title'>Replay the rules</a><span class='ds-entry-opts'>report only</span><span class='ds-entry-pill ds-entry-pill-ok'><svg viewBox='0 0 24 24' aria-hidden='true'><circle cx='12' cy='12' r='10'/><path d='m16 9-5.5 5.5L8 12'/></svg>Finished</span><span class='ds-entry-took'>took 6 s</span></div><p class='ds-entry-facts'><span>Checked <b>24</b></span><span>Changed <b>3</b></span><span>Stored <b>0</b></span><span>Unchanged <b>21</b></span></p></div></li><li class='ds-entry'><time datetime='08:12'>08:12</time><span class='ds-entry-icon ds-entry-icon-failed'><svg viewBox='0 0 24 24' aria-hidden='true'><path d='M3 7V5a2 2 0 0 1 2-2h2'/><path d='M17 3h2a2 2 0 0 1 2 2v2'/><path d='M21 17v2a2 2 0 0 1-2 2h-2'/><path d='M7 21H5a2 2 0 0 1-2-2v-2'/><circle cx='12' cy='12' r='3'/><path d='m16 16-1.9-1.9'/></svg></span><div><div class='ds-entry-head'><a href='#' class='ds-entry-title'>Scan Nichibo</a><span class='ds-entry-pill ds-entry-pill-failed'><svg viewBox='0 0 24 24' aria-hidden='true'><circle cx='12' cy='12' r='10'/><path d='m15 9-6 6'/><path d='m9 9 6 6'/></svg>Failed</span><span class='ds-entry-took'>took 9 s</span></div><p class='ds-entry-error'>Nichibo redirected to the login page</p></div></li></ol>",
+      "css": ".ds-entries { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; max-width: 720px; font: 500 14px/1.5 var(--font, 'Manrope', 'Segoe UI', system-ui, sans-serif); color: var(--ink-2, #344054); } .ds-entry { display: grid; grid-template-columns: 44px 32px minmax(0, 1fr); gap: 0 10px; align-items: start; padding: 12px 16px 12px 10px; background: var(--surface, #ffffff); border: 1px solid var(--line, #eaecf0); border-radius: var(--r-md, 12px); } .ds-entry p { margin: 0; } .ds-entry time { padding-top: 7px; font-size: 12.5px; font-weight: 600; color: var(--ink-3, #5f6f82); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; } .ds-entry svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; } .ds-entry-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: var(--r-sm, 8px); background: var(--surface-3, #eef2f6); color: var(--ink-2, #344054); } .ds-entry-icon-ok { background: var(--ok-bg, #ecfdf3); color: var(--ok-ink, #067647); } .ds-entry-icon-failed { background: var(--bad-bg, #fff6f5); color: var(--bad-ink, #b42318); } .ds-entry-head { display: flex; align-items: center; gap: 4px 10px; flex-wrap: wrap; min-height: 32px; } .ds-entry-title { font-size: 14px; font-weight: 700; color: var(--ink, #101828); text-decoration: none; text-underline-offset: 3px; } .ds-entry-title:hover { text-decoration: underline; } .ds-entry-title:focus-visible { outline: 2px solid var(--blue, #0473ea); outline-offset: 2px; border-radius: 4px; } .ds-entry-opts { font-size: 12.5px; color: var(--ink-3, #5f6f82); } .ds-entry-pill { display: inline-flex; align-items: center; gap: 5px; min-height: 22px; padding: 1px 10px; border: 1px solid; border-radius: var(--r-pill, 999px); font-size: 12px; font-weight: 600; line-height: 1.3; white-space: nowrap; } .ds-entry-pill svg { width: 13px; height: 13px; } .ds-entry-pill-ok { background: var(--ok-bg, #ecfdf3); border-color: var(--ok-line, #abefc6); color: var(--ok-ink, #067647); } .ds-entry-pill-failed { background: var(--bad-bg, #fff6f5); border-color: var(--bad-line, #fecdca); color: var(--bad-ink, #b42318); } .ds-entry-took { margin-left: auto; font-size: 12px; color: var(--ink-3, #5f6f82); } .ds-entry-facts { display: flex; flex-wrap: wrap; gap: 2px 16px; margin-top: 3px; font-size: 12.5px; color: var(--ink-3, #5f6f82); font-variant-numeric: tabular-nums; } .ds-entry-facts b { font-weight: 700; color: var(--ink, #101828); } .ds-entry-error { margin-top: 3px; font-size: 13px; font-weight: 600; color: var(--bad-ink, #b42318); overflow-wrap: anywhere; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "One Family",
+    "overview": "BidBarn's pages are written in the visual language of the Carbarn dashboard, so that the two read as one family when they sit beside each other on the office PC. Jim pinned this on 2026-09-29. The stylesheet is BidBarn's own: one file, `bidbarn.css`, with every token on `:root`. It is light only and declares `color-scheme: light`.\n\nIt is a working tool for one person who opens it a session or two a day. The pages are dense enough to hold a day of runs or a queue of lots, and quiet enough that the one thing to do next is easy to find. Text is Manrope at 14px. Surfaces are white cards with a 1px line on a grey-blue ground. The brand blue marks the action that moves the day forward and whatever is live or selected. State is shown as a pill that carries a word.\n\nMotion follows change and nothing else. A page opens still. After that, a number counts to its new value, a meter grows to its share, and the guide row sweeps once when a scan ends. CSS transitions are 120 to 300ms. A reader who asks for reduced motion gets the final values with no movement.",
+    "keyCharacteristics": [
+      "Manrope, one self-hosted variable font (weights 200 to 800), body at 14px and weight 500.",
+      "The brand blue for the primary action, the live entry, the selected row and the focus ring.",
+      "White cards with a 12px radius and a 1px line, no shadow, on the grey-blue ground.",
+      "Pill chips with a tinted ground, a 1px border and ink of the same hue, always with a word.",
+      "Uppercase 11px letterspaced labels for table column heads, fact terms and counter labels.",
+      "Lucide icons from one sprite, stroke 1.75, 16px by default.",
+      "A 72px white sticky header with the Carbarn wordmark, a hairline, the name BidBarn, and the lock pill at the right end.",
+      "Tabular numerals wherever numbers are compared or change.",
+      "Every font, script and icon is served from the project's own `static/vendor/` folder."
+    ],
+    "rules": [
+      { "name": "The Word With The Colour Rule", "body": "A status colour never stands alone. Every pill carries its word. A pill that reports a run or a check also carries its Lucide icon. In the guide row the height of a cell changes with its state as well as its colour, and the legend names each state.", "section": "colors" },
+      { "name": "The Empty Track Exception", "body": "The guide cells that are not scanned yet are #a3afbf on white, about 2.2:1, below the 3:1 floor for graphics. This is deliberate and it is the only such case. Those cells are the empty track of the row, 4px high. Their meaning is carried elsewhere: the legend names them (\"to come\", or \"not scanned\" after the run), the line above the row says \"Guide 8 of 46\", and the row's accessible label counts them. The value is not a text colour and is not available to any other component.", "section": "colors" },
+      { "name": "The Data Label Rule", "body": "The uppercase 11px label names a piece of data: a column, a fact, a counter. It sits directly over its value or its column. It is never placed above a heading or a section title.", "section": "typography" },
+      { "name": "The Tabular Figures Rule", "body": "Counts, amounts, times and durations use tabular numerals. Numeric table columns are right aligned.", "section": "typography" },
+      { "name": "The Line Not Shadow Rule", "body": "A surface is declared once, by its line. Cards, tiles, log entries, tables and notices have a 1px border and no shadow. A shadow belongs to the header and to the chosen segment, nowhere else.", "section": "elevation" },
+      { "name": "The Confirm In Place Rule", "body": "An action that deserves a second thought is confirmed on the button itself. The first click arms it: the label becomes the confirm words (\"Confirm stop\", \"Confirm approve\") and the button turns navy. The second click acts. An armed button disarms after 5 seconds. The button is given the width of its longer label beforehand, so arming moves nothing. No dialog is opened.", "section": "components" },
+      { "name": "The Keyboard Is Instant Rule", "body": "When the decision row is opened with the pointer it fades in and grows from 0.97 over 150ms, from its top right corner. When it is opened with a key it appears at once.", "section": "components" },
+      { "name": "The Still On Load Rule", "body": "Nothing animates when a page opens. What the page opens with is drawn as it is. Only a change that arrives afterwards moves: a counter counts to its new value in 0.4 seconds, a meter grows to its share in 0.3 seconds, a new log line fades in over 150ms unless more than five arrive together. When a scan ends well the cells of the guide row sweep once from 30% to full opacity, 12ms apart. The spinning icon and the pulsing cell mark a run that is running and stop with it.", "section": "components" }
+    ],
+    "dos": [
+      "Do build every page inside the shared shell: the 72px header with the wordmark and the lock pill, the nav, then the page head and its cards.",
+      "Do give every state a pill with its word, in the family this document assigns to it.",
+      "Do use tabular numerals for counts, amounts, times and durations, and right align numeric columns.",
+      "Do show an amount with where it came from: the grid cell under the bid, \"grid\" or \"base\" under a changed amount.",
+      "Do confirm on the button itself, following the Confirm In Place Rule.",
+      "Do keep hover styles behind a fine pointer that can hover, and keep the 2px blue focus ring on every control.",
+      "Do use the ease-out curve (`cubic-bezier(0.23, 1, 0.32, 1)`) for movement, 150ms for colour, 120ms for a press, and 300ms at most for a CSS transition.",
+      "Do honour reduced motion: write the final value and move nothing.",
+      "Do take icons from the Lucide sprite, at stroke 1.75.",
+      "Do use the tokens on `:root`. Where the stylesheet writes a value straight into a rule, treat it as that component's own value."
+    ],
+    "donts": [
+      "Don't add a dark theme or a `prefers-color-scheme` branch. The pages are light only, like the Carbarn dashboard.",
+      "Don't place the uppercase 11px label above a heading or a section title. It names data.",
+      "Don't use the grey of the cells to come (#a3afbf) anywhere else, and don't use `ink-faint` for text.",
+      "Don't put a shadow on a card, a tile, a log entry or a notice.",
+      "Don't animate anything when a page opens, and don't animate what a key opens.",
+      "Don't open a dialog to confirm an action.",
+      "Don't show a state by colour alone.",
+      "Don't use a Unicode mark or an emoji where an icon belongs.",
+      "Don't load a font, a script or an icon from the network. Everything is served from `static/vendor/`.",
+      "Don't introduce a second typeface for headings. Manrope carries every level."
+    ]
+  }
+}

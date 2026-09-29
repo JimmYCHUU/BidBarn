@@ -24,6 +24,7 @@ def cfg(tmp_path) -> Config:
     c.evidence_dir = tmp_path / "evidence"
     c.override_dir = tmp_path / "overrides"
     c.snapshot_dir = tmp_path / "snapshots"
+    c.review = {"allow_hosts": ["testserver"]}  # the test client's name for this PC; config.yaml allows none
     for d in (c.evidence_dir, c.override_dir, c.snapshot_dir):
         d.mkdir()
     return c
@@ -115,7 +116,7 @@ def test_store_and_review_flow(cfg, rule, facts):
     store.close()
 
     client = TestClient(create_app(cfg))
-    r = client.get("/")
+    r = client.get("/review")
     assert r.status_code == 200 and "2020 Toyota Hiace" in r.text
     r = client.get(f"/p/{pid}")
     assert r.status_code == 200 and "GDH206V" in r.text and "1,240" in r.text
@@ -168,7 +169,7 @@ def test_testing_lock_blocks_live_placement(cfg):
     cfg.project_status = "the project is finished"
     assert cfg.placement_mode(live_flag=True)[0] is True  # exact phrase only
     client = TestClient(create_app(cfg))
-    assert "TESTING: no bids are placed" in client.get("/").text
+    assert "TESTING: no bids are placed" in client.get("/review").text
 
 
 def test_same_vehicle_under_two_guides_is_flagged(cfg, rule, facts):
@@ -184,4 +185,4 @@ def test_same_vehicle_under_two_guides_is_flagged(cfg, rule, facts):
     client = TestClient(create_app(cfg))
     page = client.get(f"/p/{a}").text
     assert "Same vehicle is also proposed under" in page and "1,830" in page and f"/p/{b}" in page
-    assert "×2" in client.get("/").text
+    assert "×2" in client.get("/review").text

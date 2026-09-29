@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% from "_parts.html" import console, status_pill %}
+{% block title %}Run {{ run.id }} · {{ command_label(run.command) }} · BidBarn{% endblock %}
+{% block body %}
+<div class="page-head">
+  <h1 class="page-title">{{ command_label(run.command) }} <span class="muted num">run {{ run.id }}</span></h1>
+  {% if options_words(run) %}<span class="page-sub">{{ options_words(run) }}</span>{% endif %}
+  <div class="end">
+    <span class="page-sub">Started {{ local_time(run.started_at) }}{% if run.finished_at %}, took {{ duration(run.started_at, run.finished_at) }}{% endif %}</span>
+    <a class="btn btn--sm" href="/runs">{{ icon('history', 'icon--sm') }} All runs</a>
+  </div>
+</div>
+
+{% if run.status == 'failed' and run.error %}
+<div class="banner banner--bad">{{ icon('circle-x') }}<div><b>The run stopped with an error.</b> {{ run.error }}{% if 'login' in run.error|lower %} Sign in from the <a href="/">overview</a>, then start it again.{% endif %}</div></div>
+{% elif run.status == 'stopped' %}
+<div class="banner">{{ icon('square') }}<div><b>The run was stopped.</b> {{ run.error or 'What it had stored up to then is kept.' }}</div></div>
+{% endif %}
+
+{% set pairs = summary_pairs(run) %}
+{% if pairs and run.status != 'running' %}
+<section class="card">
+  <div class="card-head"><h2>Outcome</h2>{{ status_pill(run.status) }}</div>
+  <div class="card-body">
+    <dl class="facts num">
+      {% for k, v in pairs %}<div class="fact"><dt>{{ k }}</dt><dd>{{ v }}</dd></div>{% endfor %}
+    </dl>
+    {% if run.summary and run.summary.errors %}
+    <details><summary>The errors ({{ run.summary.errors_total or run.summary.errors|length }})</summary><pre>{% for e in run.summary.errors %}{{ e }}
+{% endfor %}</pre></details>
+    {% endif %}
+    {% if run.command == 'scan' and (run.summary.review or run.summary.bid) %}<div class="row"><a class="btn btn--primary" href="/review">{{ icon('list-checks') }} Review the lots</a></div>{% endif %}
+  </div>
+</section>
+{% endif %}
+
+{% if placements %}
+<section class="card">
+  <div class="card-head"><h2>Placements</h2><span class="faint">{{ placements|length }} lot{{ 's' if placements|length != 1 }}</span></div>
+  <div class="table-wrap">
+  <table class="lots wide">
+    <thead><tr><th>Result</th><th>Lot</th><th class="num">Amount (K JPY)</th><th>Message</th><th>Screenshot</th></tr></thead>
+    <tbody>
+    {% for p in placements %}
+      <tr>
+        <td><span class="pill {{ 'pill--ok' if p.ok else 'pill--bad' }}">{{ icon('circle-check' if p.ok else 'circle-x') }} {{ 'Ok' if p.ok else 'Blocked' }}</span>{% if p.dry_run %} <span class="pill pill--info">dry run</span>{% endif %}</td>
+        <td><a class="lot-title" href="/p/{{ p.proposal_id }}">{{ lot_title(p.summary) or p.ref_no }}</a><div class="mono faint">{{ p.model_code }}</div></td>
+        <td class="num"><b>{{ '{:,}'.format(p.amount) if p.amount else '' }}</b></td>
+        <td class="why">{{ p.message }}</td>
+        <td>{% if p.screenshot %}<a href="{{ p.screenshot }}" target="_blank" data-sheet-zoom>{{ icon('image', 'icon--sm') }} Open</a>{% else %}<span class="muted">none</span>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+
+<section class="card">
+  <div class="card-head"><h2>{{ 'Live' if run.status == 'running' else 'Log' }}</h2>
+    <span class="faint mono push" title="The command this run was started as">bot {{ run.args|join(' ') }}</span></div>
+  {{ console(run) }}
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="/static/vendor/gsap.min.js?v={{ asset_v }}" defer></script>
+<script src="/static/dashboard.js?v={{ asset_v }}" defer></script>
+{% endblock %}

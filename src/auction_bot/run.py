@@ -15,7 +15,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
+from auction_bot import progress
 from auction_bot.config import Config
+from auction_bot.progress import Cancelled
 
 LOGIN_WAIT_SECONDS = 15 * 60
 
@@ -45,6 +47,8 @@ def carbarn_signed_in(browser, cfg: Config, timeout_ms: int = 20_000) -> bool:
         with page.expect_response(lambda r: "/bidding-guides?" in r.url and r.status == 200, timeout=timeout_ms):
             browser.goto(url)
         return True
+    except Cancelled:
+        raise  # stopped from the dashboard: that is not "signed out"
     except Exception:
         return False
 
@@ -76,6 +80,7 @@ def ensure_signed_in(cfg: Config, echo: Callable[[str], None] = print) -> None:
             guides_seen.set()
         deadline = time.time() + LOGIN_WAIT_SECONDS
         while time.time() < deadline:
+            progress.check_cancel()
             nichibo_page.wait_for_timeout(2000)
             n_ok = nichibo_ok or ("/login" not in nichibo_page.url and "nichibojapan" in nichibo_page.url)
             if n_ok and guides_seen.is_set():
@@ -135,11 +140,12 @@ def serve_review(cfg: Config, echo: Callable[[str], None] = print, open_browser:
     """Serve the review page until "Finish review" is clicked on it (or Enter is pressed here)."""
     import uvicorn
 
+    from auction_bot.dashboard.jobs import DisabledJobManager
     from auction_bot.review.app import create_app
 
     host, port = cfg.review.get("host", "127.0.0.1"), int(cfg.review.get("port", 8765))
     finished = threading.Event()
-    app = create_app(cfg, finish_event=finished)
+    app = create_app(cfg, finish_event=finished, jobs=DisabledJobManager(cfg))  # this window runs the commands itself
     server = uvicorn.Server(uvicorn.Config(app, host=host, port=port, log_level="warning"))
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()
@@ -147,7 +153,7 @@ def serve_review(cfg: Config, echo: Callable[[str], None] = print, open_browser:
         if server.started:
             break
         time.sleep(0.1)
-    url = f"http://{host}:{port}/"
+    url = f"http://{host}:{port}/review"
     echo(f"Review page: {url}")
     echo("Approve or reject the lots there. When you are done click \"Finish review\" at the top of the page")
     echo("(or press Enter in this window). The approved bids are placed after that.")
@@ -186,30 +192,49 @@ def place_approved(cfg: Config, echo: Callable[[str], None] = print, headless: b
     store = Store(cfg.db_path)
     try:
         rows = store.approved_unplaced(cfg.max_bids_per_run)
+        progress.emit(stage="place", i=0, total=len(rows), dry_run=dry)
         if not rows:
             echo("No approved bids waiting.")
             return lines
         echo(f"{'DRY RUN' if dry else 'LIVE'} ({why}): {len(rows)} approved bid(s)")
         factory = browser_factory or (lambda: Browser(cfg, headless=headless))
         with factory() as b:
-            for row in rows:
+            for i, row in enumerate(rows, 1):
+                progress.check_cancel()  # between lots only: a lot that was started is finished and recorded
                 if store.already_bid(row["ref_no"]):
                     lines.append(f"skip {row['ref_no']}: already bid")
                     echo("  " + lines[-1])
+                    progress.emit(stage="place", i=i, total=len(rows), ref_no=row["ref_no"], ok=False, skipped=True,
+                                  message="already bid", screenshot=None, dry_run=dry)
                     continue
                 facts = VehicleFacts.from_dict(json.loads(row["facts_json"]))
                 amount = int(row["approved_bid_jpy_k"] or row["bid_jpy_k"])
                 try:
                     res = place_bid(b, cfg, row["ref_no"], amount, facts, dry_run=dry)
                     ok, message, shot = res.ok, res.message, res.screenshot
+                except Cancelled:
+                    raise  # raised before the lot's page was loaded: nothing was typed, nothing is recorded
                 except Exception as exc:  # one broken lot must not stop the others
                     ok, message, shot = False, f"error: {str(exc)[:160]}", None
                 store.record_placement(row["id"], row["ref_no"], row["model_code"], amount, ok, message, shot, dry)
                 lines.append(f"{row['model_code']} {(row['summary'] or '')[:70]} -> {amount}K: {'OK' if ok else 'BLOCKED'} {message}")
                 echo("  " + lines[-1])
+                progress.emit(stage="place", i=i, total=len(rows), ref_no=row["ref_no"], ok=ok, skipped=False,
+                              message=message, screenshot=shot, screenshot_rel=_evidence_rel(cfg, shot), dry_run=dry,
+                              proposal_id=row["id"], model_code=row["model_code"], amount_jpy_k=amount)
     finally:
         store.close()
     return lines
+
+
+def _evidence_rel(cfg: Config, path: str | None) -> str | None:
+    """A screenshot's path below the evidence folder ("<lot>/bid_before.png"), for the page's /evidence mount."""
+    if not path:
+        return None
+    try:
+        return Path(path).resolve().relative_to(Path(cfg.evidence_dir).resolve()).as_posix()
+    except (OSError, ValueError):
+        return None
 
 
 # -- the whole day -----------------------------------------------------------------------------

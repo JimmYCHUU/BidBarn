@@ -27,3 +27,8 @@ rules/playbook/*
 
 # Browser tool snapshots (page content), never committed
 .playwright-mcp/
+
+# Design review captures and decision-page logs (the surface briefs under .impeccable/surfaces are kept)
+.impeccable/review/
+.impeccable/questions/
+.impeccable/config.local.json

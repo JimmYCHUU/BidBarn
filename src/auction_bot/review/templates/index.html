@@ -1,39 +1,63 @@
 {% extends "base.html" %}
+{% block title %}All lots · BidBarn{% endblock %}
 {% block body %}
-<form method="get" style="display:flex; gap:10px; margin-bottom:12px; align-items:center">
-  <label>Decision
-    <select name="decision">
-      {% for d in ['pending','approved','rejected',''] %}<option value="{{ d }}" {% if d == decision %}selected{% endif %}>{{ d or 'all' }}</option>{% endfor %}
-    </select></label>
-  <label>Status
-    <select name="status">
-      {% for s in ['', 'BID','NEEDS_REVIEW','SKIP'] %}<option value="{{ s }}" {% if s == status %}selected{% endif %}>{{ s or 'all' }}</option>{% endfor %}
-    </select></label>
-  <label>Model <input type="text" name="model" value="{{ model }}" style="width:120px"></label>
-  <button>Filter</button>
-</form>
-<table>
-  <thead><tr><th>Status</th><th>Model</th><th>Vehicle</th><th>Bid (K JPY)</th><th>Why</th><th>Decision</th><th></th></tr></thead>
-  <tbody>
-  {% for p in rows %}
-    <tr>
-      <td><span class="pill {{ p.status }}">{{ p.status }}</span><div class="muted" style="font-size:11px">{{ p.stage }}{% if p.soft and p.soft.images_pending %} · images pending{% endif %}</div></td>
-      <td class="mono">{{ p.model_code }}{% if p.multi_guide %} <span class="pill NEEDS_REVIEW" title="also proposed under another guide">×2</span>{% endif %}</td>
-      <td><a href="/p/{{ p.id }}">{{ p.summary }}</a></td>
-      <td class="mono">{% if p.bid_jpy_k %}{{ '{:,}'.format(p.bid_jpy_k) }}{% if p.base_jpy_k and p.base_jpy_k != p.bid_jpy_k %} <span class="muted">(base {{ '{:,}'.format(p.base_jpy_k) }})</span>{% endif %}{% endif %}</td>
-      <td style="max-width:420px">
-        {% set reasons = [] %}
-        {% if p.hard and p.hard.checks %}{% for c in p.hard.checks if not c.ok %}{% set _ = reasons.append(c.name ~ ': ' ~ c.detail) %}{% endfor %}{% endif %}
-        {% if p.soft and p.soft.reasons %}{% for r in p.soft.reasons %}{% set _ = reasons.append(r) %}{% endfor %}{% endif %}
-        {% for r in reasons[:3] %}<div>{{ r }}</div>{% endfor %}
-        {% if reasons|length > 3 %}<div class="muted">+{{ reasons|length - 3 }} more</div>{% endif %}
-      </td>
-      <td><span class="pill {{ p.decision }}">{{ p.decision }}</span>{% if p.placed_at %}<div class="muted" style="font-size:11px">placed</div>{% endif %}</td>
-      <td><a href="/p/{{ p.id }}">open</a></td>
-    </tr>
-  {% else %}
-    <tr><td colspan="7" class="muted">Nothing here. Run <span class="mono">bot scan</span>.</td></tr>
-  {% endfor %}
-  </tbody>
-</table>
+<div class="page-head">
+  <h1 class="page-title">All lots</h1>
+  <span class="page-sub">{{ rows|length }} shown{% if placed == '1' %}, placed only{% elif placed == '0' %}, not placed yet{% endif %}</span>
+</div>
+
+<div class="card">
+  <form method="get" class="card-head form-row">
+    {% if placed %}<input type="hidden" name="placed" value="{{ placed }}">{% endif %}
+    <div class="field field--narrow">
+      <label for="f-decision">Decision</label>
+      <select id="f-decision" name="decision">
+        {% for d in ['pending', 'approved', 'rejected', ''] %}<option value="{{ d }}" {% if d == decision %}selected{% endif %}>{{ (d or 'all')|capitalize }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="field field--narrow">
+      <label for="f-status">Status</label>
+      <select id="f-status" name="status">
+        {% for s in ['', 'BID', 'NEEDS_REVIEW', 'SKIP'] %}<option value="{{ s }}" {% if s == status %}selected{% endif %}>{{ status_label(s) if s else 'All' }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="field field--narrow">
+      <label for="f-model">Model code</label>
+      <input id="f-model" type="search" name="model" value="{{ model }}">
+    </div>
+    <button>Filter</button>
+  </form>
+  <div class="table-wrap">
+  <table class="lots wide">
+    <thead><tr><th>Status</th><th>Model</th><th>Vehicle</th><th class="num">Bid (K JPY)</th><th>Why</th><th>Decision</th></tr></thead>
+    <tbody>
+    {% for p in rows %}
+      {% set f = p.facts or {} %}
+      <tr>
+        <td><span class="pill {{ p.status }}">{{ status_label(p.status) }}</span><div class="faint">{{ p.stage }}{% if p.soft and p.soft.images_pending %}, images pending{% endif %}</div></td>
+        <td class="mono nowrap">{{ p.model_code }}{% if p.multi_guide %} <span class="pill pill--violet" title="Also proposed under another guide">×2 guides</span>{% endif %}</td>
+        <td><a class="lot-title" href="/p/{{ p.id }}">{% if f.year or f.make %}{{ f.year }} {{ f.make }} {{ f.model }}{% else %}{{ lot_title(p.summary) }}{% endif %}</a> <span class="muted">{{ f.variant_text }}</span>
+          <div class="lot-facts num">
+            {% if f.grade_raw %}<span class="pill pill--tan">Grade {{ f.grade_raw }}</span>{% endif %}
+            {% if f.km %}<span><b>{{ '{:,}'.format(f.km) }}</b> km</span>{% endif %}
+            {% if f.start_price_jpy %}<span>start <b>¥{{ '{:,}'.format(f.start_price_jpy) }}</b></span>{% endif %}
+            {% if f.chassis and f.chassis != p.model_code %}<span class="mono">{{ f.chassis }}</span>{% endif %}
+          </div></td>
+        <td class="num">{% if p.bid_jpy_k %}<b>{{ '{:,}'.format(p.bid_jpy_k) }}</b>{% if p.base_jpy_k and p.base_jpy_k != p.bid_jpy_k %}<div class="faint">base {{ '{:,}'.format(p.base_jpy_k) }}</div>{% endif %}{% endif %}</td>
+        <td class="why">
+          {% set reasons = [] %}
+          {% if p.hard and p.hard.checks %}{% for c in p.hard.checks if not c.ok %}{% set _ = reasons.append(c.name ~ ': ' ~ c.detail) %}{% endfor %}{% endif %}
+          {% if p.soft and p.soft.reasons %}{% for r in p.soft.reasons %}{% set _ = reasons.append(r) %}{% endfor %}{% endif %}
+          {% for r in reasons[:3] %}<div>{{ r }}</div>{% endfor %}
+          {% if reasons|length > 3 %}<div class="faint">+{{ reasons|length - 3 }} more</div>{% endif %}
+        </td>
+        <td><span class="pill {{ p.decision }}">{{ p.decision|capitalize }}</span>{% if p.placed_at %}<div class="faint">placed</div>{% endif %}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6"><div class="empty">{{ icon('table-2') }}<h3>No lots match</h3><p>Change the filters, or run a scan from the <a href="/">overview</a>.</p></div></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
 {% endblock %}

@@ -278,6 +278,17 @@ def session_dir(cfg: Config, stamp: datetime | None = None) -> Path:
 def watch(cfg: Config, echo=print, headless: bool = False, max_seconds: float | None = None) -> Path:
     """Open the bot's browser for Jim, with Nichibo and the Carbarn dashboard in two tabs, and
     record until he closes it (or Ctrl+C). `headless` and `max_seconds` exist for smoke tests."""
+    from auction_bot import lock
+
+    # The same profile as every other run, so the same lock: a scan started meanwhile stops with one line.
+    lock.acquire(cfg, lock.command_name())
+    try:
+        return _record(cfg, echo, headless, max_seconds)
+    finally:
+        lock.release(cfg)  # also when the browser could not be started
+
+
+def _record(cfg: Config, echo, headless: bool, max_seconds: float | None) -> Path:
     from playwright.sync_api import sync_playwright
 
     out = session_dir(cfg)

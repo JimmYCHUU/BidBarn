@@ -83,6 +83,7 @@ def cfg(tmp_path) -> Config:
     c.playbook_dir = tmp_path / "playbook"
     c.snapshot_dir = tmp_path / "snapshots"
     c.pace_seconds = (0, 0)
+    c.review = {"allow_hosts": ["testserver"]}  # the test client's name for this PC; config.yaml allows none
     for d in (c.evidence_dir, c.override_dir, c.snapshot_dir):
         d.mkdir()
     tree = json.loads((FIX / "guide_223_tree.json").read_text(encoding="utf-8"))
@@ -264,4 +265,157 @@ def test_cache_reuses_downloaded_pages_and_evidence(cfg):
     b2 = FakeBrowser()
     scan(cfg, b2, store, ["GDH206"], limit_per_model=1, rescan=True, fresh=True)
     assert len(b2.visited) == 2
+    store.close()
+
+
+# -- runs started from the dashboard: progress lines, Stop, and a session that has expired ------------------
+
+class SignedOut(FakeBrowser):
+    """Nichibo answers every page with its login page."""
+
+    def goto(self, url, wait_until="domcontentloaded"):
+        self.visited.append(url)
+        self.page.url = "https://autosearch.nichibojapan.com/login"
+        return "<html><body>Please sign in</body></html>"
+
+
+def _progress_lines(text: str) -> list[dict]:
+    from auction_bot import progress
+    parsed = [progress.parse(ln) for ln in text.splitlines()]
+    return [p[1] for p in parsed if p and p[0] == "progress"]
+
+
+def test_scan_prints_progress_for_the_dashboard(cfg, monkeypatch, capsys):
+    monkeypatch.setenv("BIDBARN_PROGRESS", "1")
+    store = Store(cfg.db_path)
+    stats = scan(cfg, FakeBrowser(), store, ["GDH206"], limit_per_model=2)
+    events = _progress_lines(capsys.readouterr().out)
+    assert events[0] == {"stage": "scan", "guides": 1, "guide": 0, "codes": ["GDH206"], "marks": ""}
+    assert events[1]["guide"] == 1 and events[1]["code"] == "GDH206" and events[1]["cards"] == 0
+    last = events[-1]
+    assert last["stage"] == "scan" and last["guide"] == last["guides"] == stats.guides == 1
+    # One letter per finished guide: f lots for review, e nothing new, x an error. While a guide is going it has none.
+    assert last == {"stage": "scan", "guides": 1, "guide": 1, "code": "GDH206", "codes": ["GDH206"], "marks": "f",
+                    "cards": stats.cards, "opened": 2, "review": 2, "skip": stats.skip, "bid": 0, "reused": 0,
+                    "pending": 0, "model_calls": 0, "errors": 0}
+    assert all(e["marks"] == "" for e in events[:-1])
+    assert [e["opened"] for e in events if e.get("opened")] == sorted(e["opened"] for e in events if e.get("opened"))
+    assert {1, 2} <= {e.get("opened") for e in events}  # one line after each lot
+    # Replay reports the same way.
+    from auction_bot.pipeline import reevaluate
+    st = reevaluate(cfg, store, ["GDH206"])
+    events = _progress_lines(capsys.readouterr().out)
+    assert events and all(e["stage"] == "replay" and e["total"] == st.checked for e in events)
+    assert events[0]["checked"] == 0 and events[-1]["checked"] == st.checked and events[-1]["changed"] == 0
+    # From a console (no variable) the same calls print no such line.
+    monkeypatch.delenv("BIDBARN_PROGRESS")
+    scan(cfg, FakeBrowser(), store, ["GDH206"], limit_per_model=2)
+    reevaluate(cfg, store, ["GDH206"])
+    out = capsys.readouterr().out
+    assert "PROGRESS" not in out and "SUMMARY" not in out
+    store.close()
+
+
+def test_scan_stops_when_the_dashboard_asks(cfg, monkeypatch, tmp_path):
+    from auction_bot.progress import Cancelled
+    flag = tmp_path / "1.cancel"
+    flag.write_text("stop", encoding="utf-8")
+    monkeypatch.setenv("BIDBARN_CANCEL_FILE", str(flag))
+    store = Store(cfg.db_path)
+    browser = FakeBrowser()
+    with pytest.raises(Cancelled, match="stopped from the dashboard"):
+        scan(cfg, browser, store, ["GDH206"], limit_per_model=2)
+    assert browser.visited == []  # asked before the scan began: not one page was loaded
+    assert store.list_proposals(decision=None, limit=1000) == []
+    store.close()
+
+
+def test_scan_stopped_halfway_keeps_what_it_stored(cfg, monkeypatch, tmp_path):
+    from auction_bot.progress import Cancelled
+    flag = tmp_path / "2.cancel"
+    monkeypatch.setenv("BIDBARN_CANCEL_FILE", str(flag))
+
+    class StopDuringTheFirstLot(FakeBrowser):
+        def get_bytes(self, url, headers=None):
+            flag.write_text("stop", encoding="utf-8")  # Stop is clicked while the first sheet downloads
+            return super().get_bytes(url, headers)
+
+    store = Store(cfg.db_path)
+    with pytest.raises(Cancelled):
+        scan(cfg, StopDuringTheFirstLot(), store, ["GDH206"], limit_per_model=5)
+    rows = store.list_proposals(decision="pending", status="NEEDS_REVIEW")
+    assert len(rows) == 1 and json.loads(rows[0]["soft_json"])["mode"] == "manual"  # the lot in hand was finished
+    assert store.list_proposals(decision="pending", status="SKIP", limit=1000)  # and the cards before it
+    flag.unlink()
+    stats = scan(cfg, FakeBrowser(), store, ["GDH206"], limit_per_model=5)  # the next scan carries on from there
+    assert stats.errors == [] and stats.opened == 5 and stats.reused >= 1
+    store.close()
+
+
+def test_signed_out_scan_stops_at_the_first_guide(cfg):
+    from auction_bot.nichibo.browser import NotLoggedIn
+    snap = cfg.snapshot_dir / "rules_test.json"
+    data = json.loads(snap.read_text(encoding="utf-8"))
+    data["guides"] = data["guides"] * 3  # three guides to search
+    snap.write_text(json.dumps(data), encoding="utf-8")
+    store = Store(cfg.db_path)
+    browser = SignedOut()
+    with pytest.raises(NotLoggedIn, match="login page"):
+        scan(cfg, browser, store, ["GDH206"])
+    assert len(browser.visited) == 1  # not one search per guide with an error each
+    assert store.list_proposals(decision=None, limit=1000) == []
+    store.close()
+
+
+def test_other_search_failures_are_still_counted_per_guide(cfg):
+    class Flaky(FakeBrowser):
+        def goto(self, url, wait_until="domcontentloaded"):
+            raise TimeoutError("Nichibo timed out")
+
+    store = Store(cfg.db_path)
+    stats = scan(cfg, Flaky(), store, ["GDH206"])
+    assert stats.guides == 1 and len(stats.errors) == 1 and "search failed: Nichibo timed out" in stats.errors[0]
+    store.close()
+
+
+def test_judge_pending_stops_when_signed_out_or_asked(cfg, monkeypatch, tmp_path, capsys):
+    import auction_bot.judge.client as client_mod
+    from auction_bot.nichibo.browser import NotLoggedIn
+    from auction_bot.pipeline import judge_pending
+    from auction_bot.progress import Cancelled
+
+    cfg.sheet_check = "judge"
+    cfg.judge = {"max_photos": 2, "inline": False}
+    monkeypatch.setenv("GEMINI_API_KEY", "k")
+    asked = []
+    monkeypatch.setattr(client_mod, "openai_transport", lambda p, messages, fmt, max_tokens: asked.append(p.name) or ("{}", None))
+    store = Store(cfg.db_path)
+    scan(cfg, FakeBrowser(), store, ["GDH206"], limit_per_model=2)
+    rows = store.list_proposals(decision="pending", status="NEEDS_REVIEW")
+    assert len(rows) == 2 and all(json.loads(r["soft_json"])["judge_pending"] for r in rows)
+    for r in rows:  # the photos are gone, so every lot needs its page again
+        for photo in json.loads(r["evidence_json"])["photos"]:
+            Path(photo).unlink()
+    cfg.cache_hours = 0  # and the saved pages are too old to use
+    browser = SignedOut()
+    with pytest.raises(NotLoggedIn):
+        judge_pending(cfg, store, browser=browser)
+    assert len(browser.visited) == 1 and asked == []  # stopped at the first lot, not an error per lot
+
+    flag = tmp_path / "3.cancel"
+    flag.write_text("stop", encoding="utf-8")
+    monkeypatch.setenv("BIDBARN_CANCEL_FILE", str(flag))
+    monkeypatch.setenv("BIDBARN_PROGRESS", "1")
+    capsys.readouterr()
+    browser = FakeBrowser()
+    with pytest.raises(Cancelled):
+        judge_pending(cfg, store, browser=browser)
+    assert browser.visited == [] and asked == []
+    assert _progress_lines(capsys.readouterr().out) == []  # stopped before the first lot
+    flag.unlink()
+    st = judge_pending(cfg, store)  # no browser: both lots are looked at and left pending, as before
+    events = _progress_lines(capsys.readouterr().out)
+    assert st.checked == 2 and [e["i"] for e in events] == [1, 2, 2] and all(e["total"] == 2 and e["stage"] == "judge" for e in events)
+    assert events[-1]["done"] is True and events[-1]["checked"] == 2 and events[-1]["judged"] == 0
+    assert all(json.loads(r["soft_json"])["judge_pending"] for r in store.list_proposals(decision="pending", status="NEEDS_REVIEW"))
     store.close()

@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Settings · BidBarn{% endblock %}
+{% block body %}
+<div class="page-head">
+  <h1 class="page-title">Settings</h1>
+  <span class="page-sub">Read from config.yaml when the dashboard started. Nothing here can be changed from the page.</span>
+</div>
+
+<div class="banner banner--info">{{ icon('info') }}<div>To change a setting, edit <span class="mono">config.yaml</span> by hand, then close the dashboard window and start it again.</div></div>
+
+<div class="cols cols--even">
+  <div>
+    <section class="card">
+      <div class="card-head"><h2>Placement</h2><span class="pill {{ 'pill--bad' if lock_label == 'LIVE PLACEMENT' else ('pill--info' if lock_label == 'DRY RUN' else 'pill--warn') }} push">{{ icon('lock-open' if lock_label == 'LIVE PLACEMENT' else 'lock') }} {{ lock_label }}</span></div>
+      <div class="card-body">
+        <dl class="facts num">
+          <div class="fact fact--wide"><dt>Testing lock (project_status)</dt><dd>{{ 'Off' if cfg.project_finished else 'On' }}<small>{% if cfg.project_finished %}The project is marked finished.{% else %}While it is on, placement is always a dry run. Only Jim lifts it, by hand.{% endif %}</small></dd></div>
+          <div class="fact"><dt>Dry run (dry_run)</dt><dd>{{ 'Yes' if cfg.dry_run else 'No' }}</dd></div>
+          <div class="fact"><dt>Bids per run, at most</dt><dd>{{ cfg.max_bids_per_run }}</dd></div>
+          <div class="fact fact--wide"><dt>What a placement from this page does</dt><dd>Dry run<small>The amount is typed into Nichibo's form and screenshotted. Nothing is submitted. Live placement cannot be started from the page.</small></dd></div>
+        </dl>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Scan</h2></div>
+      <div class="card-body">
+        <dl class="facts num">
+          <div class="fact"><dt>Sheet check</dt><dd>{{ cfg.sheet_check }}</dd></div>
+          <div class="fact"><dt>Guides older than</dt><dd>{{ '%g' % cfg.max_rules_age_hours }} h<small>are refused</small></dd></div>
+          <div class="fact"><dt>Pages reused for</dt><dd>{{ '%g' % cfg.cache_hours }} h</dd></div>
+          <div class="fact"><dt>Pause between pages</dt><dd>{{ '%g' % cfg.pace_seconds[0] }} to {{ '%g' % cfg.pace_seconds[1] }} s</dd></div>
+          <div class="fact"><dt>Open a lot's page</dt><dd>{{ 'Only when a rule needs it' if cfg.open_details_only_for_candidates else 'Always' }}</dd></div>
+          <div class="fact"><dt>Search results per page</dt><dd>{{ cfg.nichibo.get('per_page') or 'not set' }}</dd></div>
+        </dl>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Sites</h2></div>
+      <div class="card-body">
+        <dl class="facts">
+          <div class="fact fact--wide"><dt>Nichibo</dt><dd>{% if cfg.nichibo.get('base_url') %}<span class="mono">{{ cfg.nichibo.get('base_url') }}</span>{% else %}not set{% endif %}</dd></div>
+          <div class="fact fact--wide"><dt>Carbarn dashboard</dt><dd>{% if cfg.carbarn.get('dashboard_url') %}<span class="mono">{{ cfg.carbarn.get('dashboard_url') }}</span>{% else %}not set{% endif %}</dd></div>
+          <div class="fact fact--wide"><dt>This page</dt><dd><span class="mono">http://{{ cfg.review.get('host', '127.0.0.1') }}:{{ cfg.review.get('port', 8765) }}</span><small>Served to this PC only.</small></dd></div>
+        </dl>
+      </div>
+    </section>
+  </div>
+
+  <div>
+    <section class="card">
+      <div class="card-head"><h2>Judgement model</h2><span class="faint push">{{ 'judges during the scan' if (cfg.judge or {}).get('inline', true) else 'judges when asked' }}</span></div>
+      {% if providers %}
+      <div class="table-wrap">
+      <table class="lots">
+        <thead><tr><th>Provider and model</th><th class="num">Per minute</th><th class="num">Per day</th><th>Photos</th><th>Key</th></tr></thead>
+        <tbody>
+        {% for p in providers %}
+          <tr><td><b>{{ p.name }}</b><div class="mono nowrap">{{ p.model }}</div></td><td class="num">{{ p.rpm }}</td><td class="num">{{ p.rpd }}</td>
+            <td>{{ 'Yes' if p.vision else 'Text only' }}</td>
+            <td>{% if p.has_key %}<span class="pill pill--ok">{{ icon('circle-check') }} Set</span>{% else %}<span class="pill pill--warn">{{ icon('circle-alert') }} Missing</span>{% endif %}<div class="mono faint">{{ p.key_env }}</div></td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      </div>
+      <div class="card-foot">Keys live in the .env file and are never shown. Providers are tried in this order.</div>
+      {% else %}
+      <div class="card-body"><p class="muted">Off. You judge the sheet and the photos yourself on the review page.</p></div>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Files on this PC</h2></div>
+      <div class="card-body">
+        <dl class="facts">
+          {% for label, path in paths %}<div class="fact fact--wide"><dt>{{ label }}</dt><dd class="mono">{{ path }}</dd></div>{% endfor %}
+        </dl>
+        <p class="faint">Everything the bot downloads and decides stays in these folders. None of it is deleted by the bot or by this page.</p>
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

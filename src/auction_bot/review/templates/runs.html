@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% from "_parts.html" import launcher, status_pill %}
+{% block title %}Runs · BidBarn{% endblock %}
+{% block body %}
+<div class="page-head">
+  <h1 class="page-title">Runs</h1>
+  <span class="page-sub">{{ runs|length }} shown{% if command %}, {{ command_label(command) }} only{% endif %}</span>
+  <div class="end">
+    <nav class="seg" aria-label="Filter by command">
+      <a href="/runs" {% if not command %}aria-current="true"{% endif %}>All</a>
+      {% for c in commands %}<a href="/runs?command={{ c.name }}" {% if command == c.name %}aria-current="true"{% endif %}>{{ command_short(c.name) }}</a>{% endfor %}
+    </nav>
+  </div>
+</div>
+
+<details class="card start-card"{% if not runs %} open{% endif %}>
+  <summary class="card-head"><h2>Start a command</h2>
+    {% if current %}<span class="faint">{{ command_label(current.command) }} is running. One command runs at a time.</span>{% endif %}
+    {{ icon('chevron-down', 'icon--sm chev') }}</summary>
+  {% if current %}<div class="card-body"><div class="banner banner--info">{{ icon('info') }}<div>{{ command_label(current.command) }} is running. <a href="/runs/{{ current.id }}">Watch run {{ current.id }}</a>.</div></div></div>{% endif %}
+  {{ launcher(commands) }}
+</details>
+
+<section class="card">
+    <div class="table-wrap">
+    <table class="lots wide runs-table">
+      <thead><tr><th class="num">Run</th><th>Command</th><th class="num">Started</th><th class="num">Took</th><th>Result</th><th>Outcome</th></tr></thead>
+      <tbody>
+      {% for r in runs %}
+        <tr>
+          <td class="num"><a href="/runs/{{ r.id }}">{{ r.id }}</a></td>
+          <td><a class="lot-title" href="/runs/{{ r.id }}">{{ icon(command_icon(r.command)) }} {{ command_label(r.command) }}</a>{% if options_words(r) %}<div class="opts" title="{{ options_text(r) }}">{{ options_words(r) }}</div>{% endif %}</td>
+          <td class="num nowrap">{{ local_time(r.started_at) }}</td>
+          <td class="num nowrap">{{ duration(r.started_at, r.finished_at) }}</td>
+          <td>{{ status_pill(r.status) }}</td>
+          <td class="why">
+            {% if r.error %}<div class="entry-error{% if r.status == 'stopped' %} entry-error--stopped{% endif %}">{{ r.error|capitalize }}</div>
+            {% elif r.status == 'stopped' %}<div class="entry-error entry-error--stopped">Stopped from the dashboard</div>{% endif %}
+            {% set pairs = summary_pairs(r) %}
+            {% if pairs %}<div class="entry-facts num">{% for k, v in pairs[:8] %}<span>{{ k }} <b>{{ v }}</b></span>{% endfor %}</div>{% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6"><div class="empty">{{ icon('history') }}<h3>No runs yet</h3><p>Commands started from this page are listed here with their logs.</p></div></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="/static/vendor/gsap.min.js?v={{ asset_v }}" defer></script>
+<script src="/static/dashboard.js?v={{ asset_v }}" defer></script>
+{% endblock %}

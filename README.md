@@ -1,7 +1,7 @@
 # BidBarn 🚗
 
 ![Python 3.12](https://img.shields.io/badge/python-3.12-blue)
-![Tests](https://img.shields.io/badge/tests-148%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-309%20passing-brightgreen)
 ![Playwright](https://img.shields.io/badge/browser-Playwright%20Chromium-45ba4b)
 ![No paid AI](https://img.shields.io/badge/AI%20APIs-none%20required-lightgrey)
 ![Testing lock](https://img.shields.io/badge/placement-testing%20lock%20on-orange)
@@ -14,6 +14,9 @@ it. A person approves or rejects each one. Nothing is placed on Nichibo without 
 while the testing lock is on nothing is placed at all. The scan judges a lot from the search
 result and the sheet alone; it opens the lot's page only when a rule needs something more.
 
+The whole day runs from a dashboard in the browser: it says what is next, starts it, shows it
+running, and holds the review pages. It looks like the Carbarn dashboard on purpose.
+
 `Python 3.12` · `Playwright` · `RapidOCR` · `FastAPI` · `SQLite`
 
 ---
@@ -25,6 +28,7 @@ result and the sheet alone; it opens the lot's page only when a rule needs somet
 - [Non-negotiable rules](#non-negotiable-rules)
 - [Install & run](#install--run)
 - [The daily workflow](#the-daily-workflow)
+- [The dashboard](#the-dashboard)
 - [The review page](#the-review-page)
 - [Rules as Carbarn confirmed them](#rules-as-carbarn-confirmed-them)
 - [CLI](#cli)
@@ -124,6 +128,15 @@ Enforced in code, not by convention. The full list for anyone touching the code 
 
 ## Install & run
 
+### The dashboard: `dashboard.cmd`
+
+Double-click `dashboard.cmd`. The page opens in your browser at http://127.0.0.1:8765 and the
+server runs in a minimised window called "BidBarn dashboard" in the taskbar. Close that window
+to stop it. A second double-click just opens the page again.
+
+The first time, run `bidbarn.cmd` once before it (see below): that creates the Python
+environment the dashboard needs.
+
 ### One click: `bidbarn.cmd`
 
 Install Python 3.12 once (tick "Add python.exe to PATH" in the installer), then double-click
@@ -153,6 +166,10 @@ placed and no rule is stored until you add it.
 stops after the review; `--headed` shows the browser while it works. No exe and no Docker on
 purpose: Windows App Control on the office PC blocks unsigned programs, and a container has
 no screen for the sign-in window or for watch mode.
+
+Bid mode serves its own review page on the same address, so close the dashboard window before
+starting it. Learn mode and watch mode stay on `bidbarn.cmd` and `bot.cmd`: the dashboard does
+not start them.
 
 ### The separate steps
 
@@ -193,11 +210,15 @@ review.cmd
 ```
 
 You should see the parsed guides listed, three Hiace lots evaluated, and the review page open
-at http://127.0.0.1:8765 with the sheet and photos of each candidate.
+at http://127.0.0.1:8765/review with the sheet of each candidate.
 
 ---
 
 ## The daily workflow
+
+From the dashboard the day is five steps, and the page always says which one is next: check the
+sign-in, fetch the guides, scan, review, place. Each of them is one button. The same steps as
+separate launchers, for when the dashboard is not running:
 
 1. **`scan.cmd`** fetches a fresh guide snapshot and scans every active guide. Lots already
    evaluated are reused; only new listings are judged. The sheet comes straight from the search
@@ -223,11 +244,33 @@ at http://127.0.0.1:8765 with the sheet and photos of each candidate.
    the per-lot timeline with the bot's own verdict beside each lot. The bot only watches: it
    makes no request and never touches the bid form.
 
+## The dashboard
+
+| Page | What it shows |
+|---|---|
+| Overview (`/`) | The next step of the day with its one button, and the five steps with where each stands. Below it the day's log, newest first: every run with how it ended and its closing numbers, and every review session with its decisions. A run that is going is the first entry, open, with its guide row, counters and log. Beside the log: the counts, the sign-in state of both sites, the age of the guide snapshot, today's model calls against the free quota, and the other commands. |
+| Runs (`/runs`) | Every run started from the page, with its options, duration and outcome, and a panel to start any command with its options. |
+| A run (`/runs/<n>`) | Live while it runs: one cell per guide in a single row (tall and blue where lots were found, short where nothing was new, red on an error, the lit cell is the guide being scanned), the running totals, the log as it is written, and **Stop**. Afterwards: the outcome, the placements with their screenshots for a placement run, and the whole log, also as a file. |
+| Insights (`/insights`) | What `bot.cmd insights` prints, as a page: per model how many you decided, how long a decision takes, what you looked at, rejection themes, and the skip rules your rejections justify, each with an *Add rule* button. |
+| Settings (`/config`) | What `config.yaml` says, read only: the locks, the scan settings, the judgement providers (whether a key is set, never the key), the sites and the folders. |
+
+What the page can start: scan, fetch the guides, judge pending lots, replay (report or store),
+place as a dry run, insights, the sign-in check and the sign-in window. Nothing else. It cannot
+ask for a live placement, it cannot change the locks, and it decides no lot: approving stays a
+click on the review page. One command runs at a time; a second one is refused with a link to
+the one that is running. **Stop** asks the run to end at its next check point (before the next
+page load) and ends its process after 20 seconds if it has not; a placement is never stopped in
+the middle of a lot. If the dashboard window is closed while a command runs, the command
+finishes by itself and the next start of the dashboard picks its record up.
+
+The page is served to this PC only. A request that names another host, or that comes from
+another website's page, is refused, so no page you visit can start a command or approve a lot.
+
 ## The review page
 
 | Panel | What it shows |
 |---|---|
-| Triage (`/`) | Every pending lot, grouped by model and sorted the way the manual pass goes: best grade first, then fewest km. Sheet thumbnail, bid, the top reasons, Approve / Reject, links to the lot and its photos on Nichibo. Keys: `j`/`k` move, `a` approve (asks first), `r` reject with a reason, `e` change the amount, `z` sheet full size, `o` Nichibo, `p` photos, `Enter` detail, `?` help. Skip rules your rejections justify are offered at the top of each model with an *add* button. |
+| Triage (`/review`) | Every pending lot, grouped by model and sorted the way the manual pass goes: best grade first, then fewest km. Sheet thumbnail, bid, the top reasons, Approve / Reject, links to the lot and its photos on Nichibo. Approve and Reject open a row under the lot with the amount or the reason; nothing is recorded until you confirm there. Keys: `j`/`k` move, `a` approve, `r` reject with a reason, `e` change the amount (each then `Enter` to confirm, `Esc` to cancel), `z` sheet full size, `o` Nichibo, `p` photos, `Enter` detail, `?` the key list. Skip rules your rejections justify are offered at the top of each model with an *Add rule* button. |
 | Header | Status, guide, decision state, link to the lot on Nichibo, `×2` when the same vehicle is proposed under another guide (both rows are shown, approve once) |
 | Listing facts | Chassis and resolved variant (or "judged from the search card" when the page was not opened), year, km, grade, start price, hall and date when known, Nichibo's own sheet translation when it has one |
 | Grid lookup and hard rules | The bid in K JPY, the grid cell used, the bonus applied, every check with a green, amber or red dot, dashboard chips that are *not* applied |
@@ -318,11 +361,13 @@ the checklist as "NOT understood". Add lines on the review page, with
 |---|---|
 | `bot.cmd learn` | Learn mode (`bidbarn.cmd`, L): watch you bid, then scan the same codes, compare, suggest rules |
 | `bot.cmd bid [--skip-scan] [--no-place] [--headed]` | Bid mode (`bidbarn.cmd`, B): sign-in check, guides, scan, review, place |
-| `bot.cmd login` | One-time sign-in to Nichibo and the Carbarn dashboard |
-| `bot.cmd fetch-rules [-m CODE]` | Snapshot the Team Bid guides |
+| `bot.cmd dashboard [--no-browser]` | Serve the dashboard and the review pages (`dashboard.cmd`). If it is already running, only opens the page |
+| `bot.cmd login [--wait]` | One-time sign-in to Nichibo and the Carbarn dashboard. `--wait` needs no keyboard: it opens a window only if a site is signed out and continues by itself |
+| `bot.cmd check-login` | Says, without a window, whether both sites are signed in |
+| `bot.cmd fetch-rules [-m CODE] [--headless]` | Snapshot the Team Bid guides |
 | `bot.cmd rules [CODE]` | Print the parsed grid of a model |
 | `bot.cmd scan [-m CODE] [--limit N] [--fresh] [--rescan] [--headless]` | Search, evaluate, write proposals |
-| `bot.cmd review` | Serve the review page (triage at `/`, table at `/list`) |
+| `bot.cmd review` | Serve the same pages without opening the browser (triage at `/review`, table at `/list`) |
 | `bot.cmd replay [--apply]` | Re-apply current rules, skip lines and code to stored proposals, offline |
 | `bot.cmd place [--live]` | Place approved bids (dry run unless every lock is off) |
 | `bot.cmd judge [--pending] [-m CODE] [--limit N]` | Ask the free vision model about stored lots still waiting for a judgement (rate-limited, resumable) |
@@ -338,7 +383,9 @@ Everything the bot downloads stays on the office PC. Git never sees any of it.
 | Folder | Content |
 |---|---|
 | `data\profile` | Browser session (cookies) for both sites |
-| `data\bot.sqlite` | Every vehicle seen, proposal, decision (with what you looked at and how long it took), placement, and manual sessions saved with `learn --save` |
+| `data\bot.sqlite` | Every vehicle seen, proposal, decision (with what you looked at and how long it took), placement, run started from the dashboard, and manual sessions saved with `learn --save`. While something has it open there are two files beside it, `bot.sqlite-wal` and `bot.sqlite-shm`; copy the database only when nothing is running |
+| `data\runs\<n>.log` | The output of run `<n>`, exactly what the console would have shown |
+| `data\profile.lock` | Present while a command uses the bot's browser. It names the command and is removed when the command ends; one left behind by a crash is replaced |
 | `data\evidence\<ref>\` | Sheet, OCR output, facts, rule snapshot, screenshots per lot |
 | `data\sessions\<stamp>\` | A watched manual session: `events.jsonl` and screenshots |
 | `data\cache\` | Downloaded pages and translator replies, reused for `cache_hours` (12) |
@@ -351,7 +398,11 @@ Everything the bot downloads stays on the office PC. Git never sees any of it.
 
 | Symptom | Cause and fix |
 |---|---|
-| "STOPPED: … not logged in" | The saved session expired. Double-click `login.cmd`, sign in to both tabs, press Enter. |
+| "STOPPED: … not logged in" or "redirected to the login page" | The saved session expired. Click **Sign in** on the dashboard, or double-click `login.cmd`, sign in to both tabs, press Enter. A scan now stops at the first guide when it is signed out, instead of trying every guide. |
+| "STOPPED: another BidBarn run … is using the browser profile" | A command that uses the bot's browser is still running, from the dashboard or from a console. Wait for it, or stop it on its run page. |
+| "… is running (run N)" on the dashboard | One command runs at a time. Follow the link to watch it, or stop it. |
+| The dashboard says "did not answer" | Its window was closed. Double-click `dashboard.cmd`. |
+| The page does not open on `dashboard.cmd` | Something else uses port 8765, usually a `review.cmd` or `bidbarn.cmd` window. Close it and try again. |
 | "STOPPED: No rules snapshot found" | Run `bot.cmd fetch-rules` (or `scan.cmd`, which does it first). |
 | "Rules snapshot is N h old" | Snapshots older than `max_rules_age_hours` are refused. Fetch again. |
 | OCR "unavailable" on the review page | Install the Visual C++ runtime linked above and restart. |
@@ -366,24 +417,34 @@ Everything the bot downloads stays on the office PC. Git never sees any of it.
 .venv\Scripts\python -m pytest -q
 ```
 
-148 tests: the golden cases from the manual walkthrough against the real GDH206 guide, variant
+309 tests: the golden cases from the manual walkthrough against the real GDH206 guide, variant
 resolution on captured Alphard and E-Class guides, the seat rule, OCR parsing on three real sheets
 plus the header-band crop and its fallback, an offline end-to-end scan against captured Nichibo
 pages, the card-and-sheet path that opens no page, the placeholder path that parks a lot
 without a page, the grid ceiling, placement re-verification of card-judged lots, the cache and
 replay paths, the skip-line grammar and where the scan applies it, review telemetry and
 insights, the triage view, the HAR parser and join (with a socket guard proving no network),
-the learn and bid modes (card attribution of comments, the Finish hand-off), the judgement layer (provider fallback and quotas, requirement classification, candidates, playbook, the stubbed model in the scan, the pending pass, replay, the review page and corrections), the Stock URL guard and the testing lock.
+the learn and bid modes (card attribution of comments, the Finish hand-off), the judgement layer (provider fallback and quotas, requirement classification, candidates, playbook, the stubbed model in the scan, the pending pass, replay, the review page and corrections), the Stock URL guard and the testing lock,
+and the dashboard: the progress lines a run prints and that a signed-out or stopped scan ends at
+once, the browser profile lock, the runs table on an old database, the job runner on harmless
+stand-in commands (finish, fail, stop, a second start refused, a run left by a closed
+dashboard), the command table (no option and no value can produce a live placement), every page
+on an empty database, the status and the day's steps, the log and its live stream, that a
+request from another site can neither start a command nor approve a lot, and that the dashboard
+package decides nothing.
 
 ## Project layout
 
 ```
 bidbarn/
+├── dashboard.cmd                                            the dashboard in your browser
 ├── bidbarn.cmd                                              one click: Learn mode or Bid mode
 ├── bot.cmd · login.cmd · scan.cmd · review.cmd · place.cmd   the separate steps
 ├── config.yaml                                              locks, cache, pacing, review address
 ├── CLAUDE.md                                                rules for anyone working on the code
+├── PRODUCT.md · DESIGN.md                                   who the page is for, and how it looks
 ├── docs/endpoints.md                                        both sites' endpoints, from the HAR captures
+├── docs/dashboard.md                                        the dashboard's routes, runs and progress lines
 ├── rules/overrides/                                         standing instructions (git-ignored)
 ├── src/auction_bot/
 │   ├── carbarn/      client.py (dashboard API) · models.py (guides, variants, grids, modifiers)
@@ -393,7 +454,12 @@ bidbarn/
 │   │                 soft.py + schema.py (the opt-in OpenAI sheet check)
 │   ├── judge/        client.py (free providers, fallback, quotas) · requirements.py · candidates.py
 │   │                 playbook.py · judge.py (prompt, schema, deterministic decision)
-│   ├── review/       FastAPI review page, templates (triage, detail, list) and static/review.js
+│   ├── review/       the local page (FastAPI): app.py (review routes, the only place a lot is decided),
+│   │                 templates, static/ (bidbarn.css, review.js, dashboard.js, icons, vendor/)
+│   ├── dashboard/    jobs.py (the command table and the job runner) · status.py (the state of the day)
+│   │                 routes.py (overview, runs, insights, settings, the API)
+│   ├── progress.py   the PROGRESS and SUMMARY lines a run prints for the dashboard, and Stop
+│   ├── lock.py       one command at a time on the bot's browser profile
 │   ├── pipeline.py   scan (card + sheet first, page only when needed) and offline replay
 │   ├── run.py        the one-click modes: learn (watch, compare, suggest) and bid (sign-in, guides, scan, review, place)
 │   ├── insights.py   how you decide, per model; suggested skip lines
@@ -408,9 +474,10 @@ bidbarn/
 
 Testing phase. The testing lock is on and every approval is test data. The speed rework is in:
 lots are judged from the search card and the sheet, the page is opened only when a rule needs
-it, photos are a link, and the OCR reads the sheet header first. Next: resume the scan from
-guide 22, the first review pass on the triage view, and the first `bot insights` run once
-decisions exist.
+it, photos are a link, and the OCR reads the sheet header first. The dashboard is in
+(2026-09-29): it has been exercised on stand-in commands and on a throwaway database, not yet
+on a real scan. Next: the first real scan started from the dashboard, the first review pass on
+the triage view, and the first look at Insights once decisions exist.
 
 ### Open questions for Carbarn
 

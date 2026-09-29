@@ -54,6 +54,13 @@ class Config:
     def openai_api_key(self) -> str | None:
         return os.environ.get("OPENAI_API_KEY")
 
+    @property
+    def runs_dir(self) -> Path:
+        """Where the dashboard keeps one log per run (beside the database, so inside `data/`)."""
+        d = self.db_path.parent / "runs"
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
 
 _PATH_KEYS = ("profile_dir", "db_path", "evidence_dir", "snapshot_dir", "override_dir", "playbook_dir")
 
