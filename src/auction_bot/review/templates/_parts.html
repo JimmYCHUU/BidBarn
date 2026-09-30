@@ -8,6 +8,31 @@
 <button type="button" class="{{ cls }}" data-start='{{ {"command": command, "options": options or {}}|tojson }}'{% if confirm %} data-confirm="{{ confirm }}"{% endif %}>{{ icon(command_icon(command)) }} {{ label }}</button>
 {%- endmacro %}
 
+{# One of the two modes on the overview: a title, one sentence, one button. #}
+{% macro mode_cell(command, title, sentence, label, primary=false) %}
+<div class="mode">
+  <h2>{{ icon(command_icon(command)) }} {{ title }}</h2>
+  <p>{{ sentence }}</p>
+  {{ start_button(command, label, cls=('btn--primary' if primary else '')) }}
+  <div class="form-error" role="alert" data-start-error></div>
+</div>
+{% endmacro %}
+
+{# The five stages of a Bid run: `stage` is the run's latest progress stage, `status` the run's status. #}
+{% macro stages(stage, status) %}
+{% set keys = ['signin', 'guides', 'scan', 'review', 'place'] %}
+{% set labels = ['Sign in', 'Guides', 'Scan', 'Review', 'Place'] %}
+{% set here = 'scan' if stage == 'judge' else stage %}
+{% set cur = keys.index(here) if here in keys else -1 %}
+<ol class="steps stages" data-stages data-stage="{{ here or '' }}" aria-label="The stages of Bid mode">
+  {% for k in keys %}
+  {% set i = loop.index0 %}
+  {% set st = 'done' if (status == 'ok' or i < cur) else ('running' if (i == cur and status == 'running') else ('failed' if (i == cur and status == 'failed') else 'idle')) %}
+  <li class="step step--{{ st }}{% if st == 'running' %} is-next{% endif %}" data-stage-key="{{ k }}">{{ icon('circle-check' if st == 'done' else ('loader-circle' if st == 'running' else ('circle-x' if st == 'failed' else 'circle')), 'spin' if st == 'running' else '') }}<span>{{ labels[i] }}</span><span class="sr-only">: {{ st }}</span></li>
+  {% endfor %}
+</ol>
+{% endmacro %}
+
 {# The live console of one run. JS (dashboard.js) fills it: the guide row, the counters, the log. #}
 {% macro console(run, compact=false) %}
 <section class="console{% if compact %} console--compact{% endif %}" data-console data-run-id="{{ run.id }}" data-status="{{ run.status }}" data-command="{{ run.command }}" aria-label="Run {{ run.id }}, {{ command_label(run.command) }}">
@@ -42,15 +67,19 @@
 </section>
 {% endmacro %}
 
-{# One command with its options, started from the page. #}
-{% macro launcher(commands, only=none, open=none) %}
+{# The single steps with their options, started from the Runs page. `only` gives the steps and
+   their order; `shown` names the options rendered per step (the rest keep their defaults). #}
+{% macro launcher(commands, only=none, open=none, shown=none) %}
+{% set picked = [] %}
+{% if only is not none %}{% for name in only %}{% for c in commands if c.name == name %}{% set _ = picked.append(c) %}{% endfor %}{% endfor %}{% else %}{% for c in commands %}{% set _ = picked.append(c) %}{% endfor %}{% endif %}
 <div class="launcher">
-{% for c in commands if (only is none or c.name in only) %}
+{% for c in picked %}
+  {% set keep = shown.get(c.name, []) if shown is not none else none %}
   <details class="cmd"{% if open == c.name %} open{% endif %}>
     <summary>{{ icon(command_icon(c.name)) }} <span>{{ c.label }}</span> {{ icon('chevron-down', 'icon--sm chev') }}</summary>
     <form data-run-command="{{ c.name }}" class="cmd-form">
       <p class="faint">{{ c.help }}</p>
-      {% for o in c.options %}
+      {% for o in c.options if (keep is none or o.name in keep) %}
         {% if o.kind == 'bool' %}
         <label class="check-row"><input type="checkbox" name="{{ o.name }}" data-kind="bool"{% if o.default %} checked{% endif %}> <span>{{ o.label }}<span class="help">{{ o.help }}</span></span></label>
         {% elif o.kind == 'int' %}
@@ -63,7 +92,6 @@
       {% endfor %}
       <div class="row">
         <button class="btn--primary btn--sm" type="submit">{{ icon('play', 'icon--sm') }} Start</button>
-        {% if c.needs_profile %}<span class="faint">Uses the bot's browser. One at a time.</span>{% else %}<span class="faint">Offline. No Nichibo traffic.</span>{% endif %}
       </div>
       <div class="form-error" role="alert"></div>
     </form>
@@ -81,8 +109,7 @@
   <span class="entry-icon entry-icon--{{ r.status }}">{{ icon(command_icon(r.command)) }}</span>
   <div class="entry-body">
     <div class="entry-head">
-      <a class="entry-title" href="/runs/{{ r.id }}">{{ command_label(r.command) }}</a>
-      {% if options_words(r) %}<span class="opts" title="{{ options_text(r) }}">{{ options_words(r) }}</span>{% endif %}
+      <a class="entry-title" href="/runs/{{ r.id }}"{% if options_words(r) %} title="{{ options_words(r) }}"{% endif %}>{{ command_label(r.command) }}</a>
       {{ status_pill(r.status) }}
       <span class="faint push">{% if r.status != 'running' %}took {{ duration(r.started_at, r.finished_at) }}{% endif %}</span>
     </div>
@@ -91,8 +118,8 @@
     {% else %}
       {% if r.error %}<p class="entry-error{% if r.status == 'stopped' %} entry-error--stopped{% endif %}">{{ icon('square' if r.status == 'stopped' else 'circle-alert', 'icon--sm') }} {{ r.error|capitalize }}</p>
       {% elif r.status == 'stopped' %}<p class="entry-error entry-error--stopped">{{ icon('square', 'icon--sm') }} Stopped from the dashboard</p>{% endif %}
-      {% set pairs = summary_pairs(r) %}
-      {% if pairs %}<p class="entry-facts num">{% for k, v in pairs[:7] %}<span>{{ k }} <b>{{ v }}</b></span>{% endfor %}</p>{% endif %}
+      {% set pairs = entry_pairs(r) %}
+      {% if pairs %}<p class="entry-facts num">{% for k, v in pairs %}<span>{{ k }} <b>{{ v }}</b></span>{% endfor %}</p>{% endif %}
     {% endif %}
   </div>
 </li>

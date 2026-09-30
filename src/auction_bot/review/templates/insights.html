@@ -46,7 +46,8 @@
   <div class="card-head">
     <h2 class="mono">{{ code }}</h2>
     <span class="faint num">{{ mi.decided }} decided</span>
-    {% if mi.photos_never_consulted %}<span class="pill pill--info push">{{ icon('info') }} Photos never opened</span>{% endif %}
+    {% if mi.photos_never_consulted %}<span class="pill pill--info push">{{ icon('info') }} Nichibo never opened</span>{% endif %}
+    <a class="{{ '' if mi.photos_never_consulted else 'push' }}" href="/guides/{{ code }}">Guide {{ icon('chevron-right', 'icon--sm') }}</a>
   </div>
   <div class="card-body">
     <div class="tiles">
@@ -57,7 +58,7 @@
     </div>
 
     <div class="looked">
-      {% for label, share in [('Sheet zoomed', mi.sheet_zoom_share), ('Photos opened', mi.photos_share), ('Nichibo opened', mi.nichibo_share)] if share is not none %}
+      {% for label, share in [('Sheet zoomed', mi.sheet_zoom_share), ('Nichibo opened', mi.nichibo_share)] if share is not none %}
       <div class="meter">
         <div class="meter-head"><span>{{ label }}</span><b>{{ '%.0f' % (share * 100) }}%</b></div>
         <div class="meter-track"><div class="meter-fill" style="--v: {{ share }}"></div></div>
@@ -79,17 +80,7 @@
     {% endif %}
   </div>
   {% if proposals.get(code) %}
-  <div class="suggest suggest--foot">
-    <div><b>Skip rules these rejections justify.</b> Each would have skipped no lot you approved. Nothing is stored until you add it.</div>
-    {% for sg in proposals[code] %}
-    <form method="post" action="/rules/{{ code }}/skip">
-      <input type="hidden" name="line" value="{{ sg.line }}"><input type="hidden" name="next" value="/insights">
-      <span class="mono">{{ sg.line }}</span> <span class="faint">({{ sg.support }} rejection{{ 's' if sg.support != 1 }})</span>
-      <button class="btn--sm">Add rule</button>
-    </form>
-    {% endfor %}
-    <div class="faint">After adding a rule, run Replay from the <a href="/">overview</a> to apply it to the stored lots.</div>
-  </div>
+  <div class="card-foot"><a href="/guides/{{ code }}#suggested">{{ proposals[code]|length }} skip rule{{ 's' if proposals[code]|length != 1 }} suggested by these rejections</a></div>
   {% endif %}
 </section>
 {% endfor %}

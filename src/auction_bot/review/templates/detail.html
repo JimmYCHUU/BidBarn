@@ -10,7 +10,7 @@
   <h1 class="page-title">{{ f.year }} {{ f.make }} {{ f.model }} <span class="muted">{{ f.variant_text }}</span></h1>
   <span class="pill {{ p.status }}">{{ status_label(p.status) }}</span>
   <span class="pill {{ p.decision }}">{{ p.decision|capitalize }}</span>
-  <span class="page-sub">Guide: {{ p.guide_name }}</span>
+  <a class="page-sub" href="/guides/{{ p.model_code }}">Guide: {{ p.guide_name }} {{ icon('chevron-right', 'icon--sm') }}</a>
   <div class="end">
     <a class="btn" href="{{ f.url }}" target="_blank" rel="noopener" data-ev="nichibo_click">Open on Nichibo {{ icon('external-link', 'icon--sm') }}</a>
     {% if next_id %}<a class="btn" href="/p/{{ next_id }}" data-next="1">Next {{ icon('chevron-right', 'icon--sm') }}</a>{% endif %}
@@ -83,7 +83,7 @@
         {% if j.sheet_notes %}<p class="faint">Sheet notes: {{ j.sheet_notes }}</p>{% endif %}
         {% for n in p.judge.judge_notes %}<p class="faint">{{ n }}</p>{% endfor %}
         {% if p.judge.candidates %}<p class="faint num">Candidate amounts: {% for c in p.judge.candidates %}{{ '{:,}'.format(c.amount_k) }}K ({{ c.label }}){% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
-        {% if p.judge.unavailable %}<div class="banner">{{ icon('triangle-alert') }}<div>Model unavailable: {{ p.judge.unavailable }}. Judge the sheet and photos yourself, or run Judge pending from the <a href="/">overview</a> later.</div></div>{% endif %}
+        {% if p.judge.unavailable %}<div class="banner">{{ icon('triangle-alert') }}<div>Model unavailable: {{ p.judge.unavailable }}. Judge the sheet and photos yourself, or start Judge pending lots from the <a href="/runs">Runs page</a> later.</div></div>{% endif %}
       </div>
     </section>
     {% endif %}
@@ -103,13 +103,11 @@
     <section class="card">
       <div class="card-head"><h2>Your checklist</h2><span class="faint">Judge these from the sheet and the photos</span></div>
       <div class="card-body">
-        <div class="stack">
-        {% for item in s.checklist or [] %}
-          <label class="check-row"><input type="checkbox"> <span>{{ item }}</span></label>
+        {% if s.checklist %}
+        <ul class="checks">{% for item in s.checklist %}<li>{{ icon('circle', 'mark-unk') }}<span>{{ item }}</span></li>{% endfor %}</ul>
         {% else %}
-          <p class="muted">No text rules for this model. Check the sheet for grade, km and accident marks.</p>
-        {% endfor %}
-        </div>
+        <p class="muted">No text rules for this model. Check the sheet for grade, km and accident marks.</p>
+        {% endif %}
         {% if s.ocr %}
           <p class="faint num">Sheet OCR{% if s.ocr.available %}: seats <b>{{ s.ocr.seats if s.ocr.seats is not none else '?' }}</b>, model {{ s.ocr.model_code or '?' }}, {{ '{:,}'.format(s.ocr.km) if s.ocr.km else '?' }} km, grade {{ s.ocr.grade or '?' }}, {{ '4WD' if s.ocr.is_4wd else '4WD not read' }}{% else %} unavailable: {{ s.ocr.error }}{% endif %}</p>
         {% endif %}
@@ -156,6 +154,7 @@
         <div class="field field--narrow">
           <label for="d-amount">Bid amount (K JPY)</label>
           <input id="d-amount" type="number" name="amount" value="{{ p.proposed_bid_jpy_k or p.bid_jpy_k or '' }}" min="0" step="10">
+          {% if not p.bid_jpy_k %}<span class="help">The guide gave no amount for this lot. Type the amount you want; Approve wakes up when there is one.</span>{% endif %}
         </div>
         {% if p.judge and p.judge.judgement %}
         <div class="form-row form-row--top">
@@ -184,10 +183,9 @@
         </div>
         <input type="hidden" name="via" value="detail">
         <div class="row">
-          <button class="approve" name="action" value="approve" data-confirm="Confirm approve" {% if not p.bid_jpy_k %}disabled{% endif %}>Approve bid</button>
+          <button class="approve" name="action" value="approve" data-confirm="Confirm approve" {% if not (p.proposed_bid_jpy_k or p.bid_jpy_k) %}disabled{% endif %}>Approve bid</button>
           <button class="reject" name="action" value="reject">Reject</button>
         </div>
-        {% if lock_label != 'LIVE PLACEMENT' %}<div class="banner">{{ icon('lock') }}<div>{{ lock_label }}. Approving here records your decision for testing; nothing is submitted to Nichibo until the testing lock is lifted in config.yaml.</div></div>{% endif %}
       </form>
     </section>
     {% elif p.decision != 'pending' %}
@@ -196,7 +194,7 @@
       <div class="card-body">
         <p>{{ p.decision|capitalize }} at {{ p.decided_at }}{% if p.decision_reason %}: {{ p.decision_reason }}{% endif %}</p>
         {% if p.approved_bid_jpy_k %}<p class="num">Approved amount <b>{{ '{:,}'.format(p.approved_bid_jpy_k) }}K</b></p>{% endif %}
-        {% if p.telemetry %}<p class="faint num">{% if p.telemetry.decide_seconds is not none %}decided in {{ p.telemetry.decide_seconds|round|int }} s, {% endif %}sheet {{ 'zoomed' if p.telemetry.sheet_zoomed else 'not zoomed' }}, photos {{ 'opened' if p.telemetry.photos_clicked else 'not opened' }}{% if p.telemetry.amount_edited %}, amount changed from {{ '{:,}'.format(p.telemetry.proposed_jpy_k or 0) }}K{% endif %}, via {{ p.telemetry.via or 'detail' }}</p>{% endif %}
+        {% if p.telemetry %}<p class="faint num">{% if p.telemetry.decide_seconds is not none %}decided in {{ p.telemetry.decide_seconds|round|int }} s, {% endif %}sheet {{ 'zoomed' if p.telemetry.sheet_zoomed else 'not zoomed' }}{% if p.telemetry.amount_edited %}, amount changed from {{ '{:,}'.format(p.telemetry.proposed_jpy_k or 0) }}K{% endif %}, via {{ p.telemetry.via or 'detail' }}</p>{% endif %}
         {% if p.placement %}
           <div class="row"><span class="pill {{ 'pill--ok' if p.placement.ok else 'pill--bad' }}">{{ 'Placement ok' if p.placement.ok else 'Placement blocked' }}</span>{% if p.placement.dry_run %}<span class="pill pill--info">dry run</span>{% endif %}<span>{{ p.placement.message }}</span></div>
           <details><summary>Placement record</summary><pre>{{ p.placement }}</pre></details>
@@ -219,8 +217,7 @@
     </section>
     {% endif %}
     <section class="card">
-      <div class="card-head"><h2>Photos{% if p.photo_files %} ({{ p.photo_files|length }}){% endif %}</h2>
-        <a class="btn btn--sm push" href="{{ f.url }}" target="_blank" rel="noopener" data-ev="photos_click">Photos on Nichibo {{ icon('external-link', 'icon--sm') }}</a></div>
+      <div class="card-head"><h2>Photos{% if p.photo_files %} ({{ p.photo_files|length }}){% endif %}</h2></div>
       <div class="card-body">
         <p class="faint">{% if p.photo_files %}The photos the model looked at, in page order (photo 1 first). The full set is on Nichibo.{% else %}No photos were downloaded for this lot. Open it in your own signed-in browser.{% endif %}</p>
         {% if p.photo_files %}<div class="thumbs">
@@ -233,6 +230,16 @@
   </div>
 </div>
 <script>
+(function () {
+  // Approve follows the amount field: off while it is empty, on as soon as there is a number.
+  const amount = document.getElementById('d-amount');
+  const approve = document.querySelector('form.decide button.approve');
+  if (amount && approve) {
+    const follow = () => { approve.disabled = !(parseInt(amount.value, 10) > 0); };
+    amount.addEventListener('input', follow);
+    follow();
+  }
+})();
 (function () {
   const reason = document.querySelector('textarea[name=reason]');
   const rule = document.getElementById('rule_text');

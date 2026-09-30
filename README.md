@@ -1,7 +1,7 @@
 # BidBarn 🚗
 
 ![Python 3.12](https://img.shields.io/badge/python-3.12-blue)
-![Tests](https://img.shields.io/badge/tests-309%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-357%20passing-brightgreen)
 ![Playwright](https://img.shields.io/badge/browser-Playwright%20Chromium-45ba4b)
 ![No paid AI](https://img.shields.io/badge/AI%20APIs-none%20required-lightgrey)
 ![Testing lock](https://img.shields.io/badge/placement-testing%20lock%20on-orange)
@@ -132,7 +132,9 @@ Enforced in code, not by convention. The full list for anyone touching the code 
 
 Double-click `dashboard.cmd`. The page opens in your browser at http://127.0.0.1:8765 and the
 server runs in a minimised window called "BidBarn dashboard" in the taskbar. Close that window
-to stop it. A second double-click just opens the page again.
+to stop it. A second double-click just opens the page again. The overview offers the two modes,
+**Start Learn mode** and **Start Bid mode**, one click each; the single steps are in a fold on
+the Runs page.
 
 The first time, run `bidbarn.cmd` once before it (see below): that creates the Python
 environment the dashboard needs.
@@ -167,9 +169,12 @@ stops after the review; `--headed` shows the browser while it works. No exe and 
 purpose: Windows App Control on the office PC blocks unsigned programs, and a container has
 no screen for the sign-in window or for watch mode.
 
-Bid mode serves its own review page on the same address, so close the dashboard window before
-starting it. Learn mode and watch mode stay on `bidbarn.cmd` and `bot.cmd`: the dashboard does
-not start them.
+Both modes also start from the dashboard. From there, Bid mode waits at step 4 on the
+dashboard's own review page and continues when you click **Finish review** in the header; a
+Learn run ends with the session on its run page, lot by lot, with the candidate rules and an
+**Add** button each. From a console, `bidbarn.cmd bid` serves its own review page on the same
+address, so it stops with a message while the dashboard is running: start it from the dashboard
+instead, or close the dashboard window first. Watch mode on its own stays on `bot.cmd`.
 
 ### The separate steps
 
@@ -248,16 +253,18 @@ separate launchers, for when the dashboard is not running:
 
 | Page | What it shows |
 |---|---|
-| Overview (`/`) | The next step of the day with its one button, and the five steps with where each stands. Below it the day's log, newest first: every run with how it ended and its closing numbers, and every review session with its decisions. A run that is going is the first entry, open, with its guide row, counters and log. Beside the log: the counts, the sign-in state of both sites, the age of the guide snapshot, today's model calls against the free quota, and the other commands. |
-| Runs (`/runs`) | Every run started from the page, with its options, duration and outcome, and a panel to start any command with its options. |
-| A run (`/runs/<n>`) | Live while it runs: one cell per guide in a single row (tall and blue where lots were found, short where nothing was new, red on an error, the lit cell is the guide being scanned), the running totals, the log as it is written, and **Stop**. Afterwards: the outcome, the placements with their screenshots for a placement run, and the whole log, also as a file. |
+| Overview (`/`) | The date, one sentence of state, and the two modes: **Learn** (the bot watches you bid) and **Bid** (the whole day as one run), one button each. While a run is going the band shows it instead, with **Watch the run**, and a Bid run's five stages. Below it the day's log, newest first: every run with how it ended and its closing numbers, and every review session with its decisions. A run that is going is the first entry, open, with its guide row, counters and log. Beside the log one card of state chips: sign-in, guides, lots to review, approved bids not placed, placed, and a model quota only when it is short. |
+| Runs (`/runs`) | Every run, filtered as All, Learn, Bid or Steps, with its options, duration and outcome. A closed fold, **Start a single step**, starts one part of the day on its own: sign in, check the sign-in, fetch the guides, scan (model codes, lots per model), judge pending lots, replay (store or report), place as a dry run. |
+| Guides (`/guides`, `/guides/<code>`) | Every bidding guide in the snapshot, and one guide as a page: its requirements and the chips you judge, the bid grid per variant, your standing instructions with the form to add one, the skip rules your rejections justify, the playbook and your learn-mode comments, recent decisions, and the lots under the code. Every lot links to its guide. |
+| A run (`/runs/<n>`) | Live while it runs: one cell per guide in a single row (tall and blue where lots were found, short where nothing was new, red on an error, the lit cell is the guide being scanned), the running totals, the log as it is written, and **Stop**. A Bid run shows its five stages and, at the review stage, **Open the review**. Afterwards: the outcome, the placements with their screenshots, and the whole log, also as a file. A Learn run shows your session: per lot what you did, what the bot would have done and what the model said, the notes you typed, and the rules your comments suggest with an **Add** button each. |
 | Insights (`/insights`) | What `bot.cmd insights` prints, as a page: per model how many you decided, how long a decision takes, what you looked at, rejection themes, and the skip rules your rejections justify, each with an *Add rule* button. |
 | Settings (`/config`) | What `config.yaml` says, read only: the locks, the scan settings, the judgement providers (whether a key is set, never the key), the sites and the folders. |
 
-What the page can start: scan, fetch the guides, judge pending lots, replay (report or store),
-place as a dry run, insights, the sign-in check and the sign-in window. Nothing else. It cannot
-ask for a live placement, it cannot change the locks, and it decides no lot: approving stays a
-click on the review page. One command runs at a time; a second one is refused with a link to
+What the page can start: Learn mode, Bid mode, and the single steps (scan, fetch the guides,
+judge pending lots, replay, place as a dry run, the sign-in check and the sign-in window).
+Nothing else. It cannot ask for a live placement, it cannot change the locks, and it decides no
+lot: approving stays a click on the review page, and a suggested skip rule becomes a rule only
+when you click **Add**. One command runs at a time; a second one is refused with a link to
 the one that is running. **Stop** asks the run to end at its next check point (before the next
 page load) and ends its process after 20 seconds if it has not; a placement is never stopped in
 the middle of a lot. If the dashboard window is closed while a command runs, the command
@@ -285,7 +292,7 @@ Recorded here so the code and the team agree. Change the code only when this lis
 
 | Rule | Confirmed |
 |---|---|
-| Odometer bands | Upper bound inclusive: 40K–50K covers 40,001 to 50,000 km |
+| Odometer bands | Upper bound inclusive: 40K–50K covers 40,001 to 50,000 km. 0 km is the lowest band; a km no band covers (below the first band, or in a gap) takes the closest band; above the last band is a skip (Jim, 2026-09-30) |
 | Grade | Nichibo's listing grade; 0, R, RA or blank never bid |
 | Grade bonus | A positive bonus stored as "grade 4" applies to 4 and above (highest threshold only); negative adjustments apply to that exact grade |
 | Dials (a percentage such as ×92 %) | Already inside the grid values; never applied again, including the E-Class Wagon's dial |
@@ -359,8 +366,8 @@ the checklist as "NOT understood". Add lines on the review page, with
 
 | Command | Purpose |
 |---|---|
-| `bot.cmd learn` | Learn mode (`bidbarn.cmd`, L): watch you bid, then scan the same codes, compare, suggest rules |
-| `bot.cmd bid [--skip-scan] [--no-place] [--headed]` | Bid mode (`bidbarn.cmd`, B): sign-in check, guides, scan, review, place |
+| `bot.cmd learn` | Learn mode (`bidbarn.cmd` L, or **Start Learn mode** on the dashboard): watch you bid, then scan the same codes, compare, suggest rules |
+| `bot.cmd bid [--skip-scan] [--no-place] [--headed] [--no-browser]` | Bid mode (`bidbarn.cmd` B, or **Start Bid mode** on the dashboard): sign-in check, guides, scan, review, place. Under the dashboard it waits for the header's Finish button instead of serving its own review page |
 | `bot.cmd dashboard [--no-browser]` | Serve the dashboard and the review pages (`dashboard.cmd`). If it is already running, only opens the page |
 | `bot.cmd login [--wait]` | One-time sign-in to Nichibo and the Carbarn dashboard. `--wait` needs no keyboard: it opens a window only if a site is signed out and continues by itself |
 | `bot.cmd check-login` | Says, without a window, whether both sites are signed in |
@@ -403,6 +410,8 @@ Everything the bot downloads stays on the office PC. Git never sees any of it.
 | "… is running (run N)" on the dashboard | One command runs at a time. Follow the link to watch it, or stop it. |
 | The dashboard says "did not answer" | Its window was closed. Double-click `dashboard.cmd`. |
 | The page does not open on `dashboard.cmd` | Something else uses port 8765, usually a `review.cmd` or `bidbarn.cmd` window. Close it and try again. |
+| "The dashboard is running on that address" from `bidbarn.cmd bid` | Start Bid mode from the dashboard instead, or close the dashboard window first. |
+| A Learn run started from the page shows no browser window | Check the run's log for "Watching. Two tabs are open"; if it is there and no window came up, see the note on `CREATE_NO_WINDOW` in `docs/dashboard.md` (Not verified yet). Meanwhile `bidbarn.cmd learn` opens it from a console. |
 | "STOPPED: No rules snapshot found" | Run `bot.cmd fetch-rules` (or `scan.cmd`, which does it first). |
 | "Rules snapshot is N h old" | Snapshots older than `max_rules_age_hours` are refused. Fetch again. |
 | OCR "unavailable" on the review page | Install the Visual C++ runtime linked above and restart. |
@@ -417,7 +426,7 @@ Everything the bot downloads stays on the office PC. Git never sees any of it.
 .venv\Scripts\python -m pytest -q
 ```
 
-309 tests: the golden cases from the manual walkthrough against the real GDH206 guide, variant
+357 tests: the golden cases from the manual walkthrough against the real GDH206 guide, variant
 resolution on captured Alphard and E-Class guides, the seat rule, OCR parsing on three real sheets
 plus the header-band crop and its fallback, an offline end-to-end scan against captured Nichibo
 pages, the card-and-sheet path that opens no page, the placeholder path that parks a lot

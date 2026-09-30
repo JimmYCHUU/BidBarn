@@ -1,7 +1,11 @@
 {% extends "base.html" %}
-{% from "_parts.html" import console, status_pill %}
+{% from "_parts.html" import console, status_pill, stages %}
 {% block title %}Run {{ run.id }} · {{ command_label(run.command) }} · BidBarn{% endblock %}
 {% block body %}
+{% set summary = run.summary or {} %}
+{% set stage = (run.progress or {}).get('stage') %}
+{% set dry = lock_label != 'LIVE PLACEMENT' %}
+{% set session = run.command == 'learn' and run.status != 'running' and summary.lots is defined %}
 <div class="page-head">
   <h1 class="page-title">{{ command_label(run.command) }} <span class="muted num">run {{ run.id }}</span></h1>
   {% if options_words(run) %}<span class="page-sub">{{ options_words(run) }}</span>{% endif %}
@@ -14,22 +18,108 @@
 {% if run.status == 'failed' and run.error %}
 <div class="banner banner--bad">{{ icon('circle-x') }}<div><b>The run stopped with an error.</b> {{ run.error }}{% if 'login' in run.error|lower %} Sign in from the <a href="/">overview</a>, then start it again.{% endif %}</div></div>
 {% elif run.status == 'stopped' %}
-<div class="banner">{{ icon('square') }}<div><b>The run was stopped.</b> {{ run.error or 'What it had stored up to then is kept.' }}</div></div>
+<div class="banner">{{ icon('square') }}<div><b>The run was stopped.</b> {% if run.command == 'bid' and stage == 'review' %}Your approvals are kept; nothing was placed.{% elif run.command == 'learn' %}The recording is kept; nothing was scanned or compared.{% else %}{{ run.error or 'What it had stored up to then is kept.' }}{% endif %}</div></div>
+{% endif %}
+
+{% if run.command == 'bid' %}
+<section class="card">
+  <div class="card-body">
+    {{ stages(stage, run.status) }}
+    <div class="banner banner--info" data-review-banner{% if not (run.status == 'running' and stage == 'review') %} hidden{% endif %}>{{ icon('list-checks') }}<div>The scan is done. Review the lots, then click Finish in the header to place the approved bids{{ ' as a dry run' if dry }}. <a class="btn btn--primary btn--sm" href="/review">Open the review</a></div></div>
+  </div>
+</section>
+{% endif %}
+
+{% if session %}
+<section class="card">
+  <div class="card-head"><h2>Your session</h2><span class="faint mono">{{ summary.session }}</span></div>
+  <div class="card-body">
+    {% set c = summary.counts or {} %}
+    <dl class="facts num">
+      <div class="fact"><dt>Lots</dt><dd>{{ c.lots or 0 }}</dd></div>
+      <div class="fact"><dt>Agree</dt><dd>{{ c.agree or 0 }}</dd></div>
+      <div class="fact"><dt>Disagree</dt><dd>{{ c.disagree or 0 }}</dd></div>
+      <div class="fact"><dt>Model codes searched</dt><dd class="mono">{{ summary.searched|join(', ') or 'none' }}</dd></div>
+    </dl>
+  </div>
+  {% if summary.lots %}
+  <div class="table-wrap">
+  <table class="lots wide session-table">
+    <thead><tr><th>Lot</th><th>You</th><th>The bot</th><th>The model</th><th>Guide</th></tr></thead>
+    <tbody>
+    {% for l in summary.lots %}
+      {% set j = l.jim or {} %}
+      {% set b = l.bot or {} %}
+      {% set md = l.model %}
+      <tr>
+        <td>{% if l.proposal_id %}<a class="lot-title" href="/p/{{ l.proposal_id }}">{{ l.title or l.ref_no }}</a>{% else %}<span class="lot-title">{{ l.title or l.ref_no }}</span>{% endif %}<div class="mono faint">{{ l.ref_no }}</div></td>
+        <td>
+          <div class="row">
+            {% if j.bid_k %}<span class="pill pill--ok">bid {{ '{:,}'.format(j.bid_k) }}K</span>
+            {% elif j.typed_k %}<span class="pill pill--info">typed {{ '{:,}'.format(j.typed_k) }}K</span>{% endif %}
+            {% if j.carted %}<span class="pill pill--info">carted</span>{% endif %}
+            {% if j.opened %}<span class="pill pill--plain">opened</span>{% endif %}
+            {% if not (j.bid_k or j.typed_k or j.carted or j.opened) %}<span class="pill pill--plain">passed</span>{% endif %}
+          </div>
+          {% for r in j.reasons or [] %}<div class="faint">{{ r }}</div>{% endfor %}
+        </td>
+        <td>
+          {% if b.status %}
+          <span class="pill {{ b.status }}">{{ status_label(b.status) }}</span>{% if b.bid_k %} <b class="num">{{ '{:,}'.format(b.bid_k) }}K</b>{% endif %}
+          {% if b.delta_k %}<div class="faint num">you {{ '%+d' % b.delta_k }}K against the grid</div>{% endif %}
+          {% if b.reason %}<div class="faint">{{ b.reason }}</div>{% endif %}
+          {% else %}<span class="muted">never seen</span>{% endif %}
+        </td>
+        <td>
+          {% if md %}
+          <span class="pill {{ 'pill--ok' if md.recommendation == 'bid' else ('pill--bad' if md.recommendation == 'skip' else 'pill--warn') }}">model: {{ md.recommendation }}</span>
+          {% if md.proposed_k %} <span class="num faint">{{ '{:,}'.format(md.proposed_k) }}K</span>{% endif %}
+          {% if md.agree is true %} <span class="pill pill--ok">agree</span>{% elif md.agree is false %} <span class="pill pill--warn">disagree</span>{% endif %}
+          {% else %}<span class="muted">no judgement</span>{% endif %}
+        </td>
+        <td>{% if l.code %}<a class="mono" href="/guides/{{ l.code }}">{{ l.code }}</a>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="empty">{{ icon('graduation-cap') }}<h3>No lots in this session</h3><p>The browser was closed before a lot was opened.</p></div>
+  {% endif %}
+  {% if summary.notes %}
+  <div class="card-body">
+    <h3>Notes</h3>
+    <ul class="checks">{% for nt in summary.notes %}<li>{{ icon('flag', 'mark-unk') }}<span><span class="muted">{{ nt.where }}</span> {{ nt.text }}</span></li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+  {% if summary.candidates %}
+  <div class="suggest suggest--foot">
+    <div><b>Rules your comments suggest.</b> Nothing is stored until you add it.</div>
+    {% for cd in summary.candidates %}
+    <form method="post" action="/rules/{{ cd.code }}/skip">
+      <input type="hidden" name="line" value="{{ cd.line }}"><input type="hidden" name="next" value="/runs/{{ run.id }}">
+      <span class="mono">{{ cd.line }}</span>{% if cd.from_reason %} <span class="faint">from: {{ cd.from_reason }}</span>{% endif %}
+      <button class="btn--sm">Add</button>
+    </form>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
 {% endif %}
 
 {% set pairs = summary_pairs(run) %}
-{% if pairs and run.status != 'running' %}
+{% if pairs and run.status != 'running' and not session %}
 <section class="card">
   <div class="card-head"><h2>Outcome</h2>{{ status_pill(run.status) }}</div>
   <div class="card-body">
     <dl class="facts num">
       {% for k, v in pairs %}<div class="fact"><dt>{{ k }}</dt><dd>{{ v }}</dd></div>{% endfor %}
     </dl>
-    {% if run.summary and run.summary.errors %}
-    <details><summary>The errors ({{ run.summary.errors_total or run.summary.errors|length }})</summary><pre>{% for e in run.summary.errors %}{{ e }}
+    {% if summary.errors %}
+    <details><summary>The errors ({{ summary.errors_total or summary.errors|length }})</summary><pre>{% for e in summary.errors %}{{ e }}
 {% endfor %}</pre></details>
     {% endif %}
-    {% if run.command == 'scan' and (run.summary.review or run.summary.bid) %}<div class="row"><a class="btn btn--primary" href="/review">{{ icon('list-checks') }} Review the lots</a></div>{% endif %}
+    {% if run.command in ('scan', 'bid') and (summary.review or summary.bid) %}<div class="row"><a class="btn btn--primary" href="/review">{{ icon('list-checks') }} Review the lots</a></div>{% endif %}
   </div>
 </section>
 {% endif %}

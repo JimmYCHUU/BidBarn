@@ -135,7 +135,8 @@ def test_scan_route1_end_to_end(cfg):
     r = client.get(f"/p/{p['id']}")
     assert r.status_code == 200
     assert "Your checklist" in r.text and "No sticker paint" in r.text and "Skip ambulance conversions" in r.text
-    assert "sheet.jpg" in r.text and "1,240" in r.text and "Photos on Nichibo" in r.text
+    assert "sheet.jpg" in r.text and "1,240" in r.text and "Open on Nichibo" in r.text  # one link to Nichibo, in the head
+    assert 'href="/guides/GDH206"' in r.text  # the lot links to its guide
     store.close()
 
 

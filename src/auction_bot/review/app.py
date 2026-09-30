@@ -17,8 +17,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
 
-from auction_bot.carbarn.client import append_override, load_rules
+from auction_bot.carbarn.client import append_override
 from auction_bot.config import Config
+from auction_bot.dashboard import status as dashboard_status
 from auction_bot.insights import propose_skip_lines
 from auction_bot.nichibo.facts import VehicleFacts
 from auction_bot.rules.instructions import InstructionError, is_structured, parse_instruction, suggest_from_reason
@@ -49,10 +50,56 @@ def _load(row) -> dict:
     d["recommendation"] = soft.get("recommendation") if d["judge"] else None
     d["proposed_bid_jpy_k"] = (soft.get("proposed_bid_jpy_k") if d["judge"] else None) or d.get("bid_jpy_k")
     d["badges"] = judge_badges(soft) if d["judge"] else []
+    lines = check_lines(d.get("hard"), soft)
+    d["verdict_counts"] = verdict_counts(d["badges"])
+    d["verdict_title"] = verdict_title(d["badges"])
+    d["why_line"] = why_line(d, lines)
+    d["more_lines"] = max(0, len(lines) - 1) if not d["judge"] else 0
     return d
 
 
 REC_RANK = {"bid": 0, "review": 1, "skip": 2}
+VERDICT_WORDS = {"✓": "pass", "✗": "fail", "?": "unclear", "·": "unclear"}
+
+
+def check_lines(hard: dict | None, soft: dict | None) -> list[str]:
+    """What the reviewer has to check on a lot: the failed hard checks, then the checklist without the
+    lines that only say how the lot was judged (the same list the review row used to print)."""
+    out = [f"{c.get('name')}: {c.get('detail')}" for c in (hard or {}).get("checks") or [] if not c.get("ok")]
+    out += [c for c in (soft or {}).get("checklist") or [] if not str(c).startswith(("Auto-skip", "Judged from"))]
+    return out
+
+
+def verdict_counts(badges: list[dict]) -> dict:
+    """How many requirements the model passed, failed and left unclear, from `judge_badges`."""
+    counts = {"ok": 0, "bad": 0, "unk": 0}
+    for b in badges:
+        counts[b["cls"] if b["cls"] in counts else "unk"] += 1
+    return counts
+
+
+def verdict_title(badges: list[dict]) -> str:
+    """Every requirement on its own line ("pass  No sticker paint: photo 2: painted body (high)"), for a title attribute."""
+    lines = []
+    for b in badges:
+        word = VERDICT_WORDS.get(b["mark"], b["mark"])
+        lines.append(f"{word}  {b['text']}" + (f": {b['evidence']}" if b.get("evidence") else ""))
+    return "\n".join(lines)
+
+
+def why_line(p: dict, lines: list[str] | None = None) -> str:
+    """The one line the review row shows: a judged lot's first failed requirement, else the model's summary,
+    else the first thing the reviewer has to check."""
+    if lines is None:
+        lines = check_lines(p.get("hard"), p.get("soft"))
+    if p.get("judge"):
+        failed = next((b for b in p.get("badges") or [] if b["cls"] == "bad"), None)
+        if failed:
+            return f"{failed['text']}: {failed['evidence']}" if failed.get("evidence") else failed["text"]
+        summary = ((p["judge"].get("judgement") or {}).get("summary") or "").strip()
+        if summary:
+            return summary
+    return lines[0] if lines else ""
 
 
 def judge_badges(soft: dict) -> list[dict]:
@@ -166,7 +213,7 @@ def create_app(cfg: Config, finish_event=None, jobs=None) -> FastAPI:
     from contextlib import asynccontextmanager
 
     from auction_bot.dashboard import routes as dashboard_routes
-    from auction_bot.dashboard.jobs import JobManager
+    from auction_bot.dashboard.jobs import JobManager, NotRunning
 
     jobs = jobs if jobs is not None else JobManager(cfg)
 
@@ -178,7 +225,18 @@ def create_app(cfg: Config, finish_event=None, jobs=None) -> FastAPI:
     app = FastAPI(title="BidBarn", lifespan=lifespan)
     app.state.jobs = jobs
     templates = Jinja2Templates(directory=str(TEMPLATES))
-    templates.env.globals["can_finish"] = finish_event is not None
+
+    class CanFinish:
+        """Whether the header shows Finish: the console's `bot bid` is waiting, or a dashboard Bid run is.
+        Callable (`can_finish()`), and true or false on its own for a template that tests it directly."""
+
+        def __call__(self) -> bool:
+            return finish_event is not None or jobs.review_waiting() is not None
+
+        def __bool__(self) -> bool:
+            return self()
+
+    templates.env.globals["can_finish"] = CanFinish()
     templates.env.globals["icon"] = icon
     templates.env.globals["status_label"] = status_label
     templates.env.globals["lot_title"] = lot_title
@@ -192,17 +250,24 @@ def create_app(cfg: Config, finish_event=None, jobs=None) -> FastAPI:
         s.cfg = cfg  # so feedback can reach the playbook files
         return s
 
-    guide_names: dict[int, str] = {}
-    try:
-        for r, _ in [load_rules(cfg)]:
-            guide_names.update({rule.guide_id: f"{rule.make} {rule.model} {rule.model_code}" for rule in r})
-    except Exception:  # no snapshot yet: fall back to model codes
-        pass
+    def guide_names() -> dict[int, str]:
+        """Guide id to "Make Model CODE", from the newest snapshot each time (a guides fetch changes it)."""
+        try:
+            codes = dashboard_status.rules_state(cfg)["codes"]
+        except Exception:  # no snapshot yet, or one that cannot be read: the pages fall back to model codes
+            return {}
+        return {g["guide_id"]: f"{g['name']} {g['code']}".strip() for g in codes}
 
     def lock_label() -> str:
         if not cfg.project_finished:
             return "TESTING: no bids are placed"
         return "DRY RUN" if cfg.dry_run else "LIVE PLACEMENT"
+
+    def lock_state() -> str:
+        """testing | dry | live, for the page's body attribute."""
+        if not cfg.project_finished:
+            return "testing"
+        return "dry" if cfg.placement_mode(False)[0] else "live"
 
     def next_pending(s: Store, exclude: int | None = None) -> int | None:
         row = s.conn.execute(
@@ -218,7 +283,7 @@ def create_app(cfg: Config, finish_event=None, jobs=None) -> FastAPI:
                 context["counts"] = s.counts()
             finally:
                 s.close()
-        context.update(nav=nav, lock_label=lock_label(), dry_run=cfg.dry_run)
+        context.update(nav=nav, lock_label=lock_label(), dry_run=cfg.dry_run, lock_state=lock_state())
         return templates.TemplateResponse(request, name, context)
 
     dashboard_routes.register(app, templates, cfg, jobs, store, page)
@@ -231,18 +296,19 @@ def create_app(cfg: Config, finish_event=None, jobs=None) -> FastAPI:
             counts = s.counts()
             multi = s.multi_guide_refs()
             rows.sort(key=triage_sort_key)
+            names = guide_names()
             groups = []
             for p in rows:
                 p["multi_guide"] = p["ref_no"] in multi
                 if not groups or groups[-1]["model_code"] != p["model_code"]:
-                    groups.append({"model_code": p["model_code"], "guide_name": guide_names.get(p["guide_id"], p["model_code"]),
+                    groups.append({"model_code": p["model_code"], "guide_name": names.get(p["guide_id"], p["model_code"]),
                                    "rows": [], "suggestions": propose_skip_lines(s.decisions_with_facts(p["model_code"]))})
                 groups[-1]["rows"].append(p)
         finally:
             s.close()
         return templates.TemplateResponse(request, "triage.html", {
-            "groups": groups, "counts": counts, "model": model or "", "lock_label": lock_label(), "dry_run": cfg.dry_run,
-            "nav": "review",
+            "groups": groups, "total": len(rows), "counts": counts, "model": model or "", "lock_label": lock_label(),
+            "dry_run": cfg.dry_run, "lock_state": lock_state(), "nav": "review",
         })
 
     @app.get("/list", response_class=HTMLResponse)
@@ -261,7 +327,8 @@ def create_app(cfg: Config, finish_event=None, jobs=None) -> FastAPI:
             row["multi_guide"] = row["ref_no"] in multi
         return templates.TemplateResponse(request, "index.html", {
             "rows": rows, "counts": counts, "decision": decision, "status": status or "", "model": model or "",
-            "placed": placed if placed in ("0", "1") else "", "dry_run": cfg.dry_run, "lock_label": lock_label(), "nav": "list",
+            "placed": placed if placed in ("0", "1") else "", "dry_run": cfg.dry_run, "lock_label": lock_label(),
+            "lock_state": lock_state(), "nav": "list",
         })
 
     @app.get("/p/{pid}", response_class=HTMLResponse)
@@ -272,8 +339,9 @@ def create_app(cfg: Config, finish_event=None, jobs=None) -> FastAPI:
             if row is None:
                 raise HTTPException(404)
             p = _load(row)
-            p["siblings"] = [dict(x, guide_name=guide_names.get(x["guide_id"], x["model_code"])) for x in s.siblings(p["ref_no"], pid)]
-            p["guide_name"] = guide_names.get(p["guide_id"], p["model_code"])
+            names = guide_names()
+            p["siblings"] = [dict(x, guide_name=names.get(x["guide_id"], x["model_code"])) for x in s.siblings(p["ref_no"], pid)]
+            p["guide_name"] = names.get(p["guide_id"], p["model_code"])
             dec = s.decision_for(pid)
             p["telemetry"] = dict(dec) if dec else None
             counts = s.counts()
@@ -283,7 +351,8 @@ def create_app(cfg: Config, finish_event=None, jobs=None) -> FastAPI:
         finally:
             s.close()
         return templates.TemplateResponse(request, "detail.html", {"p": p, "next_id": nxt, "counts": counts, "nav": "review",
-                                                                    "dry_run": cfg.dry_run, "lock_label": lock_label()})
+                                                                    "dry_run": cfg.dry_run, "lock_label": lock_label(),
+                                                                    "lock_state": lock_state()})
 
     @app.post("/p/{pid}/event")
     async def log_event(pid: int, request: Request):
@@ -364,17 +433,28 @@ def create_app(cfg: Config, finish_event=None, jobs=None) -> FastAPI:
 
     @app.post("/finish", response_class=HTMLResponse)
     def finish(request: Request):
-        """Hand control back to `bot run`, which then places the approved bids."""
+        """End the review: the console's `bot bid` (its event) or the dashboard's Bid run waiting at the
+        review (its finish file) then places the approved bids. Nothing is decided here."""
+        run_id = None
         if finish_event is None:
-            raise HTTPException(404, "not started by bot run")
+            cur = jobs.review_waiting()
+            if cur is None:
+                raise HTTPException(404, "no review is waiting: start Bid mode from the overview")
+            try:
+                jobs.finish_review(cur["id"])
+            except NotRunning as exc:
+                raise HTTPException(409, str(exc))
+            run_id = cur["id"]
         s = store()
         try:
             counts = s.counts()
         finally:
             s.close()
-        finish_event.set()
+        if finish_event is not None:
+            finish_event.set()
         return templates.TemplateResponse(request, "finished.html", {
-            "waiting": counts["approved"], "counts": counts, "lock_label": lock_label(), "nav": "review",
+            "waiting": counts["approved"], "counts": counts, "lock_label": lock_label(), "lock_state": lock_state(),
+            "nav": "review", "run_id": run_id,
         })
 
     @app.post("/rules/{code}/skip")

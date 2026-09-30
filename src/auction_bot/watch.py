@@ -11,6 +11,10 @@ In this mode the bot makes no request of its own and never touches the bid form;
 is Jim's own manual bid. The Stock URL guard is off for this window (it would block his own
 clicks), which is the one documented exception in CLAUDE.md. `bot watch --report DIR`
 turns a recorded session into a per-lot timeline, offline.
+
+Started from the dashboard (Learn mode), the recording reports its counts every couple of
+seconds and stops at the dashboard's Stop: the recording so far is kept, nothing is scanned
+or compared. Closing the browser window is how a session finishes.
 """
 from __future__ import annotations
 
@@ -24,10 +28,12 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
+from auction_bot import progress
 from auction_bot.config import Config
 
 NOT_A_LOT = {"search", "cart", "bid", "login", "today", "favourites", "favorites", "history",
              "jsonAuctionSheetData", "jsonSuggested", "jsonMaketPrice"}
+PROGRESS_SECONDS = 2.0  # how often the recording tells the dashboard its counts, when they changed
 
 # Injected into every Nichibo and Carbarn dashboard page (the dashboard tab may live on a
 # second monitor; it is the same browser session, so it is recorded the same way). Sends
@@ -193,6 +199,8 @@ class Recorder:
         self._queue: list[tuple[object, str, float]] = []  # (page, tag, not_before)
         self._last_nav: dict[int, tuple[str, float]] = {}  # per tab: (url, when) to drop duplicates
         self.counts: Counter = Counter()
+        self.lots: set[str] = set()  # lot pages opened so far
+        self.searches: list[str] = []  # model codes searched so far, in order
 
     def record(self, type: str, **data) -> dict:
         ev = {"t": now_iso(), "type": type, **data}
@@ -234,6 +242,10 @@ class Recorder:
         self._last_nav[id(page)] = (url, time.time())
         ref = ref_from_url(url)
         chassis = search_chassis(url)
+        if ref:
+            self.lots.add(ref)
+        if chassis:
+            self.searches.append(chassis)
         self.record("nav", url=url, ref=ref, chassis=chassis, **extra)
         self._queue.append((page, "lot" if ref else ("search" if chassis else "page"), time.time() + 1.2))
 
@@ -333,10 +345,16 @@ def _record(cfg: Config, echo, headless: bool, max_seconds: float | None) -> Pat
         closed = {"v": False}
         ctx.on("close", lambda: closed.__setitem__("v", True))
         deadline = time.time() + max_seconds if max_seconds else None
+        told, told_at = -1, 0.0
         try:
             while not closed["v"]:
+                progress.check_cancel()  # Stop on the dashboard: Cancelled runs the finally below and is not caught here
                 if deadline and time.time() > deadline:
                     break
+                if rec.count != told and time.time() - told_at >= PROGRESS_SECONDS:
+                    told, told_at = rec.count, time.time()
+                    progress.emit(stage="learn", phase="recording", session=out.name, events=rec.count, lots=len(rec.lots),
+                                  bids=rec.counts["bid"], searched=list(dict.fromkeys(rec.searches)))
                 rec.flush_screenshots()
                 live = [p for p in ctx.pages if not p.is_closed()]
                 if not live:

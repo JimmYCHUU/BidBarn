@@ -47,7 +47,30 @@ CRASH = 'print("working")\nraise RuntimeError("boom")\n'
 SLOW = 'import time\nprint("one", flush=True)\ntime.sleep(0.8)\nprint("two", flush=True)\n'
 DEAF = 'import time\nprint("not listening", flush=True)\ntime.sleep(60)\n'
 LATER = 'import json, time\nprint("working", flush=True)\ntime.sleep(1.5)\nprint("SUMMARY " + json.dumps({"guides": 1}))\n'
-SCRIPTS = {"ok": OK, "wait": WAIT, "fail": FAIL, "crash": CRASH, "slow": SLOW, "deaf": DEAF, "later": LATER}
+REVIEW = r'''
+import json, os, sys, time
+finish = os.environ["BIDBARN_FINISH_FILE"]
+print("stale finish file: " + ("yes" if os.path.exists(finish) else "no"), flush=True)
+print("PROGRESS " + json.dumps({"stage": "review", "pending": 2, "approved": 1, "waiting": True}), flush=True)
+end = time.time() + 30
+while not os.path.exists(finish) and not os.path.exists(os.environ["BIDBARN_CANCEL_FILE"]) and time.time() < end:
+    time.sleep(0.05)
+if os.path.exists(os.environ["BIDBARN_CANCEL_FILE"]):
+    print("STOPPED: stopped from the dashboard")
+    sys.exit(1)
+print("PROGRESS " + json.dumps({"stage": "review", "pending": 2, "approved": 1, "waiting": False}), flush=True)
+os.remove(finish)
+print("SUMMARY " + json.dumps({"approved": 1, "lines": ["x"]}))
+'''
+TOUCH = r'''
+import os
+path = os.environ["BIDBARN_FINISH_FILE"]
+print("finish file: " + path)
+print("stale finish file: " + ("yes" if os.path.exists(path) else "no"))
+open(path, "w").write("left behind")
+'''
+SCRIPTS = {"ok": OK, "wait": WAIT, "fail": FAIL, "crash": CRASH, "slow": SLOW, "deaf": DEAF, "later": LATER,
+           "bid": REVIEW, "scan": REVIEW, "touch": TOUCH}
 
 
 def table(needs_profile: bool = False) -> dict[str, Cmd]:
@@ -264,7 +287,7 @@ def test_a_held_profile_refuses_commands_that_need_it(cfg, make):
 def test_unknown_command_and_failed_start(cfg, make):
     m = make()
     with pytest.raises(BadRequest):
-        m.start("scan")  # not in this manager's table
+        m.start("judge")  # not in this manager's table
     with pytest.raises(BadRequest):
         m.start("ok", {"live": True})
 
@@ -306,6 +329,7 @@ def test_reconcile_closes_runs_whose_process_is_gone(cfg, make):
     finally:
         store.close()
     (cfg.runs_dir / f"{a}.cancel").write_text("stop", encoding="utf-8")
+    (cfg.runs_dir / f"{a}.finish").write_text("finish", encoding="utf-8")
     untouched = make(reconcile=False)
     assert untouched.get(a)["status"] == "running"
     m = make()
@@ -314,7 +338,7 @@ def test_reconcile_closes_runs_whose_process_is_gone(cfg, make):
         assert run["status"] == "stopped" and run["finished_at"] and run["exit_code"] is None
         assert run["error"] == "the dashboard was closed while this run was going"
     assert m.get(c)["status"] == "ok" and m.current() is None
-    assert not (cfg.runs_dir / f"{a}.cancel").exists()
+    assert not (cfg.runs_dir / f"{a}.cancel").exists() and not (cfg.runs_dir / f"{a}.finish").exists()
     assert m.start("ok")["id"] == 4  # nothing is in the way
 
 
@@ -378,6 +402,70 @@ def test_a_process_id_handed_out_again_is_not_adopted(cfg, make, monkeypatch):
     assert m.current() is None and m.get(run_id)["status"] == "stopped"
 
 
+# -- the finish file: Bid mode waiting at the review ------------------------------------------------------
+
+def _waiting(m, run_id: int, seconds: float = 30.0) -> dict:
+    end = time.monotonic() + seconds
+    while time.monotonic() < end:
+        cur = m.review_waiting()
+        if cur is not None and cur["id"] == run_id:
+            return cur
+        time.sleep(0.05)
+    raise AssertionError(f"run {run_id} never waited at the review: {m.get(run_id)}")
+
+
+def test_finish_file_is_named_in_the_environment_and_tidied(cfg, make):
+    cfg.runs_dir.mkdir(parents=True, exist_ok=True)
+    (cfg.runs_dir / "1.finish").write_text("stale", encoding="utf-8")  # left by an earlier run with this id
+    m = make()
+    run = m.start("touch")
+    done = finished(m, run["id"])
+    lines = m.lines_after(run["id"])["lines"]
+    assert done["status"] == "ok" and lines[0] == f"finish file: {cfg.runs_dir / '1.finish'}" and lines[1] == "stale finish file: no"
+    assert not (cfg.runs_dir / "1.finish").exists()  # the file the script left behind is tidied with the run
+    assert not (cfg.runs_dir / "1.cancel").exists()
+
+
+def test_review_waiting_and_finish_review(cfg, make):
+    m = make()
+    assert m.review_waiting() is None
+    with pytest.raises(NotRunning):
+        m.finish_review(1)
+    run = m.start("bid")
+    cur = _waiting(m, run["id"])
+    assert cur["command"] == "bid" and cur["progress"] == {"stage": "review", "pending": 2, "approved": 1, "waiting": True}
+    assert m.lines_after(run["id"])["lines"][0] == "stale finish file: no"
+    with pytest.raises(NotRunning, match="run 999 is not waiting"):
+        m.finish_review(999)
+    assert not (cfg.runs_dir / f"{run['id']}.finish").exists()
+    m.finish_review(run["id"])
+    done = finished(m, run["id"])
+    assert done["status"] == "ok" and done["summary"] == {"approved": 1, "lines": ["x"]}
+    assert done["progress"]["waiting"] is False and m.review_waiting() is None
+    assert not (cfg.runs_dir / f"{run['id']}.finish").exists()  # the run removed it, and the runner would have
+    with pytest.raises(NotRunning):
+        m.finish_review(run["id"])  # over: nothing waits
+
+    # The same progress line from any other command is not a review that Finish can end.
+    scan = m.start("scan")
+    seen(m, scan["id"], "stale finish file")
+    time.sleep(0.3)
+    assert m.current()["id"] == scan["id"] and m.review_waiting() is None
+    with pytest.raises(NotRunning):
+        m.finish_review(scan["id"])
+    m.cancel(scan["id"])
+    assert finished(m, scan["id"])["status"] == "stopped"
+
+    # Stop asked while a Bid run waits: it is no longer "waiting", the run ends stopped, approvals are untouched here.
+    again = m.start("bid")
+    _waiting(m, again["id"])
+    m.cancel(again["id"])
+    assert m.review_waiting() is None
+    with pytest.raises(NotRunning):
+        m.finish_review(again["id"])
+    assert finished(m, again["id"])["status"] == "stopped"
+
+
 # -- the review page inside `bot bid` --------------------------------------------------------------------
 
 def test_disabled_manager_shows_history_and_starts_nothing(cfg, make):
@@ -392,7 +480,9 @@ def test_disabled_manager_shows_history_and_starts_nothing(cfg, make):
         off.start("nonsense", {"live": True})
     with pytest.raises(NotRunning):
         off.cancel(1)
-    assert off.current() is None and off.describe() == describe()
+    with pytest.raises(NotRunning):
+        off.finish_review(1)
+    assert off.current() is None and off.review_waiting() is None and off.describe() == describe()
     assert off.get(1)["status"] == "ok" and off.get(1)["summary"] == {"guides": 2, "review": 3} and off.get(2) is None
     assert off.lines_after(1, after=3) == m.lines_after(1, after=3)
     assert off.lines_after(2) is None and [r["id"] for r in off.list()] == [1]
@@ -418,14 +508,17 @@ def combinations(cmd: Cmd):
 
 
 def test_the_table_is_the_daily_set():
-    assert list(COMMANDS) == ["scan", "fetch-rules", "judge", "replay", "place", "insights", "login", "check-login"]
-    assert {n for n, c in COMMANDS.items() if c.needs_profile} == {"scan", "fetch-rules", "judge", "place", "login", "check-login"}
+    assert list(COMMANDS) == ["bid", "learn", "scan", "fetch-rules", "judge", "replay", "place", "insights", "login", "check-login"]
+    assert {n for n, c in COMMANDS.items() if c.needs_profile} == {"bid", "learn", "scan", "fetch-rules", "judge", "place", "login",
+                                                                   "check-login"}
     assert {n: sorted(c.options) for n, c in COMMANDS.items()} == {
+        "bid": [], "learn": [],  # the two modes take no options from the page
         "scan": ["fresh", "headless", "limit", "model", "rescan"], "fetch-rules": ["model"], "judge": ["limit", "model"],
         "replay": ["apply", "model"], "place": ["headless"], "insights": ["days", "min_support", "model"],
         "login": [], "check-login": []}
     for cmd in COMMANDS.values():
         assert cmd.label and cmd.help and all(o.kind in jobs.KINDS and o.label for o in cmd.options.values())
+        assert "live" not in cmd.label.lower() and "live" not in cmd.help.lower()
 
 
 def test_no_combination_can_ask_for_live_placement():
@@ -445,6 +538,11 @@ def test_no_combination_can_ask_for_live_placement():
                 assert argv == ["login", "--wait"]
             if name == "check-login":
                 assert argv == ["check-login"]
+            if name == "bid":
+                assert argv == ["bid", "--no-browser"]  # the whole day, no window of its own, never a shortcut
+                assert "--skip-scan" not in argv and "--no-place" not in argv and "--headed" not in argv
+            if name == "learn":
+                assert argv == ["learn"]  # watching Jim, never a HAR, never saving
             if name == "place":
                 assert argv in (["place", "--headless"], ["place", "--no-headless"])
             if name in ("scan", "place"):
@@ -464,9 +562,11 @@ def test_argv_is_built_from_the_table():
     assert build_argv("replay", {"apply": False}) == ["replay"]
     assert build_argv("place", {}) == ["place", "--headless"]
     assert build_argv("insights", {"days": 30, "min_support": 3}) == ["insights", "--days", "30", "--min-support", "3"]
+    assert build_argv("bid") == ["bid", "--no-browser"] and build_argv("bid", {}) == ["bid", "--no-browser"]
+    assert build_argv("learn") == ["learn"] and build_argv("learn", None) == ["learn"]
 
 
-@pytest.mark.parametrize("command", ["bid", "learn", "watch", "review", "dashboard", "skip-line", "rules", "playbook", "",
+@pytest.mark.parametrize("command", ["watch", "review", "dashboard", "skip-line", "rules", "playbook", "", "BID", "Learn",
                                      "scan --live", "--live", "SCAN", None, 5, ["scan"]])
 def test_unknown_command_is_refused(command):
     with pytest.raises(BadRequest):
@@ -479,6 +579,9 @@ def test_unknown_command_is_refused(command):
     ("judge", {"no_browser": True}), ("login", {"wait": False}), ("check-login", {"headless": True}),
     ("fetch-rules", {"headless": False}), ("fetch-rules", {"include_inactive": True}), ("replay", {"limit": 5}),
     ("scan", {"": True}), ("scan", {5: True}),
+    ("bid", {"skip_scan": True}), ("bid", {"no_place": True}), ("bid", {"live": True}), ("bid", {"headed": True}),
+    ("bid", {"no_browser": False}), ("bid", {"model": ["GDH206"]}),
+    ("learn", {"har": "x.har"}), ("learn", {"save": True}), ("learn", {"model": ["GDH206"]}), ("learn", {"live": True}),
 ])
 def test_unknown_option_is_refused(command, options):
     with pytest.raises(BadRequest):
@@ -537,7 +640,10 @@ def test_describe_is_plain_data_for_the_page(cfg):
     d = describe()
     assert json.loads(json.dumps(d)) == d
     assert [c["name"] for c in d] == list(COMMANDS)
-    scan = d[0]
+    bid, learn = d[0], d[1]
+    assert bid == {"name": "bid", "label": "Bid mode", "help": bid["help"], "needs_profile": True, "options": []}
+    assert learn == {"name": "learn", "label": "Learn mode", "help": learn["help"], "needs_profile": True, "options": []}
+    scan = next(c for c in d if c["name"] == "scan")
     assert scan["label"] == "Scan Nichibo" and scan["needs_profile"] is True and scan["help"]
     assert [o["name"] for o in scan["options"]] == ["model", "headless", "limit", "rescan", "fresh"]
     assert scan["options"][1] == {"name": "headless", "kind": "bool", "default": True, "label": "Hide the browser window",
@@ -575,6 +681,10 @@ def test_every_argv_is_understood_by_the_real_cli():
                 assert params["days"] == chosen.get("days") and params["min_support"] == chosen.get("min_support", 2)
             if name == "login":
                 assert params == {"wait": True}
+            if name == "bid":
+                assert params == {"skip_scan": False, "no_place": False, "headed": False, "no_browser": True}
+            if name == "learn":
+                assert params["har"] is None and params["save"] is False and not params["model"]
             if "model" in cmd.options:
                 wanted = list(dict.fromkeys(c.upper() for c in chosen.get("model") or []))
                 assert list(params["model"] or []) == wanted

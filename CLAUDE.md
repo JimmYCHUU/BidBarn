@@ -62,6 +62,10 @@ hard constraints. Do not weaken them, work around them, or "temporarily" disable
 - Confirmed by Jim on 2026-09-14: odo bands are upper-bound inclusive; grade = Nichibo listing
   grade (0/R/RA/blank = skip); a positive grade bonus stored as "grade 4" applies to 4 and above,
   negative grade adjustments stay exact; a percentage dial (the xNN% badge) is already baked into grid values.
+- Confirmed by Jim on 2026-09-30: 0 km falls in the lowest odo band; a km that no band covers
+  (below the first band, or in a gap between bands) takes the closest band; above the last band
+  stays a skip. A lot parked for unpublished images keeps its grid amount from the card, so it can
+  be approved.
 - Anything not covered by a stored rule goes to the reviewer as NEEDS_REVIEW. Uncertainty is
   never resolved in favour of bidding.
 - Do not change how variants, modifiers or model matching are interpreted without asking Jim.

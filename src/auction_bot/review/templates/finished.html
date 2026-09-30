@@ -5,8 +5,14 @@
 <div class="page-head"><h1 class="page-title">Review finished</h1></div>
 <div class="card">
   <div class="card-body">
+    {% if run_id %}
+    {% if waiting %}<p><b class="num">{{ waiting }}</b> approved bid{{ 's' if waiting != 1 }} {{ 'is' if waiting == 1 else 'are' }} now being placed{{ ' as a dry run' if lock_label != 'LIVE PLACEMENT' }} by run {{ run_id }}.</p>
+    {% else %}<p>No bid was approved, so run {{ run_id }} has nothing to place and finishes.</p>{% endif %}
+    <p><a class="btn btn--primary" href="/runs/{{ run_id }}">{{ icon('terminal') }} Watch the run</a></p>
+    {% else %}
     <p><b class="num">{{ waiting }}</b> approved bid(s) will now be placed by the BidBarn window ({{ lock_label|lower }}).</p>
     <p class="muted">The result is printed in that window. You can close this tab.</p>
+    {% endif %}
   </div>
 </div>
 {% endblock %}

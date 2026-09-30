@@ -11,6 +11,9 @@ the log back, keeps the `PROGRESS` and `SUMMARY` lines (`progress.py`) apart fro
 and closes the run's row when the process ends. Closing the dashboard does not stop a run;
 the next dashboard adopts what is still going and closes what is not.
 
+Two files beside the log carry the page's two buttons to the run: `<id>.cancel` (Stop) and
+`<id>.finish` (Finish, while a Bid run waits at the review; `review_waiting`, `finish_review`).
+
 This module imports the store, the config, the progress protocol and the profile lock, and
 nothing that loads Playwright: the dashboard can never hold the browser profile itself.
 """
@@ -123,6 +126,14 @@ _MODEL = Opt("list", label="Model codes", help="Only these model codes, for exam
 _HIDDEN = Opt("bool", default=True, label="Hide the browser window", help="Off shows the bot's browser while it works.")
 
 COMMANDS: dict[str, Cmd] = {
+    "bid": Cmd(
+        "Bid mode", True, {}, lambda v: ["bid", "--no-browser"],
+        help="Checks the sign-in, fetches the guides, scans Nichibo, waits for your review, then places what you "
+             "approve as a dry run. One run you can watch."),
+    "learn": Cmd(
+        "Learn mode", True, {}, lambda v: ["learn"],
+        help="Opens the bot's browser for you: bid as usual and type why in the blue box. The bot only watches, "
+             "then scans what you searched and reports lot by lot."),
     "scan": Cmd(
         "Scan Nichibo", True,
         {"model": _MODEL, "headless": _HIDDEN,
@@ -311,6 +322,16 @@ class _Runs:
     def current(self) -> dict | None:
         return None
 
+    def review_waiting(self) -> dict | None:
+        """The current run while it is Bid mode waiting at the review stage (its Finish button may be shown), else None."""
+        cur = self.current()
+        if not cur or cur.get("command") != "bid" or cur.get("cancel_requested"):
+            return None
+        p = cur.get("progress") or {}
+        if p.get("stage") != "review" or p.get("waiting") is False:
+            return None
+        return cur
+
     def get(self, run_id: int) -> dict | None:
         return self._row(run_id)
 
@@ -353,6 +374,9 @@ class DisabledJobManager(_Runs):
     def cancel(self, run_id: int) -> None:
         raise NotRunning("this review was started by bot bid; it runs no commands")
 
+    def finish_review(self, run_id: int) -> None:
+        raise NotRunning("this review was started by bot bid; its own Finish button ends it")
+
     def close(self) -> None:
         pass
 
@@ -393,6 +417,7 @@ class _Job:
         self.started_at = started_at
         self.log_path = log_path
         self.cancel_path = cancel_path
+        self.finish_path = cancel_path.with_suffix(".finish")  # written by Finish while a Bid run waits at the review
         self.proc = proc
         self.pid = pid
         self.adopted = adopted  # found running when the dashboard started: watched, never killed
@@ -443,10 +468,11 @@ class JobManager(_Runs):
                                     stdout=out, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, env=env,
                                     creationflags=flags)
 
-    def _env(self, run_id: int, command: str, cancel_path: Path) -> dict:
+    def _env(self, run_id: int, command: str, cancel_path: Path, finish_path: Path | None = None) -> dict:
         env = dict(os.environ)
         env.update({"PYTHONUTF8": "1", "PYTHONUNBUFFERED": "1", "BIDBARN_RUN_ID": str(run_id), "BIDBARN_PROGRESS": "1",
-                    "BIDBARN_COMMAND": command, "BIDBARN_CANCEL_FILE": str(cancel_path)})
+                    "BIDBARN_COMMAND": command, "BIDBARN_CANCEL_FILE": str(cancel_path),
+                    "BIDBARN_FINISH_FILE": str(finish_path or cancel_path.with_suffix(".finish"))})
         return env
 
     def start(self, command: str, options: dict | None = None) -> dict:
@@ -465,10 +491,12 @@ class JobManager(_Runs):
             try:
                 run_id = s.start_run(command, argv)
                 log_path, cancel_path = runs_dir / f"{run_id}.log", runs_dir / f"{run_id}.cancel"
+                finish_path = runs_dir / f"{run_id}.finish"
                 s.set_run_log(run_id, log_path)
                 cancel_path.unlink(missing_ok=True)
+                finish_path.unlink(missing_ok=True)
                 try:
-                    proc = self._spawn(argv, log_path, self._env(run_id, command, cancel_path))
+                    proc = self._spawn(argv, log_path, self._env(run_id, command, cancel_path, finish_path))
                 except Exception as exc:
                     s.finish_run(run_id, "failed", error=f"could not start: {exc}"[:500])
                     raise RuntimeError(f"could not start {command}: {exc}") from exc
@@ -552,6 +580,19 @@ class JobManager(_Runs):
             s.request_run_cancel(job.id)
         finally:
             s.close()
+
+    def finish_review(self, run_id: int) -> None:
+        """Finish on the review page: tell the Bid run waiting there to go on and place the approved bids.
+        Only that run, and only while it waits; anything else is `NotRunning`."""
+        cur = self.review_waiting()
+        if cur is None or int(run_id) != cur["id"]:
+            raise NotRunning(f"run {run_id} is not waiting at the review")
+        with self._cond:
+            job = self._jobs.get(cur["id"])
+        if job is None or job.done:
+            raise NotRunning(f"run {run_id} is not running")
+        job.finish_path.parent.mkdir(parents=True, exist_ok=True)
+        job.finish_path.write_text("finish\n", encoding="utf-8")
 
     def _kill(self, job: _Job) -> None:
         """The run did not stop by itself: end its process and, on Windows, the ones it started (Chromium)."""
@@ -660,10 +701,11 @@ class JobManager(_Runs):
                 break
             except sqlite3.Error:
                 time.sleep(0.5)  # still busy after the timeout: the row stays "running" until the next dashboard start
-        try:
-            job.cancel_path.unlink(missing_ok=True)
-        except OSError:
-            pass
+        for path in (job.cancel_path, job.finish_path):
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                pass
         with self._cond:
             job.status, job.exit_code, job.error, job.done = status, code, error, True
             self._jobs.pop(job.id, None)  # from here on the row and the file are the record
@@ -679,10 +721,11 @@ class JobManager(_Runs):
                     going.append(run)
                     continue
                 s.finish_run(run["id"], "stopped", error=CLOSED_MESSAGE)
-                try:
-                    (self.cfg.runs_dir / f"{run['id']}.cancel").unlink(missing_ok=True)
-                except OSError:
-                    pass
+                for suffix in (".cancel", ".finish"):
+                    try:
+                        (self.cfg.runs_dir / f"{run['id']}{suffix}").unlink(missing_ok=True)
+                    except OSError:
+                        pass
         finally:
             s.close()
         for run in going:  # watched to its end; adoption never ends a process

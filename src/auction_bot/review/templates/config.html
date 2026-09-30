@@ -54,10 +54,10 @@
       {% if providers %}
       <div class="table-wrap">
       <table class="lots">
-        <thead><tr><th>Provider and model</th><th class="num">Per minute</th><th class="num">Per day</th><th>Photos</th><th>Key</th></tr></thead>
+        <thead><tr><th>Provider and model</th><th class="num">Calls today</th><th class="num">Per minute</th><th class="num">Per day</th><th>Photos</th><th>Key</th></tr></thead>
         <tbody>
         {% for p in providers %}
-          <tr><td><b>{{ p.name }}</b><div class="mono nowrap">{{ p.model }}</div></td><td class="num">{{ p.rpm }}</td><td class="num">{{ p.rpd }}</td>
+          <tr><td><b>{{ p.name }}</b><div class="mono nowrap">{{ p.model }}</div></td><td class="num">{{ p.calls if p.calls is defined else '' }}</td><td class="num">{{ p.rpm }}</td><td class="num">{{ p.rpd }}</td>
             <td>{{ 'Yes' if p.vision else 'Text only' }}</td>
             <td>{% if p.has_key %}<span class="pill pill--ok">{{ icon('circle-check') }} Set</span>{% else %}<span class="pill pill--warn">{{ icon('circle-alert') }} Missing</span>{% endif %}<div class="mono faint">{{ p.key_env }}</div></td></tr>
         {% endfor %}

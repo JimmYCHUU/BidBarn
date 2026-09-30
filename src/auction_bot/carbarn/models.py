@@ -140,6 +140,21 @@ class Variant:
                 return cell
         return None
 
+    def nearest_cell(self, year: int, km: int) -> GridCell | None:
+        """The cell of that year whose band lies closest to `km`, for a km that no band covers
+        (below the first band, or in a gap between bands). Jim, 2026-09-30: a lot with no
+        dedicated band takes the closest band in the grid. Above the last band is not this
+        case: the cap is checked first and stays a skip."""
+        best: GridCell | None = None
+        best_distance: int | None = None
+        for cell in self.cells.values():
+            if cell.year != year:
+                continue
+            distance = cell.band.odo_from - km if km <= cell.band.odo_from else max(0, km - cell.band.odo_to)
+            if best is None or distance < best_distance:
+                best, best_distance = cell, distance
+        return best
+
 
 @dataclass
 class ModelRule:

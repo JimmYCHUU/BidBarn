@@ -130,12 +130,19 @@
     panel = null;
   }
 
+  // what an approval does on this PC today, said once, in the row
+  function approveHint() {
+    var lock = document.body.dataset.lock;
+    if (lock === "testing") return "Recorded for testing, nothing is submitted. ";
+    if (lock === "dry") return "Dry run, nothing is submitted. ";
+    return "";
+  }
+
   function openPanel(r, act, focus, byKey) {
     closePanel();
     if (r.classList.contains("is-done")) return;
     var pid = r.dataset.pid;
-    var bid = r.dataset.bid || "";
-    if (act === "approve" && !bid) { mark(r, "No bid amount: open the detail page", false); return; }
+    var bid = r.dataset.bid || "";  // empty when the guide gave no amount: the amount is then Jim's to type
 
     var tr = document.createElement("tr");
     tr.className = "decide-row";
@@ -153,7 +160,7 @@
         '<input id="amt-' + pid + '" name="amount" type="number" min="0" step="10" inputmode="numeric"></div>' +
         '<button class="btn--primary" type="submit">Approve</button>' +
         '<button type="button" class="btn--quiet" data-cancel>Cancel</button>' +
-        '<span class="faint"><kbd>Enter</kbd> approves, <kbd>Esc</kbd> cancels</span>' +
+        '<span class="faint">' + (bid ? "" : "No grid amount for this lot: type the amount you want. ") + approveHint() + '<kbd>Enter</kbd> approves, <kbd>Esc</kbd> cancels</span>' +
         '<div class="error" role="alert"></div>';
       var input = form.elements.amount;
       var go = form.querySelector("button[type=submit]");
@@ -234,16 +241,23 @@
     });
   }
 
-  function help() {
-    var keys = document.getElementById("keys");
-    if (!keys) return;
-    keys.open = !keys.open;
-    if (keys.open) keys.scrollIntoView({ block: "nearest" });
+  // the keyboard list is a popover under the page head; a key opens it, so it does not animate
+  var keysPop = document.getElementById("keys"), keysBtn = document.querySelector("[data-keys-toggle]");
+  function help(force) {
+    if (!keysPop) return;
+    var open = force != null ? force : keysPop.hidden;
+    keysPop.hidden = !open;
+    if (keysBtn) keysBtn.setAttribute("aria-expanded", open ? "true" : "false");
   }
+  if (keysBtn) keysBtn.addEventListener("click", function () { help(); });
+  document.addEventListener("click", function (e) {
+    if (keysPop && !keysPop.hidden && !e.target.closest("#keys, [data-keys-toggle]")) help(false);
+  });
 
   function triageKeys(e) {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (sheetOpen()) { hideSheet(); e.preventDefault(); return; }
+    if (keysPop && !keysPop.hidden && e.key === "Escape") { help(false); e.preventDefault(); return; }
     if (panel) {
       if (e.key === "Escape") { var back = panel.row; closePanel(); select(rows.indexOf(back), false); e.preventDefault(); }
       return;
@@ -258,7 +272,6 @@
       case "e": if (r) openPanel(r, "approve", "amount", true); break;
       case "z": if (r) showSheet(r.dataset.sheet, r.dataset.pid); break;
       case "o": if (r) { event(r.dataset.pid, "nichibo_click", null); window.open(r.dataset.url, "_blank"); } break;
-      case "p": if (r) { event(r.dataset.pid, "photos_click", null); window.open(r.dataset.url, "_blank"); } break;
       case "Enter": if (r && !e.target.closest("a,button")) window.location.href = "/p/" + r.dataset.pid; else return; break;
       case "?": help(); break;
       default: return;

@@ -169,7 +169,9 @@ def test_testing_lock_blocks_live_placement(cfg):
     cfg.project_status = "the project is finished"
     assert cfg.placement_mode(live_flag=True)[0] is True  # exact phrase only
     client = TestClient(create_app(cfg))
-    assert "TESTING: no bids are placed" in client.get("/review").text
+    page = client.get("/review").text
+    assert "TESTING: no bids are placed" in page  # the header pill and the nav foot
+    assert 'class="banner' not in page.split("<main>")[1]  # and nowhere else on the review page
 
 
 def test_same_vehicle_under_two_guides_is_flagged(cfg, rule, facts):

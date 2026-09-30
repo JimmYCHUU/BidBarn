@@ -1,13 +1,16 @@
 """One click (`bidbarn.cmd`): Learn mode (`bot learn`) watches Jim bid; Bid mode (`bot bid`) does the day.
 
 Every step is the same code the separate commands use; this module only puts them in
-order and stops in the middle for the human review. The review page gets a "Finish review"
-button that hands control back here, and then the approved bids are placed. Placement is
-a dry run while the testing lock is on (CLAUDE.md, rule 0).
+order and stops in the middle for the human review. From a console the review page is served
+here and its "Finish review" button hands control back; under the dashboard (`BIDBARN_FINISH_FILE`
+set) the dashboard already serves the page and this run waits for the finish file its header
+button writes. Then the approved bids are placed. Placement is a dry run while the testing lock
+is on (CLAUDE.md, rule 0).
 """
 from __future__ import annotations
 
 import json
+import socket
 import threading
 import time
 import webbrowser
@@ -15,7 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from auction_bot import progress
+from auction_bot import lock, progress
 from auction_bot.config import Config
 from auction_bot.progress import Cancelled
 
@@ -60,6 +63,7 @@ def ensure_signed_in(cfg: Config, echo: Callable[[str], None] = print) -> None:
     with Browser(cfg, headless=True) as b:
         nichibo_ok = nichibo_signed_in(b, cfg)
         carbarn_ok = carbarn_signed_in(b, cfg)
+    progress.emit(stage="signin", nichibo=nichibo_ok, carbarn=carbarn_ok, waiting=not (nichibo_ok and carbarn_ok))
     if nichibo_ok and carbarn_ok:
         echo("Signed in to Nichibo and the Carbarn dashboard.")
         return
@@ -85,6 +89,7 @@ def ensure_signed_in(cfg: Config, echo: Callable[[str], None] = print) -> None:
             n_ok = nichibo_ok or ("/login" not in nichibo_page.url and "nichibojapan" in nichibo_page.url)
             if n_ok and guides_seen.is_set():
                 echo("Signed in. Continuing.")
+                progress.emit(stage="signin", nichibo=True, carbarn=True, waiting=False)
                 nichibo_page.wait_for_timeout(1000)  # let the cookies settle in the profile
                 return
         raise RuntimeError("Still not signed in after 15 minutes. Double-click bidbarn.cmd again when you are ready.")
@@ -100,6 +105,7 @@ def fetch_guides(cfg: Config, echo: Callable[[str], None] = print) -> tuple[int,
         guides = CarbarnClient(b, cfg).fetch_team_guides(None, False)
     path = save_snapshot(cfg, guides)
     echo(f"Fetched {len(guides)} bidding guides ({path.name}).")
+    progress.emit(stage="guides", guides=len(guides), snapshot=path.name)
     return len(guides), path
 
 
@@ -136,14 +142,32 @@ def scan_all(cfg: Config, echo: Callable[[str], None] = print, headless: bool = 
 
 # -- 4. review --------------------------------------------------------------------------------
 
+DASHBOARD_HAS_THE_PORT = ("The dashboard is running on that address. Start Bid mode from the dashboard, "
+                          "or close the dashboard window and run bidbarn.cmd again.")
+
+
+def port_in_use(host: str, port: int, timeout: float = 0.5) -> bool:
+    """Does something already accept connections there (a dashboard that is running)?"""
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
 def serve_review(cfg: Config, echo: Callable[[str], None] = print, open_browser: bool = True) -> None:
-    """Serve the review page until "Finish review" is clicked on it (or Enter is pressed here)."""
+    """Serve the review page until "Finish review" is clicked on it (or Enter is pressed here).
+
+    The console path only: with the dashboard on the same address this stops with one line,
+    because that page is already there and Bid mode can be started from it."""
     import uvicorn
 
     from auction_bot.dashboard.jobs import DisabledJobManager
     from auction_bot.review.app import create_app
 
     host, port = cfg.review.get("host", "127.0.0.1"), int(cfg.review.get("port", 8765))
+    if port_in_use(host, port):
+        raise RuntimeError(DASHBOARD_HAS_THE_PORT)
     finished = threading.Event()
     app = create_app(cfg, finish_event=finished, jobs=DisabledJobManager(cfg))  # this window runs the commands itself
     server = uvicorn.Server(uvicorn.Config(app, host=host, port=port, log_level="warning"))
@@ -172,6 +196,35 @@ def serve_review(cfg: Config, echo: Callable[[str], None] = print, open_browser:
         pass
     server.should_exit = True
     thread.join(timeout=10)
+    echo("Review finished.")
+
+
+def wait_for_review(cfg: Config, echo: Callable[[str], None] = print, open_browser: bool = True,
+                    poll_seconds: float = 1.0) -> None:
+    """Under the dashboard: the review page is its own, so wait until its Finish button writes the
+    finish file. Never opens a browser (`open_browser` keeps the call shape of `serve_review`).
+    The counts are reported whenever they change, so the run page can show the review moving."""
+    from auction_bot.store import Store
+
+    echo("Review the lots on the dashboard's review page. When you are done click \"Finish review\" at the top")
+    echo("of the page. The approved bids are placed after that.")
+    last: tuple[int, int] | None = None
+    while True:
+        progress.check_cancel()
+        store = Store(cfg.db_path)
+        try:
+            c = store.counts()
+        finally:
+            store.close()
+        now = (int(c["bid"]) + int(c["review"]), int(c["approved"]))
+        if now != last:
+            last = now
+            progress.emit(stage="review", pending=now[0], approved=now[1], waiting=True)
+        if progress.finish_requested():
+            break
+        time.sleep(poll_seconds)
+    progress.emit(stage="review", pending=last[0], approved=last[1], waiting=False)
+    progress.clear_finish()
     echo("Review finished.")
 
 
@@ -239,42 +292,69 @@ def _evidence_rel(cfg: Config, path: str | None) -> str | None:
 
 # -- the whole day -----------------------------------------------------------------------------
 
+SCAN_KEYS = ("cards", "opened", "review", "bid", "skip", "reused", "pending", "model_calls")
+
+
+def bid_summary(cfg: Config, out: RunSummary) -> dict:
+    """The closing numbers of a Bid run, flat so the run page orders them like a scan's or a placement's.
+    `nichibo` and `carbarn` are true because the sign-in step only returns once both are in."""
+    scan = out.scan or {}
+    errors = [str(e)[:300] for e in (scan.get("errors") or [])]
+    d: dict = {"steps": list(out.steps), "nichibo": True, "carbarn": True, "guides": out.guides}
+    for key in SCAN_KEYS:
+        if key in scan:
+            d[key] = scan[key]
+    d.update(errors=errors[:20], errors_total=len(errors), approved=out.approved,
+             dry_run=cfg.placement_mode(False)[0], lines=[str(ln)[:300] for ln in out.placed])
+    return d
+
+
 def run(cfg: Config, echo: Callable[[str], None] = print, skip_scan: bool = False, no_place: bool = False,
         headed: bool = False, open_browser: bool = True, steps: dict | None = None) -> RunSummary:
-    """The daily routine in one go. `steps` lets tests swap the individual step functions."""
+    """The daily routine in one go. `steps` lets tests swap the individual step functions.
+
+    The browser profile is held for the whole run, so a scan started from a console during the
+    review wait stops with one line instead of taking the profile. Each step boundary is
+    reported with its stage, so the dashboard's stepper moves with the run."""
     s = steps or {}
     sign_in = s.get("ensure_signed_in", ensure_signed_in)
     guides = s.get("fetch_guides", fetch_guides)
     scan = s.get("scan_all", scan_all)
-    review = s.get("serve_review", serve_review)
+    review = s.get("wait_for_review", wait_for_review) if progress.finish_file() else s.get("serve_review", serve_review)
     place = s.get("place_approved", place_approved)
     out = RunSummary()
     total = 5 - int(skip_scan) - int(no_place)
     n = 0
 
-    def step(title: str) -> None:
+    def step(title: str, key: str) -> None:
         nonlocal n
         n += 1
         echo(f"\n[{n}/{total}] {title}")
         out.steps.append(title)
+        progress.emit(stage=key, step=n, steps=total)
 
-    lock = "testing lock on: placement is a dry run" if not cfg.project_finished else ("dry run" if cfg.dry_run else "LIVE placement")
-    echo(f"BidBarn ({lock})")
-    step("Checking the sign-in")
-    sign_in(cfg, echo)
-    step("Fetching the bidding guides")
-    out.guides, _ = guides(cfg, echo)
-    if not skip_scan:
-        step("Scanning Nichibo")
-        out.scan = scan(cfg, echo, headless=not headed)
-    step("Your review")
-    review(cfg, echo, open_browser=open_browser)
-    if not no_place:
-        step("Placing the approved bids")
-        out.placed = place(cfg, echo, headless=not headed)
-        out.approved = len(out.placed)
+    mode = "testing lock on: placement is a dry run" if not cfg.project_finished else ("dry run" if cfg.dry_run else "LIVE placement")
+    echo(f"BidBarn ({mode})")
+    lock.acquire(cfg, lock.command_name())  # re-entrant: every Browser below takes and gives back the same lock
+    try:
+        step("Checking the sign-in", "signin")
+        sign_in(cfg, echo)
+        step("Fetching the bidding guides", "guides")
+        out.guides, _ = guides(cfg, echo)
+        if not skip_scan:
+            step("Scanning Nichibo", "scan")
+            out.scan = scan(cfg, echo, headless=not headed)
+        step("Your review", "review")
+        review(cfg, echo, open_browser=open_browser)
+        if not no_place:
+            step("Placing the approved bids", "place")
+            out.placed = place(cfg, echo, headless=not headed)
+            out.approved = len(out.placed)
+    finally:
+        lock.release(cfg)
     echo("")
     echo("Done. " + (f"{out.approved} approved bid(s) handled." if out.approved else "Nothing was placed."))
+    progress.summary(bid_summary(cfg, out))
     return out
 
 
@@ -331,13 +411,38 @@ def model_view(soft: dict, jim_acted: bool, jim_passed: bool) -> str:
     return "; ".join(bits) + verdict
 
 
-def compare_session(cfg: Config, session, store) -> list[str]:
-    """Per lot Jim touched: what he did, what the bot proposed, and the rule his comment suggests."""
+def _k(value) -> int | str | None:
+    """An amount in thousands as recorded: a whole number when it is one, else the text as typed."""
+    if value in (None, ""):
+        return None
+    text = str(value).strip()
+    return int(text) if text.isdigit() else text
+
+
+def model_agrees(soft: dict, jim_acted: bool, jim_passed: bool) -> bool | None:
+    """True when Jim and the model both bid, False when one bid and the other would skip, else None."""
+    if not soft or soft.get("mode") != "judge":
+        return None
+    rec = soft.get("recommendation") or "review"
+    if jim_acted and rec == "skip":
+        return False
+    if jim_passed and rec == "bid":
+        return False
+    if jim_acted and rec == "bid":
+        return True
+    return None
+
+
+def compare_lots(session, store) -> list[dict]:
+    """Per lot Jim touched: what he did, what the bot proposed, what the model said, and the rules
+    his comments suggest, as plain data. `compare_lines` turns it into the report's text.
+
+    `bot` is None when the bot never saw the lot; `model` is None without a judgement."""
     from auction_bot.learn import _reasons
     from auction_bot.nichibo.facts import VehicleFacts
     from auction_bot.rules.instructions import suggest_from_reason
 
-    lines: list[str] = []
+    lots: list[dict] = []
     for v in session.lots.values():
         if not v.touched or v.ref in ("today",):
             continue
@@ -345,47 +450,81 @@ def compare_session(cfg: Config, session, store) -> list[str]:
         row = dict(row) if row is not None else None
         facts = store.vehicle_facts(v.ref)
         title = v.title or (f"{facts.get('year', '')} {facts.get('make', '')} {facts.get('model', '')}".strip() if facts else v.ref)
-        jim = []
-        if v.bid_k:
-            jim.append(f"bid {v.bid_k}K")
-        elif v.amounts:
-            jim.append(f"typed {v.amounts[-1]}K")
-        if v.cart_clicks:
-            jim.append("left in the cart" if v.carted else "carted, then taken out")
-        if v.opened:
-            jim.append("opened the page")
-        if row is None:
-            bot = "never seen (not in the bot's scan)"
-        else:
-            bot = row["status"] + (f" {row['bid_jpy_k']:,}K" if row.get("bid_jpy_k") else "")
-            why = _reasons(row)
-            if why:
-                bot += " because " + why[0]
-        delta = ""
         typed = v.bid_k or (v.amounts[-1] if v.amounts else None)
-        if typed and row and row.get("bid_jpy_k"):
-            try:
-                delta = f" (Jim {int(typed) - int(row['bid_jpy_k']):+,}K against the grid)"
-            except ValueError:
-                pass
-        lines.append(f"- {title}: Jim {', '.join(jim) or 'looked'} | bot {bot}{delta}")
+        jim = {"opened": v.opened, "carted": v.carted, "cart_clicks": v.cart_clicks, "bid_k": _k(v.bid_k),
+               "typed_k": _k(v.amounts[-1]) if v.amounts else None, "reasons": list(v.reasons), "seconds": v.seconds,
+               "sheet_viewed": v.sheet_viewed}
+        bot = None
+        if row is not None:
+            why = _reasons(row)
+            delta = None
+            if typed and row.get("bid_jpy_k"):
+                try:
+                    delta = int(typed) - int(row["bid_jpy_k"])
+                except ValueError:
+                    pass
+            bot = {"status": row["status"], "bid_k": row.get("bid_jpy_k"), "reason": why[0] if why else None,
+                   "decision": row.get("decision"), "delta_k": delta}
+        model = None
         if row and row.get("soft_json"):
             try:
                 soft = json.loads(row["soft_json"])
             except (TypeError, ValueError):
                 soft = {}
-            mv = model_view(soft, jim_acted=bool(v.bid_k or v.amounts or v.carted),
-                            jim_passed=bool(v.cart_clicks and not v.carted and not v.bid_k and not v.amounts))
-            if mv:
-                lines.append(f"     {mv}")
+            acted = bool(v.bid_k or v.amounts or v.carted)
+            passed = bool(v.cart_clicks and not v.carted and not v.bid_k and not v.amounts)
+            line = model_view(soft, jim_acted=acted, jim_passed=passed)
+            if line:
+                j = soft.get("judgement") or {}
+                model = {"recommendation": soft.get("recommendation") or "review", "proposed_k": soft.get("proposed_bid_jpy_k"),
+                         "summary": j.get("summary") or "", "agree": model_agrees(soft, acted, passed), "line": line}
+        candidates = []
         for r in v.reasons:
-            lines.append(f"     why: {r}")
             cand = suggest_from_reason(r, VehicleFacts.from_dict(facts)) if facts else None
             if cand:
-                lines.append(f"     candidate rule for {row['model_code'] if row else 'this model'}: {cand}")
-    for n in session.notes:
+                candidates.append({"line": cand, "from_reason": r})
+        lots.append({"ref_no": v.ref, "title": title, "code": row["model_code"] if row else None,
+                     "proposal_id": row["id"] if row else None, "jim": jim, "bot": bot, "model": model, "candidates": candidates})
+    return lots
+
+
+def compare_lines(lots: list[dict], notes) -> list[str]:
+    """The comparison as the report prints it, from `compare_lots` and the session's notes."""
+    lines: list[str] = []
+    for lot in lots:
+        jim, bot, model = lot["jim"], lot["bot"], lot["model"]
+        did = []
+        if jim["bid_k"] is not None:
+            did.append(f"bid {jim['bid_k']}K")
+        elif jim["typed_k"] is not None:
+            did.append(f"typed {jim['typed_k']}K")
+        if jim["cart_clicks"]:
+            did.append("left in the cart" if jim["carted"] else "carted, then taken out")
+        if jim["opened"]:
+            did.append("opened the page")
+        if bot is None:
+            said = "never seen (not in the bot's scan)"
+        else:
+            said = bot["status"] + (f" {bot['bid_k']:,}K" if bot["bid_k"] else "")
+            if bot["reason"]:
+                said += " because " + bot["reason"]
+        delta = f" (Jim {bot['delta_k']:+,}K against the grid)" if bot and bot["delta_k"] is not None else ""
+        lines.append(f"- {lot['title']}: Jim {', '.join(did) or 'looked'} | bot {said}{delta}")
+        if model:
+            lines.append(f"     {model['line']}")
+        for r in jim["reasons"]:
+            lines.append(f"     why: {r}")
+            for cand in lot["candidates"]:
+                if cand["from_reason"] == r:
+                    lines.append(f"     candidate rule for {lot['code'] or 'this model'}: {cand['line']}")
+    for n in notes:
         lines.append(f"- note [{n.where}]: {n.text}")
     return lines
+
+
+def compare_session(cfg: Config, session, store) -> list[str]:
+    """Per lot Jim touched: what he did, what the bot proposed, and the rule his comment suggests."""
+    return compare_lines(compare_lots(session, store), session.notes)
 
 
 def learn(cfg: Config, echo: Callable[[str], None] = print, steps: dict | None = None) -> Path:
@@ -408,10 +547,13 @@ def learn(cfg: Config, echo: Callable[[str], None] = print, steps: dict | None =
         echo("")
         echo(f"You searched {', '.join(codes)}. The bot now scans the same codes for comparison (nothing is placed).")
         try:
+            progress.emit(stage="learn", phase="guides", session=out.name, searched=codes)
             guides_(cfg, echo)
+            progress.emit(stage="learn", phase="scan", session=out.name, searched=codes)
             scan_(cfg, codes, echo)
         except Exception as exc:  # the comparison is optional; the session is already saved
             echo(f"Could not scan for comparison: {str(exc)[:200]}")
+    progress.emit(stage="learn", phase="compare", session=out.name, searched=codes)
     store = Store(cfg.db_path)
     try:
         def bot_view(ref: str) -> str:
@@ -421,7 +563,8 @@ def learn(cfg: Config, echo: Callable[[str], None] = print, steps: dict | None =
             return row["status"] + (f" {row['bid_jpy_k']:,}K" if row["bid_jpy_k"] else "") + f", {row['decision']}"
 
         report = render_session(session, bot_view)
-        comparison = compare_session(cfg, session, store)
+        lots = compare_lots(session, store)
+        comparison = compare_lines(lots, session.notes)
         actions = [(v.ref, "open", None, None, v.opened_at, None) for v in session.visits]
         actions += [(v.ref, "bid", int(v.bid_k) * 1000 if str(v.bid_k).isdigit() else None,
                      int(v.bid_k) if str(v.bid_k).isdigit() else None, session.ended or session.started or "", None)
@@ -438,4 +581,22 @@ def learn(cfg: Config, echo: Callable[[str], None] = print, steps: dict | None =
     echo("")
     echo(f"Report saved to {out / 'report.txt'} ({saved} actions kept in the store).")
     echo("A candidate rule becomes a rule only when you add it: review page, or  bot skip-line CODE \"skip: ...\".")
+    progress.summary(learn_summary(out, session, codes, lots, saved))
     return out
+
+
+def learn_summary(out: Path, session, codes: list[str], lots: list[dict], saved: int) -> dict:
+    """The session as plain data for the run page: the counts, every lot compared, the notes and the
+    candidate rules (which become rules only when Jim adds them)."""
+    agree = sum(1 for lot in lots if lot["model"] and lot["model"]["agree"] is True)
+    disagree = sum(1 for lot in lots if lot["model"] and lot["model"]["agree"] is False)
+    candidates = [{"code": lot["code"], "ref_no": lot["ref_no"], **c} for lot in lots for c in lot["candidates"]]
+    d = session.dashboard
+    return {"session": out.name, "report": str(out / "report.txt"), "searched": list(codes),
+            "counts": {"lots": len(lots), "opened": sum(1 for lot in lots if lot["jim"]["opened"]),
+                       "carted": sum(1 for lot in lots if lot["jim"]["carted"]),
+                       "bids": sum(1 for lot in lots if lot["jim"]["bid_k"] is not None), "agree": agree, "disagree": disagree,
+                       "searches": len(session.searches), "notes": len(session.notes), "candidates": len(candidates),
+                       "actions_saved": saved, "screenshots": int(session.counts.get("screenshot", 0))},
+            "lots": lots, "notes": [{"where": n.where, "text": n.text} for n in session.notes], "candidates": candidates,
+            "dashboard": {"active_seconds": d.active_seconds, "headings": [[h, n] for h, n in d.headings.most_common(8)]}}

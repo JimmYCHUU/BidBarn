@@ -3,57 +3,41 @@
 {% block body %}
 <div class="page-head">
   <h1 class="page-title">Review</h1>
-  <span class="page-sub">Best grade first, then fewest km.</span>
+  <span class="page-sub">{{ total }} lot{{ 's' if total != 1 }} in {{ groups|length }} model{{ 's' if groups|length != 1 }}</span>
   <div class="end">
     <form method="get" class="filter" role="search">
-      <label class="sr-only" for="model-filter">Model code</label>
-      <input id="model-filter" type="search" name="model" value="{{ model }}" placeholder="Model code">
-      <button>Filter</button>
+      <label class="sr-only" for="model-filter">Filter by model code</label>
+      <input id="model-filter" type="search" name="model" value="{{ model }}" placeholder="Filter by model code">
     </form>
+    {% if groups %}
+    <button type="button" class="btn--icon" data-keys-toggle aria-controls="keys" aria-expanded="false" title="Keyboard keys">{{ icon('keyboard') }}<span class="sr-only">Keyboard keys</span></button>
+    <div class="keys-pop" id="keys" hidden>
+      <div class="keys-list">
+        <span><kbd>j</kbd> <kbd>k</kbd> next, previous</span>
+        <span><kbd>a</kbd> approve</span>
+        <span><kbd>r</kbd> reject with a reason</span>
+        <span><kbd>e</kbd> change the amount</span>
+        <span><kbd>z</kbd> sheet full size</span>
+        <span><kbd>o</kbd> open on Nichibo</span>
+        <span><kbd>Enter</kbd> detail</span>
+        <span><kbd>Esc</kbd> cancel</span>
+        <span><kbd>?</kbd> this list</span>
+      </div>
+    </div>
+    {% endif %}
   </div>
 </div>
-
-{% if lock_label != 'LIVE PLACEMENT' %}
-<div class="banner">{{ icon('lock') }}<div>{{ lock_label }}. Approving here records your decision; nothing is submitted to Nichibo until the testing lock is lifted in config.yaml.</div></div>
-{% endif %}
-
-{% if groups %}
-<details class="keys" id="keys">
-  <summary>{{ icon('keyboard') }} Keyboard {{ icon('chevron-down', 'icon--sm chev') }}</summary>
-  <div class="keys-list">
-    <span><kbd>j</kbd> <kbd>k</kbd> next, previous</span>
-    <span><kbd>a</kbd> approve</span>
-    <span><kbd>r</kbd> reject with a reason</span>
-    <span><kbd>e</kbd> change the amount</span>
-    <span><kbd>z</kbd> sheet full size</span>
-    <span><kbd>o</kbd> open on Nichibo</span>
-    <span><kbd>p</kbd> photos on Nichibo</span>
-    <span><kbd>Enter</kbd> detail</span>
-    <span><kbd>Esc</kbd> cancel</span>
-    <span><kbd>?</kbd> this list</span>
-  </div>
-</details>
-{% endif %}
 
 {% for g in groups %}
 <section class="card group" aria-labelledby="g-{{ g.model_code }}">
   <div class="card-head">
     <h2 id="g-{{ g.model_code }}">{{ g.guide_name }}</h2>
     <span class="count">{{ g.rows|length }}</span><span class="faint">pending</span>
+    <span class="end">
+      {% if g.suggestions %}<a class="faint" href="/guides/{{ g.model_code }}#suggested">{{ g.suggestions|length }} skip rule{{ 's' if g.suggestions|length != 1 }} suggested</a>{% endif %}
+      <a href="/guides/{{ g.model_code }}">Guide {{ icon('chevron-right', 'icon--sm') }}</a>
+    </span>
   </div>
-  {% if g.suggestions %}
-  <div class="suggest">
-    <div><b>Skip rules your rejections of {{ g.model_code }} justify.</b> Each would have skipped no lot you approved.</div>
-    {% for sg in g.suggestions %}
-    <form method="post" action="/rules/{{ g.model_code }}/skip">
-      <input type="hidden" name="line" value="{{ sg.line }}"><input type="hidden" name="next" value="/review">
-      <span class="mono">{{ sg.line }}</span> <span class="faint">({{ sg.support }} rejection{{ 's' if sg.support != 1 }})</span>
-      <button class="btn--sm">Add rule</button>
-    </form>
-    {% endfor %}
-    <div class="faint">After adding a rule, run Replay from the <a href="/">overview</a> to apply it to the stored lots.</div>
-  </div>
-  {% endif %}
   <div class="table-wrap triage-wrap">
   {# the roles are spelled out because a narrow window lays the rows out as blocks, which can cost a table its meaning #}
   <table class="lots wide triage-table" role="table">
@@ -64,7 +48,7 @@
     <tr class="lot" role="row" id="lot-{{ p.id }}" data-pid="{{ p.id }}" data-url="{{ f.url }}" data-sheet="{{ p.sheet_src }}" data-bid="{{ p.proposed_bid_jpy_k or '' }}" data-start="{{ f.start_price_jpy or 0 }}">
       <td role="cell">
         <span class="pill {{ p.status }}">{{ status_label(p.status) }}</span>
-        <div class="faint">{{ p.stage }}{% if p.soft and p.soft.images_pending %}, images pending{% endif %}</div>
+        {% if p.soft and p.soft.images_pending %}<div class="faint">images pending</div>{% endif %}
         {% if p.multi_guide %}<span class="pill pill--violet" title="Also proposed under another guide. Approve it once.">×2 guides</span>{% endif %}
       </td>
       <td role="cell">
@@ -87,26 +71,24 @@
       </td>
       <td role="cell">{% if p.sheet_src %}<img class="thumb sheet-thumb" src="{{ p.sheet_src }}" alt="Auction sheet" loading="lazy">{% else %}<span class="muted">No sheet yet</span>{% endif %}</td>
       <td class="why" role="cell">
-        {% if p.judge %}
-          {% if p.judge.judgement %}<div><b>{{ p.judge.judgement.summary }}</b></div>{% endif %}
-          <div>{% for b in p.badges %}<span class="badge {{ b.cls }}" title="{{ b.evidence }}">{% if b.mark in ['✓', '✗', '?', '·'] %}{{ icon('check' if b.cls == 'ok' else ('x' if b.cls == 'bad' else 'circle-alert')) }}<span class="sr-only">{{ 'pass' if b.cls == 'ok' else ('fail' if b.cls == 'bad' else 'unclear') }}</span>{% else %}{{ b.mark }}:{% endif %} {{ b.text }}</span> {% endfor %}</div>
-          {% for fl in p.judge.flags[:2] %}<div class="faint">{{ icon('flag', 'icon--sm') }} {{ fl }}</div>{% endfor %}
-          {% for n in p.judge.judge_notes[:2] %}<div class="faint">{{ n }}</div>{% endfor %}
-        {% endif %}
-        {% set lines = [] %}
-        {% if p.hard and p.hard.checks %}{% for c in p.hard.checks if not c.ok %}{% set _ = lines.append(c.name ~ ': ' ~ c.detail) %}{% endfor %}{% endif %}
-        {% if p.soft and p.soft.checklist %}{% for c in p.soft.checklist if not c.startswith('Auto-skip') and not c.startswith('Judged from') %}{% set _ = lines.append(c) %}{% endfor %}{% endif %}
-        {% for l in lines[:2] %}<div>{{ l }}</div>{% endfor %}
-        {% if lines|length > 2 %}<div class="faint">+{{ lines|length - 2 }} more on the detail page</div>{% endif %}
+        {% if p.why_line %}<div class="why-line" title="{{ p.why_line }}">{{ p.why_line }}</div>{% endif %}
+        {% set vc = p.verdict_counts %}
+        {% if p.judge and vc and (vc.ok or vc.bad or vc.unk) %}
+        <span class="verdicts" title="{{ p.verdict_title }}">
+          {%- if vc.ok %}<span class="badge ok">{{ icon('check') }} {{ vc.ok }}</span>{% endif -%}
+          {%- if vc.bad %}<span class="badge bad">{{ icon('x') }} {{ vc.bad }}</span>{% endif -%}
+          {%- if vc.unk %}<span class="badge unk">{{ icon('circle-alert') }} {{ vc.unk }}</span>{% endif -%}
+          <span class="sr-only">{{ vc.ok }} pass, {{ vc.bad }} fail, {{ vc.unk }} unclear</span>
+        </span>
+        {% elif p.more_lines %}<a class="faint" href="/p/{{ p.id }}">{{ p.more_lines }} more to check</a>{% endif %}
       </td>
       <td class="nowrap" role="cell">
         <div class="row">
-          <button class="approve act" data-act="approve" {% if not p.bid_jpy_k %}disabled title="No bid amount. Open the detail page."{% endif %}>Approve</button>
+          <button class="approve act" data-act="approve"{% if not p.bid_jpy_k %} data-nobid="1" title="No grid amount for this lot: you type the amount"{% endif %}>Approve</button>
           <button class="reject act" data-act="reject">Reject</button>
         </div>
         <div class="lot-links">
           <a href="{{ f.url }}" target="_blank" rel="noopener" data-ev="nichibo_click">Nichibo {{ icon('external-link', 'icon--sm') }}</a>
-          <a href="{{ f.url }}" target="_blank" rel="noopener" data-ev="photos_click">Photos {{ icon('image', 'icon--sm') }}</a>
           <a href="/p/{{ p.id }}">Detail</a>
         </div>
         <div class="result" role="status"></div>
@@ -122,7 +104,7 @@
   <div class="empty">
     {{ icon('list-checks') }}
     <h3>Nothing to review</h3>
-    <p>New lots appear here after a scan. Decided lots are under All lots.</p>
+    <p>New lots arrive with a scan. Decided lots are under All lots.</p>
     <a class="btn" href="/">Go to the overview</a>
   </div>
 </div>

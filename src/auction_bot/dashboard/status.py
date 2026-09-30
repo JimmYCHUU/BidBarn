@@ -110,9 +110,10 @@ def rules_state(cfg) -> dict:
 
 
 def signin_state(store) -> dict:
-    """The result of the newest sign-in check (`check-login` or `login --wait`), and how old it is."""
+    """The result of the newest sign-in check (`check-login`, `login --wait`, or a Bid run, whose first
+    step is that check), and how old it is."""
     newest = None
-    for command in ("check-login", "login"):
+    for command in ("check-login", "login", "bid"):
         for row in store.list_runs(limit=5, command=command):
             d = run_dict(row)
             if d["status"] == "ok" and d["summary"] and "nichibo" in d["summary"]:
@@ -228,13 +229,16 @@ def placements_between(store, started: str | None, finished: str | None) -> list
     return out
 
 
-COMMAND_ICONS = {"scan": "scan-search", "fetch-rules": "book-open", "judge": "eye", "replay": "rotate-ccw", "place": "gavel",
-                 "insights": "chart-column", "login": "log-in", "check-login": "shield-check"}
-COMMAND_SHORT = {"scan": "Scan", "fetch-rules": "Guides", "judge": "Judge", "replay": "Replay", "place": "Place",
-                 "insights": "Insights", "login": "Sign in", "check-login": "Sign-in check"}
-DOING = {"scan": "Scanning Nichibo", "fetch-rules": "Fetching the bidding guides", "judge": "Judging pending lots",
-         "replay": "Replaying the rules", "place": "Placing the approved bids as a dry run",
-         "insights": "Working out the insights", "login": "Waiting for the sign-in", "check-login": "Checking the sign-in"}
+COMMAND_ICONS = {"bid": "route", "learn": "graduation-cap", "scan": "scan-search", "fetch-rules": "book-open", "judge": "eye",
+                 "replay": "rotate-ccw", "place": "gavel", "insights": "chart-column", "login": "log-in", "check-login": "shield-check"}
+COMMAND_SHORT = {"bid": "Bid", "learn": "Learn", "scan": "Scan", "fetch-rules": "Guides", "judge": "Judge", "replay": "Replay",
+                 "place": "Place", "insights": "Insights", "login": "Sign in", "check-login": "Sign-in check"}
+DOING = {"bid": "Running Bid mode", "learn": "Recording your session", "scan": "Scanning Nichibo",
+         "fetch-rules": "Fetching the bidding guides", "judge": "Judging pending lots", "replay": "Replaying the rules",
+         "place": "Placing the approved bids as a dry run", "insights": "Working out the insights",
+         "login": "Waiting for the sign-in", "check-login": "Checking the sign-in"}
+# A Bid run's progress stage, as the step of the day it is at (the scan step includes the judge).
+BID_STAGE_STEP = {"signin": "signin", "guides": "guides", "scan": "scan", "judge": "scan", "review": "review", "place": "place"}
 STATUS_ICONS = {"running": "loader-circle", "ok": "circle-check", "failed": "circle-x", "stopped": "square"}
 STATUS_WORDS = {"running": "Running", "ok": "Finished", "failed": "Failed", "stopped": "Stopped"}
 SESSION_GAP_MINUTES = 30  # decisions closer together than this are one review session
@@ -282,14 +286,22 @@ def day_log(store, runs: list[dict], days: int = 7, limit: int = 80) -> dict:
 # -- the day as steps ---------------------------------------------------------------------------
 
 def day_steps(s: dict, cache_hours: float) -> list[dict]:
-    """Sign in, guides, scan, review, place: where each stands, and the one that is next."""
-    running = (s["current"] or {}).get("command")
+    """Sign in, guides, scan, review, place: where each stands, and the one that is next.
+
+    A single step runs as its own command; a Bid run walks all five, so its progress stage says
+    which step is going. While it waits at the review, that step says so and links to the page."""
+    current = s["current"] or {}
+    running = current.get("command")
+    bid_step = BID_STAGE_STEP.get(current.get("stage") or "") if running == "bid" else None
+    waiting = bool(current.get("review_waiting"))
     last = s["last_runs"]
 
     def step(key, label, state, detail, command=None, href=None, options=None):
-        going = bool(command and running == command)  # what is true of a step at rest is not true while it runs
+        going = bool(command and running == command) or key == bid_step  # what is true of a step at rest is not true while it runs
+        if going:
+            detail = "Waiting for your review." if key == "review" and waiting else "Running now."
         return {"key": key, "label": label, "state": "running" if going else state,
-                "detail": "Running now." if going else detail, "command": command, "options": options or {}, "href": href}
+                "detail": detail, "command": command, "options": options or {}, "href": href}
 
     sign = s["signin"]
     if not sign["known"]:
@@ -344,8 +356,10 @@ def gather_status(cfg, store, jobs) -> dict:
     dry, reason = cfg.placement_mode(False)
     current = jobs.current()
     if current:
+        waiting = getattr(jobs, "review_waiting", lambda: None)() is not None
         current = dict(current, label=COMMANDS[current["command"]].label if current["command"] in COMMANDS else current["command"],
-                       doing=DOING.get(current["command"], current["command"]), started=ago(current["started_at"]))
+                       doing=DOING.get(current["command"], current["command"]), started=ago(current["started_at"]),
+                       stage=(current.get("progress") or {}).get("stage"), review_waiting=waiting)
     s = {
         "lock": {"testing": not cfg.project_finished, "dry_run": cfg.dry_run, "dry": dry, "label": lock_label(cfg), "reason": reason},
         "signin": signin_state(store),

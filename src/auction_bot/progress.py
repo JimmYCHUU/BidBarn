@@ -8,7 +8,9 @@ ordinary output, single lines the dashboard reads back from the run's log:
 
 Without the variable nothing is printed, so a command run from a console looks exactly as
 before. The dashboard stops a run by creating the file named in `BIDBARN_CANCEL_FILE`; the
-command notices at its next `check_cancel()` and ends with `Cancelled`.
+command notices at its next `check_cancel()` and ends with `Cancelled`. Its mirror is the file
+named in `BIDBARN_FINISH_FILE`: a Bid run waits at the review until the dashboard's Finish
+button creates it (`finish_requested()`), then removes it (`clear_finish()`) and goes on.
 
 This module imports nothing from the package (the browser module imports it).
 """
@@ -59,6 +61,27 @@ def cancel_requested() -> bool:
 def check_cancel() -> None:
     if cancel_requested():
         raise Cancelled(CANCEL_MESSAGE)
+
+
+def finish_file() -> str | None:
+    """The file the dashboard's Finish button writes; None when this run was not started by the dashboard."""
+    return os.environ.get("BIDBARN_FINISH_FILE") or None
+
+
+def finish_requested() -> bool:
+    path = finish_file()
+    return bool(path) and os.path.exists(path)
+
+
+def clear_finish() -> None:
+    """Remove the finish file once it has been seen. Best effort: a file that is gone already is fine."""
+    path = finish_file()
+    if not path:
+        return
+    try:
+        os.remove(path)
+    except OSError:
+        pass
 
 
 def parse(line: str) -> tuple[str, dict] | None:

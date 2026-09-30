@@ -4,21 +4,24 @@
 {% block body %}
 <div class="page-head">
   <h1 class="page-title">Runs</h1>
-  <span class="page-sub">{{ runs|length }} shown{% if command %}, {{ command_label(command) }} only{% endif %}</span>
+  <span class="page-sub">{{ runs|length }} shown{% if filter_label %}, {{ filter_label|lower if filter_label == 'Single steps' else filter_label }} only{% endif %}</span>
   <div class="end">
-    <nav class="seg" aria-label="Filter by command">
+    <nav class="seg" aria-label="Filter the runs">
       <a href="/runs" {% if not command %}aria-current="true"{% endif %}>All</a>
-      {% for c in commands %}<a href="/runs?command={{ c.name }}" {% if command == c.name %}aria-current="true"{% endif %}>{{ command_short(c.name) }}</a>{% endfor %}
+      <a href="/runs?command=learn" {% if command == 'learn' %}aria-current="true"{% endif %}>Learn</a>
+      <a href="/runs?command=bid" {% if command == 'bid' %}aria-current="true"{% endif %}>Bid</a>
+      <a href="/runs?command=steps" {% if command == 'steps' %}aria-current="true"{% endif %}>Steps</a>
     </nav>
   </div>
 </div>
 
-<details class="card start-card"{% if not runs %} open{% endif %}>
-  <summary class="card-head"><h2>Start a command</h2>
-    {% if current %}<span class="faint">{{ command_label(current.command) }} is running. One command runs at a time.</span>{% endif %}
-    {{ icon('chevron-down', 'icon--sm chev') }}</summary>
-  {% if current %}<div class="card-body"><div class="banner banner--info">{{ icon('info') }}<div>{{ command_label(current.command) }} is running. <a href="/runs/{{ current.id }}">Watch run {{ current.id }}</a>.</div></div></div>{% endif %}
-  {{ launcher(commands) }}
+<details class="card start-card">
+  <summary class="card-head"><h2>Start a single step</h2>{{ icon('chevron-down', 'icon--sm chev') }}</summary>
+  <div class="card-body">
+    <p class="faint">For one part of the day on its own. Learn and Bid start from the overview.</p>
+    {% if current %}<div class="banner banner--info">{{ icon('info') }}<div>{{ command_label(current.command) }} is running. <a href="/runs/{{ current.id }}">Watch run {{ current.id }}</a>.</div></div>{% endif %}
+  </div>
+  {{ launcher(commands, only=STEP_COMMANDS, shown=SHOWN_OPTIONS) }}
 </details>
 
 <section class="card">
@@ -41,7 +44,7 @@
           </td>
         </tr>
       {% else %}
-        <tr><td colspan="6"><div class="empty">{{ icon('history') }}<h3>No runs yet</h3><p>Commands started from this page are listed here with their logs.</p></div></td></tr>
+        <tr><td colspan="6"><div class="empty">{{ icon('history') }}<h3>No runs yet</h3><p>Learn and Bid runs, and the single steps started here, are listed with their logs.</p></div></td></tr>
       {% endfor %}
       </tbody>
     </table>

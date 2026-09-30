@@ -30,12 +30,15 @@ def test_triage_and_detail_show_the_judgement(cfg, monkeypatch):
     client = TestClient(create_app(cfg))
     r = client.get("/review")
     assert r.status_code == 200
-    assert "model: bid" in r.text and "dark cloth seats" in r.text and 'title="photo 2: painted body (high)"' in r.text
+    assert "model: bid" in r.text and "dark cloth seats" in r.text and "photo 2: painted body (high)" in r.text  # in the verdicts' tooltip
     assert 'class="badge ok"' in r.text and "No sticker paint" in r.text and 'data-bid="1240"' in r.text
+    assert 'class="verdicts"' in r.text and "pass," in r.text  # the row carries counts, the lot page the list
     r = client.get(f"/p/{pid}")
     assert "The model's judgement" in r.text and "recommends: bid" in r.text and "proposes <b>1,240K</b>" in r.text
     assert "photo 2: painted body" in r.text and "The model was wrong about" in r.text and 'value="1240"' in r.text
     assert "Your checklist" in r.text  # the reviewer's own checklist stays
+    card = r.text.split("Your checklist")[1].split("</section>")[0]
+    assert 'type="checkbox"' not in card  # as a list, not as boxes that were never saved
 
 
 def test_corrections_go_to_feedback_and_the_playbook(cfg, monkeypatch):

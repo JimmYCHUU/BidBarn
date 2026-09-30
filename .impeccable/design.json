@@ -1,94 +1,449 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-29T11:13:32+06:00",
+  "generatedAt": "2026-09-30T10:11:30+06:00",
   "title": "Design System: BidBarn",
   "extensions": {
     "colorMeta": {
-      "blue": { "role": "primary", "displayName": "Carbarn Blue", "canonical": "#0473ea", "tonalRamp": ["#061d33", "#0c3a66", "#035bbb", "#0366d0", "#0473ea", "#b9d6fb", "#e7f1ff", "#f5f9ff"] },
-      "blue-hover": { "role": "primary", "displayName": "Blue Hover", "canonical": "#0366d0" },
-      "blue-press": { "role": "primary", "displayName": "Blue Press", "canonical": "#035bbb" },
-      "blue-soft": { "role": "primary", "displayName": "Blue Soft", "canonical": "#e7f1ff" },
-      "blue-line": { "role": "primary", "displayName": "Blue Line", "canonical": "#b9d6fb" },
-      "link": { "role": "primary", "displayName": "Link Blue", "canonical": "#0366d0" },
-      "navy": { "role": "secondary", "displayName": "Carbarn Navy", "canonical": "#061d33" },
-      "navy-2": { "role": "secondary", "displayName": "Navy 2", "canonical": "#0c3a66" },
-      "ground": { "role": "neutral", "displayName": "Ground", "canonical": "#f1f4f8" },
-      "surface": { "role": "neutral", "displayName": "Surface", "canonical": "#ffffff" },
-      "surface-2": { "role": "neutral", "displayName": "Surface 2", "canonical": "#f8fafc" },
-      "surface-3": { "role": "neutral", "displayName": "Surface 3", "canonical": "#eef2f6" },
-      "ink": { "role": "neutral", "displayName": "Ink", "canonical": "#101828", "tonalRamp": ["#101828", "#344054", "#5f6f82", "#8692a3", "#98a2b3", "#d0d8e2", "#eaecf0", "#f8fafc"] },
-      "ink-2": { "role": "neutral", "displayName": "Ink 2", "canonical": "#344054" },
-      "ink-3": { "role": "neutral", "displayName": "Ink 3", "canonical": "#5f6f82" },
-      "ink-4": { "role": "neutral", "displayName": "Ink 4", "canonical": "#667085" },
-      "ink-faint": { "role": "neutral", "displayName": "Faint Ink", "canonical": "#98a2b3" },
-      "line": { "role": "neutral", "displayName": "Line", "canonical": "#eaecf0" },
-      "line-2": { "role": "neutral", "displayName": "Line 2", "canonical": "#e5e7eb" },
-      "line-strong": { "role": "neutral", "displayName": "Line Strong", "canonical": "#d0d8e2" },
-      "line-field": { "role": "neutral", "displayName": "Field Line", "canonical": "#8692a3" },
-      "ok-ink": { "role": "tertiary", "displayName": "Ok Ink", "canonical": "#067647", "tonalRamp": ["#085d3a", "#067647", "#079455", "#abefc6", "#ecfdf3"] },
-      "ok-bg": { "role": "tertiary", "displayName": "Ok Ground", "canonical": "#ecfdf3" },
-      "ok-line": { "role": "tertiary", "displayName": "Ok Line", "canonical": "#abefc6" },
-      "ok": { "role": "tertiary", "displayName": "Ok Solid", "canonical": "#079455" },
-      "warn-ink": { "role": "tertiary", "displayName": "Warn Ink", "canonical": "#b54708", "tonalRamp": ["#7a3306", "#b54708", "#dc6803", "#f4d9b0", "#fbe3bf", "#fef6e7"] },
-      "warn-bg": { "role": "tertiary", "displayName": "Warn Ground", "canonical": "#fef6e7" },
-      "warn-line": { "role": "tertiary", "displayName": "Warn Line", "canonical": "#f4d9b0" },
-      "warn": { "role": "tertiary", "displayName": "Warn Solid", "canonical": "#dc6803" },
-      "bad-ink": { "role": "tertiary", "displayName": "Bad Ink", "canonical": "#b42318", "tonalRamp": ["#8a1c13", "#b42318", "#d92d20", "#fda29b", "#fecdca", "#fff6f5"] },
-      "bad-bg": { "role": "tertiary", "displayName": "Bad Ground", "canonical": "#fff6f5" },
-      "bad-line": { "role": "tertiary", "displayName": "Bad Line", "canonical": "#fecdca" },
-      "bad": { "role": "tertiary", "displayName": "Bad Solid", "canonical": "#d92d20" },
-      "info-ink": { "role": "tertiary", "displayName": "Info Ink", "canonical": "#175cd3", "tonalRamp": ["#184b91", "#175cd3", "#b2ddff", "#eff8ff"] },
-      "info-bg": { "role": "tertiary", "displayName": "Info Ground", "canonical": "#eff8ff" },
-      "info-line": { "role": "tertiary", "displayName": "Info Line", "canonical": "#b2ddff" },
-      "violet-ink": { "role": "tertiary", "displayName": "Violet Ink", "canonical": "#5925dc", "tonalRamp": ["#5925dc", "#d9d6fe", "#f4f3ff"] },
-      "violet-bg": { "role": "tertiary", "displayName": "Violet Ground", "canonical": "#f4f3ff" },
-      "violet-line": { "role": "tertiary", "displayName": "Violet Line", "canonical": "#d9d6fe" },
-      "tan-ink": { "role": "tertiary", "displayName": "Tan Ink", "canonical": "#8a4b1c", "tonalRamp": ["#8a4b1c", "#cf9963", "#faead7"] },
-      "tan-bg": { "role": "tertiary", "displayName": "Tan Ground", "canonical": "#faead7" },
-      "tan-line": { "role": "tertiary", "displayName": "Tan Line", "canonical": "#cf9963" },
-      "slate-bg": { "role": "tertiary", "displayName": "Slate Ground", "canonical": "#e9eef4", "tonalRamp": ["#b4c2d2", "#e9eef4"] },
-      "slate-line": { "role": "tertiary", "displayName": "Slate Line", "canonical": "#b4c2d2" }
+      "blue": {
+        "role": "primary",
+        "displayName": "Carbarn Blue",
+        "canonical": "#0473ea",
+        "tonalRamp": [
+          "#061d33",
+          "#0c3a66",
+          "#035bbb",
+          "#0366d0",
+          "#0473ea",
+          "#b9d6fb",
+          "#e7f1ff",
+          "#f5f9ff"
+        ]
+      },
+      "blue-hover": {
+        "role": "primary",
+        "displayName": "Blue Hover",
+        "canonical": "#0366d0"
+      },
+      "blue-press": {
+        "role": "primary",
+        "displayName": "Blue Press",
+        "canonical": "#035bbb"
+      },
+      "blue-soft": {
+        "role": "primary",
+        "displayName": "Blue Soft",
+        "canonical": "#e7f1ff"
+      },
+      "blue-line": {
+        "role": "primary",
+        "displayName": "Blue Line",
+        "canonical": "#b9d6fb"
+      },
+      "link": {
+        "role": "primary",
+        "displayName": "Link Blue",
+        "canonical": "#0366d0"
+      },
+      "navy": {
+        "role": "secondary",
+        "displayName": "Carbarn Navy",
+        "canonical": "#061d33"
+      },
+      "navy-2": {
+        "role": "secondary",
+        "displayName": "Navy 2",
+        "canonical": "#0c3a66"
+      },
+      "ground": {
+        "role": "neutral",
+        "displayName": "Ground",
+        "canonical": "#f1f4f8"
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Surface",
+        "canonical": "#ffffff"
+      },
+      "surface-2": {
+        "role": "neutral",
+        "displayName": "Surface 2",
+        "canonical": "#f8fafc"
+      },
+      "surface-3": {
+        "role": "neutral",
+        "displayName": "Surface 3",
+        "canonical": "#eef2f6"
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#101828",
+        "tonalRamp": [
+          "#101828",
+          "#344054",
+          "#5f6f82",
+          "#8692a3",
+          "#98a2b3",
+          "#d0d8e2",
+          "#eaecf0",
+          "#f8fafc"
+        ]
+      },
+      "ink-2": {
+        "role": "neutral",
+        "displayName": "Ink 2",
+        "canonical": "#344054"
+      },
+      "ink-3": {
+        "role": "neutral",
+        "displayName": "Ink 3",
+        "canonical": "#5f6f82"
+      },
+      "ink-4": {
+        "role": "neutral",
+        "displayName": "Ink 4",
+        "canonical": "#667085"
+      },
+      "ink-faint": {
+        "role": "neutral",
+        "displayName": "Faint Ink",
+        "canonical": "#98a2b3"
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Line",
+        "canonical": "#eaecf0"
+      },
+      "line-2": {
+        "role": "neutral",
+        "displayName": "Line 2",
+        "canonical": "#e5e7eb"
+      },
+      "line-strong": {
+        "role": "neutral",
+        "displayName": "Line Strong",
+        "canonical": "#d0d8e2"
+      },
+      "line-field": {
+        "role": "neutral",
+        "displayName": "Field Line",
+        "canonical": "#8692a3"
+      },
+      "ok-ink": {
+        "role": "tertiary",
+        "displayName": "Ok Ink",
+        "canonical": "#067647",
+        "tonalRamp": [
+          "#085d3a",
+          "#067647",
+          "#079455",
+          "#abefc6",
+          "#ecfdf3"
+        ]
+      },
+      "ok-bg": {
+        "role": "tertiary",
+        "displayName": "Ok Ground",
+        "canonical": "#ecfdf3"
+      },
+      "ok-line": {
+        "role": "tertiary",
+        "displayName": "Ok Line",
+        "canonical": "#abefc6"
+      },
+      "ok": {
+        "role": "tertiary",
+        "displayName": "Ok Solid",
+        "canonical": "#079455"
+      },
+      "warn-ink": {
+        "role": "tertiary",
+        "displayName": "Warn Ink",
+        "canonical": "#b54708",
+        "tonalRamp": [
+          "#7a3306",
+          "#b54708",
+          "#dc6803",
+          "#f4d9b0",
+          "#fbe3bf",
+          "#fef6e7"
+        ]
+      },
+      "warn-bg": {
+        "role": "tertiary",
+        "displayName": "Warn Ground",
+        "canonical": "#fef6e7"
+      },
+      "warn-line": {
+        "role": "tertiary",
+        "displayName": "Warn Line",
+        "canonical": "#f4d9b0"
+      },
+      "warn": {
+        "role": "tertiary",
+        "displayName": "Warn Solid",
+        "canonical": "#dc6803"
+      },
+      "bad-ink": {
+        "role": "tertiary",
+        "displayName": "Bad Ink",
+        "canonical": "#b42318",
+        "tonalRamp": [
+          "#8a1c13",
+          "#b42318",
+          "#d92d20",
+          "#fda29b",
+          "#fecdca",
+          "#fff6f5"
+        ]
+      },
+      "bad-bg": {
+        "role": "tertiary",
+        "displayName": "Bad Ground",
+        "canonical": "#fff6f5"
+      },
+      "bad-line": {
+        "role": "tertiary",
+        "displayName": "Bad Line",
+        "canonical": "#fecdca"
+      },
+      "bad": {
+        "role": "tertiary",
+        "displayName": "Bad Solid",
+        "canonical": "#d92d20"
+      },
+      "info-ink": {
+        "role": "tertiary",
+        "displayName": "Info Ink",
+        "canonical": "#175cd3",
+        "tonalRamp": [
+          "#184b91",
+          "#175cd3",
+          "#b2ddff",
+          "#eff8ff"
+        ]
+      },
+      "info-bg": {
+        "role": "tertiary",
+        "displayName": "Info Ground",
+        "canonical": "#eff8ff"
+      },
+      "info-line": {
+        "role": "tertiary",
+        "displayName": "Info Line",
+        "canonical": "#b2ddff"
+      },
+      "violet-ink": {
+        "role": "tertiary",
+        "displayName": "Violet Ink",
+        "canonical": "#5925dc",
+        "tonalRamp": [
+          "#5925dc",
+          "#d9d6fe",
+          "#f4f3ff"
+        ]
+      },
+      "violet-bg": {
+        "role": "tertiary",
+        "displayName": "Violet Ground",
+        "canonical": "#f4f3ff"
+      },
+      "violet-line": {
+        "role": "tertiary",
+        "displayName": "Violet Line",
+        "canonical": "#d9d6fe"
+      },
+      "tan-ink": {
+        "role": "tertiary",
+        "displayName": "Tan Ink",
+        "canonical": "#8a4b1c",
+        "tonalRamp": [
+          "#8a4b1c",
+          "#cf9963",
+          "#faead7"
+        ]
+      },
+      "tan-bg": {
+        "role": "tertiary",
+        "displayName": "Tan Ground",
+        "canonical": "#faead7"
+      },
+      "tan-line": {
+        "role": "tertiary",
+        "displayName": "Tan Line",
+        "canonical": "#cf9963"
+      },
+      "slate-bg": {
+        "role": "tertiary",
+        "displayName": "Slate Ground",
+        "canonical": "#e9eef4",
+        "tonalRamp": [
+          "#b4c2d2",
+          "#e9eef4"
+        ]
+      },
+      "slate-line": {
+        "role": "tertiary",
+        "displayName": "Slate Line",
+        "canonical": "#b4c2d2"
+      }
     },
     "typographyMeta": {
-      "display": { "displayName": "Display", "purpose": "The bid amount on the lot's detail page, with its unit at 14px and the grid cell it came from on the line below." },
-      "headline": { "displayName": "Headline", "purpose": "The page title, one per page. The name of the next step on the overview uses the same size with line-height 1.3 and letter-spacing -0.015em." },
-      "title": { "displayName": "Title", "purpose": "Card heads, the title of a lot, the title of a log entry." },
-      "body": { "displayName": "Body", "purpose": "Running text. The sentence under the next step is held to 72ch." },
-      "control": { "displayName": "Control", "purpose": "Button text." },
-      "meta": { "displayName": "Meta", "purpose": "The facts line of a log entry or a lot, and the options of a run. Entry times and field labels use the same size at weight 600." },
-      "label": { "displayName": "Label", "purpose": "Pills." },
-      "table-head": { "displayName": "Table head", "purpose": "Uppercase. Column heads, the term of a fact pair, the label of a counter. Never above a heading." },
-      "mono": { "displayName": "Mono", "purpose": "The log of a run, model codes, chassis codes, file paths, key caps." }
+      "display": {
+        "displayName": "Display",
+        "purpose": "The bid amount on the lot's detail page, with its unit at 14px and the grid cell it came from on the line below."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "The page title, one per page. The name of the next step on the overview uses the same size with line-height 1.3 and letter-spacing -0.015em."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Card heads, the title of a lot, the title of a log entry."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Running text. The sentence under the next step is held to 72ch."
+      },
+      "control": {
+        "displayName": "Control",
+        "purpose": "Button text."
+      },
+      "meta": {
+        "displayName": "Meta",
+        "purpose": "The facts line of a log entry or a lot, and the options of a run. Entry times and field labels use the same size at weight 600."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Pills."
+      },
+      "table-head": {
+        "displayName": "Table head",
+        "purpose": "Uppercase. Column heads, the term of a fact pair, the label of a counter. Never above a heading."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "The log of a run, model codes, chassis codes, file paths, key caps."
+      }
     },
     "shadows": [
-      { "name": "shadow-header", "value": "0 8px 28px rgba(16, 24, 40, 0.05)", "purpose": "Under the sticky header, so that the page passes beneath it." },
-      { "name": "shadow-xs", "value": "0 1px 2px rgba(16, 24, 40, 0.06)", "purpose": "The chosen item of a segmented control." },
-      { "name": "field-focus", "value": "0 0 0 3px rgba(4, 115, 234, 0.18)", "purpose": "The ring around a focused input, with a blue border. A focus mark, not depth." }
+      {
+        "name": "shadow-header",
+        "value": "0 8px 28px rgba(16, 24, 40, 0.05)",
+        "purpose": "Under the sticky header, so that the page passes beneath it."
+      },
+      {
+        "name": "shadow-xs",
+        "value": "0 1px 2px rgba(16, 24, 40, 0.06)",
+        "purpose": "The chosen item of a segmented control."
+      },
+      {
+        "name": "field-focus",
+        "value": "0 0 0 3px rgba(4, 115, 234, 0.18)",
+        "purpose": "The ring around a focused input, with a blue border. A focus mark, not depth."
+      }
     ],
     "motion": [
-      { "name": "ease-out", "value": "cubic-bezier(0.23, 1, 0.32, 1)", "purpose": "The curve for movement: a press, a meter, a chevron, the decision row." },
-      { "name": "colour", "value": "150ms ease", "purpose": "Background, border and text colour of buttons, nav items, tiles and inputs." },
-      { "name": "press", "value": "transform scale(0.98), 120ms ease-out", "purpose": "A button while it is pressed." },
-      { "name": "meter", "value": "transform scaleX, 300ms ease-out", "purpose": "A meter's fill growing to its share. The longest CSS transition." },
-      { "name": "chevron", "value": "transform rotate(180deg), 150ms ease-out", "purpose": "The chevron of an opened disclosure." },
-      { "name": "decision-row-enter", "value": "opacity 0 to 1 and scale 0.97 to 1, 150ms ease-out, origin top right", "purpose": "The decision row opened with the pointer. Opened with a key it does not animate." },
-      { "name": "log-line-enter", "value": "opacity 0 to 1, 150ms ease", "purpose": "A new log line. Skipped when more than five lines arrive together." },
-      { "name": "number-tween", "value": "GSAP, 0.4s, power2.out, snapped to whole numbers", "purpose": "A counter or a count tile reaching its new value." },
-      { "name": "share-tween", "value": "GSAP, 0.3s, power3.out", "purpose": "The meter inside the run console." },
-      { "name": "completion-sweep", "value": "GSAP, opacity 0.3 to 1, 0.3s, stagger 0.012s, power2.out", "purpose": "The guide row, once, when a scan ends well. The page reloads after it." },
-      { "name": "now-pulse", "value": "opacity to 0.35 and back, 1.2s ease-in-out, repeating", "purpose": "The guide cell being scanned, while the run is running." },
-      { "name": "spin", "value": "rotate 360deg, 1s linear, repeating", "purpose": "The icon of a running run or step." },
-      { "name": "confirm-disarm", "value": "5000ms", "purpose": "An armed button returns to its first label." },
-      { "name": "reduced-motion", "value": "durations 0.01ms, one iteration, no press movement; scripts write the final value", "purpose": "Applied when the reader asks for reduced motion." }
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.23, 1, 0.32, 1)",
+        "purpose": "The curve for movement: a press, a meter, a chevron, the decision row."
+      },
+      {
+        "name": "colour",
+        "value": "150ms ease",
+        "purpose": "Background, border and text colour of buttons, nav items, tiles and inputs."
+      },
+      {
+        "name": "press",
+        "value": "transform scale(0.98), 120ms ease-out",
+        "purpose": "A button while it is pressed."
+      },
+      {
+        "name": "meter",
+        "value": "transform scaleX, 300ms ease-out",
+        "purpose": "A meter's fill growing to its share. The longest CSS transition."
+      },
+      {
+        "name": "chevron",
+        "value": "transform rotate(180deg), 150ms ease-out",
+        "purpose": "The chevron of an opened disclosure."
+      },
+      {
+        "name": "decision-row-enter",
+        "value": "opacity 0 to 1 and scale 0.97 to 1, 150ms ease-out, origin top right",
+        "purpose": "The decision row opened with the pointer. Opened with a key it does not animate."
+      },
+      {
+        "name": "log-line-enter",
+        "value": "opacity 0 to 1, 150ms ease",
+        "purpose": "A new log line. Skipped when more than five lines arrive together."
+      },
+      {
+        "name": "number-tween",
+        "value": "GSAP, 0.4s, power2.out, snapped to whole numbers",
+        "purpose": "A counter or a count tile reaching its new value."
+      },
+      {
+        "name": "share-tween",
+        "value": "GSAP, 0.3s, power3.out",
+        "purpose": "The meter inside the run console."
+      },
+      {
+        "name": "completion-sweep",
+        "value": "GSAP, opacity 0.3 to 1, 0.3s, stagger 0.012s, power2.out",
+        "purpose": "The guide row, once, when a scan ends well. The page reloads after it."
+      },
+      {
+        "name": "now-pulse",
+        "value": "opacity to 0.35 and back, 1.2s ease-in-out, repeating",
+        "purpose": "The guide cell being scanned, while the run is running."
+      },
+      {
+        "name": "spin",
+        "value": "rotate 360deg, 1s linear, repeating",
+        "purpose": "The icon of a running run or step."
+      },
+      {
+        "name": "confirm-disarm",
+        "value": "5000ms",
+        "purpose": "An armed button returns to its first label."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "durations 0.01ms, one iteration, no press movement; scripts write the final value",
+        "purpose": "Applied when the reader asks for reduced motion."
+      }
     ],
     "breakpoints": [
-      { "name": "nav-strip", "value": "max-width: 1279px" },
-      { "name": "overview-one-column", "value": "max-width: 1279px" },
-      { "name": "review-lot-as-block", "value": "container triage, max-width: 1129px" },
-      { "name": "review-lot-stacked", "value": "container triage, max-width: 829px" },
-      { "name": "columns-stack", "value": "max-width: 860px" },
-      { "name": "evidence-sticky", "value": "min-width: 861px" },
-      { "name": "phone", "value": "max-width: 640px" }
+      {
+        "name": "nav-strip",
+        "value": "max-width: 1279px"
+      },
+      {
+        "name": "overview-one-column",
+        "value": "max-width: 1279px"
+      },
+      {
+        "name": "review-lot-as-block",
+        "value": "container triage, max-width: 1129px"
+      },
+      {
+        "name": "review-lot-stacked",
+        "value": "container triage, max-width: 829px"
+      },
+      {
+        "name": "columns-stack",
+        "value": "max-width: 860px"
+      },
+      {
+        "name": "evidence-sticky",
+        "value": "min-width: 861px"
+      },
+      {
+        "name": "phone",
+        "value": "max-width: 640px"
+      }
     ]
   },
   "components": [
@@ -171,11 +526,60 @@
       "description": "One thing that happened today: the time, an icon tile in the colour of the outcome, the title with its pill and duration, then the numbers it ended on or the line that stopped it.",
       "html": "<ol class='ds-entries'><li class='ds-entry'><time datetime='09:27'>09:27</time><span class='ds-entry-icon ds-entry-icon-ok'><svg viewBox='0 0 24 24' aria-hidden='true'><path d='M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8'/><path d='M3 3v5h5'/></svg></span><div><div class='ds-entry-head'><a href='#' class='ds-entry-title'>Replay the rules</a><span class='ds-entry-opts'>report only</span><span class='ds-entry-pill ds-entry-pill-ok'><svg viewBox='0 0 24 24' aria-hidden='true'><circle cx='12' cy='12' r='10'/><path d='m16 9-5.5 5.5L8 12'/></svg>Finished</span><span class='ds-entry-took'>took 6 s</span></div><p class='ds-entry-facts'><span>Checked <b>24</b></span><span>Changed <b>3</b></span><span>Stored <b>0</b></span><span>Unchanged <b>21</b></span></p></div></li><li class='ds-entry'><time datetime='08:12'>08:12</time><span class='ds-entry-icon ds-entry-icon-failed'><svg viewBox='0 0 24 24' aria-hidden='true'><path d='M3 7V5a2 2 0 0 1 2-2h2'/><path d='M17 3h2a2 2 0 0 1 2 2v2'/><path d='M21 17v2a2 2 0 0 1-2 2h-2'/><path d='M7 21H5a2 2 0 0 1-2-2v-2'/><circle cx='12' cy='12' r='3'/><path d='m16 16-1.9-1.9'/></svg></span><div><div class='ds-entry-head'><a href='#' class='ds-entry-title'>Scan Nichibo</a><span class='ds-entry-pill ds-entry-pill-failed'><svg viewBox='0 0 24 24' aria-hidden='true'><circle cx='12' cy='12' r='10'/><path d='m15 9-6 6'/><path d='m9 9 6 6'/></svg>Failed</span><span class='ds-entry-took'>took 9 s</span></div><p class='ds-entry-error'>Nichibo redirected to the login page</p></div></li></ol>",
       "css": ".ds-entries { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; max-width: 720px; font: 500 14px/1.5 var(--font, 'Manrope', 'Segoe UI', system-ui, sans-serif); color: var(--ink-2, #344054); } .ds-entry { display: grid; grid-template-columns: 44px 32px minmax(0, 1fr); gap: 0 10px; align-items: start; padding: 12px 16px 12px 10px; background: var(--surface, #ffffff); border: 1px solid var(--line, #eaecf0); border-radius: var(--r-md, 12px); } .ds-entry p { margin: 0; } .ds-entry time { padding-top: 7px; font-size: 12.5px; font-weight: 600; color: var(--ink-3, #5f6f82); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; } .ds-entry svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; } .ds-entry-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: var(--r-sm, 8px); background: var(--surface-3, #eef2f6); color: var(--ink-2, #344054); } .ds-entry-icon-ok { background: var(--ok-bg, #ecfdf3); color: var(--ok-ink, #067647); } .ds-entry-icon-failed { background: var(--bad-bg, #fff6f5); color: var(--bad-ink, #b42318); } .ds-entry-head { display: flex; align-items: center; gap: 4px 10px; flex-wrap: wrap; min-height: 32px; } .ds-entry-title { font-size: 14px; font-weight: 700; color: var(--ink, #101828); text-decoration: none; text-underline-offset: 3px; } .ds-entry-title:hover { text-decoration: underline; } .ds-entry-title:focus-visible { outline: 2px solid var(--blue, #0473ea); outline-offset: 2px; border-radius: 4px; } .ds-entry-opts { font-size: 12.5px; color: var(--ink-3, #5f6f82); } .ds-entry-pill { display: inline-flex; align-items: center; gap: 5px; min-height: 22px; padding: 1px 10px; border: 1px solid; border-radius: var(--r-pill, 999px); font-size: 12px; font-weight: 600; line-height: 1.3; white-space: nowrap; } .ds-entry-pill svg { width: 13px; height: 13px; } .ds-entry-pill-ok { background: var(--ok-bg, #ecfdf3); border-color: var(--ok-line, #abefc6); color: var(--ok-ink, #067647); } .ds-entry-pill-failed { background: var(--bad-bg, #fff6f5); border-color: var(--bad-line, #fecdca); color: var(--bad-ink, #b42318); } .ds-entry-took { margin-left: auto; font-size: 12px; color: var(--ink-3, #5f6f82); } .ds-entry-facts { display: flex; flex-wrap: wrap; gap: 2px 16px; margin-top: 3px; font-size: 12.5px; color: var(--ink-3, #5f6f82); font-variant-numeric: tabular-nums; } .ds-entry-facts b { font-weight: 700; color: var(--ink, #101828); } .ds-entry-error { margin-top: 3px; font-size: 13px; font-weight: 600; color: var(--bad-ink, #b42318); overflow-wrap: anywhere; }"
+    },
+    {
+      "name": "Mode Cell",
+      "kind": "custom",
+      "refersTo": "mode",
+      "description": "One of the two things the overview offers when nothing runs: a 15px title with a blue icon, one 13px sentence held to 52ch, one button. Bid's button is primary, Learn's default. Two cells side by side with a hairline between; stacked under 860px.",
+      "html": "<div class='ds-modes'><div class='ds-mode'><h2>Learn mode</h2><p>Bid as usual in the bot's browser and type why in the blue box; the bot only watches, and reports on your session here.</p><button class='ds-btn'>Start Learn mode</button></div><div class='ds-mode'><h2>Bid mode</h2><p>Checks the sign-in, fetches the guides, scans Nichibo, opens the review, then places what you approve as a dry run.</p><button class='ds-btn ds-btn-primary'>Start Bid mode</button></div></div>"
+    },
+    {
+      "name": "State Chip List",
+      "kind": "chip",
+      "refersTo": "state-chips",
+      "description": "The state of the day as pills in one card: sign-in, guides, to review, approved not placed, placed, a model quota only when short. A faint note beside a pill gives its age or count; a small button appears only when something is wrong and the page can repair it.",
+      "html": "<ul class='ds-state-chips'><li><span class='ds-pill ds-pill-ok'>Signed in</span><span class='ds-faint'>checked 3 h ago</span></li><li><span class='ds-pill ds-pill-warn'>Guides stale</span><span class='ds-faint'>fetched 26 h ago</span><button class='ds-btn ds-btn-sm'>Fetch the guides</button></li><li><a class='ds-pill ds-pill-warn' href='#'><b>7</b> to review</a></li></ul>"
+    },
+    {
+      "name": "Stages",
+      "kind": "custom",
+      "refersTo": "stages",
+      "description": "The five stages of a Bid run in one row joined by hairlines: done with the ok check, running with the spinning blue icon in bold ink, failed with the bad cross, to come with the faint circle. Shown for Bid runs only.",
+      "html": "<ol class='ds-steps'><li class='ds-step ds-step-done'>Sign in</li><li class='ds-step ds-step-done'>Guides</li><li class='ds-step ds-step-running'>Scan</li><li class='ds-step'>Review</li><li class='ds-step'>Place</li></ol>"
+    },
+    {
+      "name": "Verdict Counts",
+      "kind": "chip",
+      "refersTo": "verdicts",
+      "description": "The requirement badges as counts on the review page: a check with the passes, a cross with the fails, an alert with the unclear ones, only the non-zero families, the full list in the tooltip.",
+      "html": "<span class='ds-verdicts' title='pass  No sticker paint: photo 2&#10;fail  Dark seats: photo 5'><span class='ds-badge ds-badge-ok'>3</span><span class='ds-badge ds-badge-bad'>1</span></span>"
+    },
+    {
+      "name": "Keys Popover",
+      "kind": "custom",
+      "refersTo": "keys-pop",
+      "description": "The review page's keyboard list as a floating white card under the page head, 8px radius, 1px line, the popover shadow, layer 40. Opened by the keyboard button or the ? key, closed by Esc or a click outside. It does not animate.",
+      "html": "<div class='ds-keys-pop'><span><kbd>j</kbd> <kbd>k</kbd> next, previous</span><span><kbd>a</kbd> approve</span><span><kbd>r</kbd> reject with a reason</span><span><kbd>Esc</kbd> cancel</span></div>"
+    },
+    {
+      "name": "Session Table",
+      "kind": "table",
+      "refersTo": "session-table",
+      "description": "A Learn run's session: per lot what Jim did (pills), what the bot proposed (status pill, amount, reason), what the model said (recommendation pill, agree or disagree), and the guide it belongs to.",
+      "html": "<table class='ds-table ds-session-table'><thead><tr><th>Lot</th><th>You</th><th>The bot</th><th>The model</th><th>Guide</th></tr></thead><tbody><tr><td>2012 Toyota Alphard 240S</td><td><span class='ds-pill ds-pill-ok'>bid 1,400K</span> <span class='ds-pill ds-pill-info'>carted</span></td><td><span class='ds-pill ds-pill-warn'>Needs review</span> <b>1,350K</b></td><td><span class='ds-pill ds-pill-ok'>model: bid</span> <span class='ds-pill ds-pill-ok'>agree</span></td><td><a href='#' class='ds-mono'>ANH20W</a></td></tr></tbody></table>"
+    },
+    {
+      "name": "Guide Grid",
+      "kind": "table",
+      "refersTo": "grid-table",
+      "description": "A bidding guide's grid: years down, odometer bands across, K JPY amounts as tabular figures, 'no bid' in muted ink with the reason as tooltip, 8px cell padding so sixteen bands fit the main column.",
+      "html": "<table class='ds-table ds-grid-table'><thead><tr><th>Year</th><th>0K-10K</th><th>10K-20K</th><th>20K-30K</th></tr></thead><tbody><tr><td><b>2020</b></td><td>1,840</td><td>1,810</td><td>1,760</td></tr><tr><td><b>2021</b></td><td>2,020</td><td>1,970</td><td>1,930</td></tr></tbody></table>"
     }
   ],
   "narrative": {
     "northStar": "One Family",
-    "overview": "BidBarn's pages are written in the visual language of the Carbarn dashboard, so that the two read as one family when they sit beside each other on the office PC. Jim pinned this on 2026-09-29. The stylesheet is BidBarn's own: one file, `bidbarn.css`, with every token on `:root`. It is light only and declares `color-scheme: light`.\n\nIt is a working tool for one person who opens it a session or two a day. The pages are dense enough to hold a day of runs or a queue of lots, and quiet enough that the one thing to do next is easy to find. Text is Manrope at 14px. Surfaces are white cards with a 1px line on a grey-blue ground. The brand blue marks the action that moves the day forward and whatever is live or selected. State is shown as a pill that carries a word.\n\nMotion follows change and nothing else. A page opens still. After that, a number counts to its new value, a meter grows to its share, and the guide row sweeps once when a scan ends. CSS transitions are 120 to 300ms. A reader who asks for reduced motion gets the final values with no movement.",
+    "overview": "BidBarn's pages are written in the visual language of the Carbarn dashboard, so that the two read as one family when they sit beside each other on the office PC. Jim pinned this on 2026-09-29. The stylesheet is BidBarn's own: one file, `bidbarn.css`, with every token on `:root`. It is light only and declares `color-scheme: light`.\n\nIt is a working tool for one person who opens it a session or two a day. The pages are dense enough to hold a day of runs or a queue of lots, and quiet enough that the one thing to do next is easy to find. Text is Manrope at 14px. Surfaces are white cards with a 1px line on a grey-blue ground. The brand blue marks the action that moves the day forward and whatever is live or selected. State is shown as a pill that carries a word.\n\nMotion follows change and nothing else. A page opens still. After that, a number counts to its new value, a meter grows to its share, and the guide row sweeps once when a scan ends. CSS transitions are 120 to 300ms. A reader who asks for reduced motion gets the final values with no movement. Revised 2026-09-30 after Jim's verdict that the first build felt complex: the overview offers two things, Learn mode and Bid mode, the single steps live in a fold on the Runs page, the review row carries one line of why with verdict counts, and every lot links to its guide's own page.",
     "keyCharacteristics": [
       "Manrope, one self-hosted variable font (weights 200 to 800), body at 14px and weight 500.",
       "The brand blue for the primary action, the live entry, the selected row and the focus ring.",
@@ -188,14 +592,46 @@
       "Every font, script and icon is served from the project's own `static/vendor/` folder."
     ],
     "rules": [
-      { "name": "The Word With The Colour Rule", "body": "A status colour never stands alone. Every pill carries its word. A pill that reports a run or a check also carries its Lucide icon. In the guide row the height of a cell changes with its state as well as its colour, and the legend names each state.", "section": "colors" },
-      { "name": "The Empty Track Exception", "body": "The guide cells that are not scanned yet are #a3afbf on white, about 2.2:1, below the 3:1 floor for graphics. This is deliberate and it is the only such case. Those cells are the empty track of the row, 4px high. Their meaning is carried elsewhere: the legend names them (\"to come\", or \"not scanned\" after the run), the line above the row says \"Guide 8 of 46\", and the row's accessible label counts them. The value is not a text colour and is not available to any other component.", "section": "colors" },
-      { "name": "The Data Label Rule", "body": "The uppercase 11px label names a piece of data: a column, a fact, a counter. It sits directly over its value or its column. It is never placed above a heading or a section title.", "section": "typography" },
-      { "name": "The Tabular Figures Rule", "body": "Counts, amounts, times and durations use tabular numerals. Numeric table columns are right aligned.", "section": "typography" },
-      { "name": "The Line Not Shadow Rule", "body": "A surface is declared once, by its line. Cards, tiles, log entries, tables and notices have a 1px border and no shadow. A shadow belongs to the header and to the chosen segment, nowhere else.", "section": "elevation" },
-      { "name": "The Confirm In Place Rule", "body": "An action that deserves a second thought is confirmed on the button itself. The first click arms it: the label becomes the confirm words (\"Confirm stop\", \"Confirm approve\") and the button turns navy. The second click acts. An armed button disarms after 5 seconds. The button is given the width of its longer label beforehand, so arming moves nothing. No dialog is opened.", "section": "components" },
-      { "name": "The Keyboard Is Instant Rule", "body": "When the decision row is opened with the pointer it fades in and grows from 0.97 over 150ms, from its top right corner. When it is opened with a key it appears at once.", "section": "components" },
-      { "name": "The Still On Load Rule", "body": "Nothing animates when a page opens. What the page opens with is drawn as it is. Only a change that arrives afterwards moves: a counter counts to its new value in 0.4 seconds, a meter grows to its share in 0.3 seconds, a new log line fades in over 150ms unless more than five arrive together. When a scan ends well the cells of the guide row sweep once from 30% to full opacity, 12ms apart. The spinning icon and the pulsing cell mark a run that is running and stop with it.", "section": "components" }
+      {
+        "name": "The Word With The Colour Rule",
+        "body": "A status colour never stands alone. Every pill carries its word. A pill that reports a run or a check also carries its Lucide icon. In the guide row the height of a cell changes with its state as well as its colour, and the legend names each state.",
+        "section": "colors"
+      },
+      {
+        "name": "The Empty Track Exception",
+        "body": "The guide cells that are not scanned yet are #a3afbf on white, about 2.2:1, below the 3:1 floor for graphics. This is deliberate and it is the only such case. Those cells are the empty track of the row, 4px high. Their meaning is carried elsewhere: the legend names them (\"to come\", or \"not scanned\" after the run), the line above the row says \"Guide 8 of 46\", and the row's accessible label counts them. The value is not a text colour and is not available to any other component.",
+        "section": "colors"
+      },
+      {
+        "name": "The Data Label Rule",
+        "body": "The uppercase 11px label names a piece of data: a column, a fact, a counter. It sits directly over its value or its column. It is never placed above a heading or a section title.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Figures Rule",
+        "body": "Counts, amounts, times and durations use tabular numerals. Numeric table columns are right aligned.",
+        "section": "typography"
+      },
+      {
+        "name": "The Line Not Shadow Rule",
+        "body": "A surface is declared once, by its line. Cards, tiles, log entries, tables and notices have a 1px border and no shadow. A shadow belongs to the header and to the chosen segment, nowhere else.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Confirm In Place Rule",
+        "body": "An action that deserves a second thought is confirmed on the button itself. The first click arms it: the label becomes the confirm words (\"Confirm stop\", \"Confirm approve\") and the button turns navy. The second click acts. An armed button disarms after 5 seconds. The button is given the width of its longer label beforehand, so arming moves nothing. No dialog is opened.",
+        "section": "components"
+      },
+      {
+        "name": "The Keyboard Is Instant Rule",
+        "body": "When the decision row is opened with the pointer it fades in and grows from 0.97 over 150ms, from its top right corner. When it is opened with a key it appears at once.",
+        "section": "components"
+      },
+      {
+        "name": "The Still On Load Rule",
+        "body": "Nothing animates when a page opens. What the page opens with is drawn as it is. Only a change that arrives afterwards moves: a counter counts to its new value in 0.4 seconds, a meter grows to its share in 0.3 seconds, a new log line fades in over 150ms unless more than five arrive together. When a scan ends well the cells of the guide row sweep once from 30% to full opacity, 12ms apart. The spinning icon and the pulsing cell mark a run that is running and stop with it.",
+        "section": "components"
+      }
     ],
     "dos": [
       "Do build every page inside the shared shell: the 72px header with the wordmark and the lock pill, the nav, then the page head and its cards.",

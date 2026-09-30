@@ -13,12 +13,22 @@ from pathlib import Path
 from fastapi import Body, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 
+from auction_bot.dashboard import guides as guide_pages  # the module: this file's own function is `register` too
 from auction_bot.dashboard import status as st
 from auction_bot.dashboard.jobs import COMMANDS, BadRequest, Busy, NotRunning
 from auction_bot.insights import model_accuracy, propose_skip_lines, summarise
 from auction_bot.judge.client import providers_for
 
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1", "[::1]"}
+MODES = ("learn", "bid")  # the two runs the overview starts; everything else is a single step
+# The single steps the Runs page offers, in order, and the options its form shows for each. The
+# `COMMANDS` table keeps every option: what is not shown falls to its default through `build_argv`.
+STEP_COMMANDS = ["login", "check-login", "fetch-rules", "scan", "judge", "replay", "place"]
+SHOWN_OPTIONS = {"scan": ["model", "limit"], "replay": ["apply"]}
+# What a log entry shows of a run's closing numbers: at most three, by the labels `summary_pairs` gives them.
+ENTRY_LABELS = {"scan": ["For review", "Skipped", "Errors"], "fetch-rules": ["Guides"], "judge": ["Judged", "Model unavailable"],
+                "replay": ["Changed", "Stored"], "place": ["Bids", "Dry run"], "login": ["Nichibo", "Carbarn dashboard"],
+                "check-login": ["Nichibo", "Carbarn dashboard"], "learn": ["Lots", "Agree", "Disagree"], "bid": ["For review", "Bids"]}
 
 
 def local_only(request: Request, allowed: set[str]) -> str | None:
@@ -70,8 +80,8 @@ def options_words(run: dict) -> str:
             words.append(f"{value} rejection{'' if value == '1' else 's'} per rule")
             i += 2
         else:
-            word = {"--no-headless": "browser window shown", "--rescan": "known lots again", "--fresh": "cache ignored",
-                    "--apply": "new outcomes stored"}.get(a)
+            word = {"--no-headless": "browser window shown", "--headed": "browser window shown", "--rescan": "known lots again",
+                    "--fresh": "cache ignored", "--apply": "new outcomes stored"}.get(a)
             if word:
                 words.append(word)
             i += 1
@@ -80,20 +90,27 @@ def options_words(run: dict) -> str:
     return ", ".join(([", ".join(models)] if models else []) + words)
 
 
+LEARN_COUNTS = [("lots", "Lots"), ("opened", "Opened"), ("bids", "Your bids"), ("agree", "Agree"), ("disagree", "Disagree"),
+                ("candidates", "Candidate rules"), ("notes", "Notes"), ("actions_saved", "Kept in the store")]
+
+
 def summary_pairs(run: dict) -> list[tuple[str, str]]:
     """The closing numbers of a run as label and value, in a reading order, without long lists."""
     s = run.get("summary") or {}
+    if run.get("command") == "learn":
+        counts = s.get("counts") if isinstance(s.get("counts"), dict) else {}
+        return [(label, f"{int(counts[key]):,}") for key, label in LEARN_COUNTS if isinstance(counts.get(key), int)]
     order = ["guides", "cards", "opened", "sheet_only", "pages", "review", "bid", "skip", "reused", "pending", "model_calls",
              "checked", "changed", "applied", "unchanged", "needs_fetch", "judged", "unavailable", "decisions",
-             "snapshot", "nichibo", "carbarn", "dry_run"]
+             "approved", "snapshot", "nichibo", "carbarn", "dry_run"]
     names = {"guides": "Guides", "cards": "Cards read", "opened": "Lots opened", "sheet_only": "Judged from the sheet",
              "pages": "Pages opened", "review": "For review", "bid": "Bid", "skip": "Skipped", "reused": "Reused",
              "pending": "Images pending", "model_calls": "Model calls", "checked": "Checked", "changed": "Changed",
              "applied": "Stored", "unchanged": "Unchanged", "needs_fetch": "Need a page", "judged": "Judged",
-             "unavailable": "Model unavailable", "decisions": "Decisions", "snapshot": "Snapshot",
+             "unavailable": "Model unavailable", "decisions": "Decisions", "approved": "Approved", "snapshot": "Snapshot",
              "nichibo": "Nichibo", "carbarn": "Carbarn dashboard", "dry_run": "Dry run"}
     out = []
-    if run.get("command") == "place" and isinstance(s.get("lines"), list):
+    if run.get("command") in ("place", "bid") and isinstance(s.get("lines"), list):
         out.append(("Bids", str(len(s["lines"]))))
     for key in order:
         if key not in s:
@@ -112,6 +129,20 @@ def summary_pairs(run: dict) -> list[tuple[str, str]]:
     return out
 
 
+def entry_pairs(run: dict) -> list[tuple[str, str]]:
+    """The few figures a log entry shows of a run: `summary_pairs` kept to the command's allow-list, at most three."""
+    wanted = ENTRY_LABELS.get(run.get("command") or "", [])
+    pairs = dict(summary_pairs(run))
+    return [(label, pairs[label]) for label in wanted if label in pairs][:3]
+
+
+def filter_label(command: str) -> str:
+    """The Runs page's filter in words: a command's label, "Single steps" for every run that is not a mode, or nothing."""
+    if command == "steps":
+        return "Single steps"
+    return command_label(command) if command else ""
+
+
 def register(app, templates, cfg, jobs, store, page) -> None:
     """`store()` opens a Store; `page(request, template, nav, **context)` renders inside the shell."""
     # The address in config.yaml, and the names a test asks for (`review.allow_hosts`; config.yaml has none).
@@ -119,10 +150,12 @@ def register(app, templates, cfg, jobs, store, page) -> None:
                | {str(h).lower() for h in cfg.review.get("allow_hosts", [])})
     templates.env.globals.update(
         ago=st.ago, local_time=st.local_time, duration=st.duration, command_label=command_label, options_text=options_text,
-        summary_pairs=summary_pairs, options_words=options_words, command_icon=lambda name: st.COMMAND_ICONS.get(name, "terminal"),
+        summary_pairs=summary_pairs, entry_pairs=entry_pairs, options_words=options_words,
+        command_icon=lambda name: st.COMMAND_ICONS.get(name, "terminal"),
         status_icon=lambda status: st.STATUS_ICONS.get(status, "circle"),
         status_word=lambda status: st.STATUS_WORDS.get(status, status),
-        command_short=lambda name: st.COMMAND_SHORT.get(name, name))
+        command_short=lambda name: st.COMMAND_SHORT.get(name, name),
+        STEP_COMMANDS=STEP_COMMANDS, SHOWN_OPTIONS=SHOWN_OPTIONS)
 
     @app.middleware("http")
     async def this_pc_only(request: Request, call_next):
@@ -159,16 +192,21 @@ def register(app, templates, cfg, jobs, store, page) -> None:
 
     @app.get("/runs", response_class=HTMLResponse)
     def runs_page(request: Request, command: str | None = None):
-        if command and command not in COMMANDS:
+        """`?command=` narrows to one command; `steps` is every run that is not Learn or Bid."""
+        if command and command != "steps" and command not in COMMANDS:
             raise HTTPException(404, "no such command")
-        return page(request, "runs.html", "runs", runs=jobs.list(limit=100, command=command or None), command=command or "",
+        if command == "steps":
+            runs = [r for r in jobs.list(limit=300) if r["command"] not in MODES][:100]
+        else:
+            runs = jobs.list(limit=100, command=command or None)
+        return page(request, "runs.html", "runs", runs=runs, command=command or "", filter_label=filter_label(command or ""),
                     commands=jobs.describe(), current=jobs.current())
 
     @app.get("/runs/{run_id}", response_class=HTMLResponse)
     def run_page(request: Request, run_id: int):
         run = run_or_404(run_id)
         placements = []
-        if run["command"] == "place":
+        if run["command"] in ("place", "bid"):
             s = store()
             try:
                 placements = st.placements_between(s, run["started_at"], run["finished_at"])
@@ -204,8 +242,15 @@ def register(app, templates, cfg, jobs, store, page) -> None:
     @app.get("/config", response_class=HTMLResponse)
     def config_page(request: Request):
         dry, reason = cfg.placement_mode(False)
-        providers = [{"name": p.name, "model": p.model, "rpm": p.rpm, "rpd": p.rpd, "vision": p.vision, "key_env": p.api_key_env,
-                      "has_key": bool(p.api_key)} for p in providers_for(cfg)] if (cfg.sheet_check or "none") != "none" else []
+        providers = []
+        if (cfg.sheet_check or "none") != "none":
+            s = store()
+            try:
+                rows = st.judge_state(cfg, s)["providers"]  # name, model, rpm, rpd, calls today, share, level, has_key, vision
+            finally:
+                s.close()
+            envs = {p.name: p.api_key_env for p in providers_for(cfg)}
+            providers = [dict(row, key_env=envs.get(row["name"], "")) for row in rows]
         return page(request, "config.html", "config", cfg=cfg, providers=providers, placement_reason=reason,
                     paths=[("Browser profile", cfg.profile_dir), ("Database", cfg.db_path), ("Evidence", cfg.evidence_dir),
                            ("Run logs", cfg.runs_dir), ("Guide snapshots", cfg.snapshot_dir),
@@ -284,3 +329,5 @@ def register(app, templates, cfg, jobs, store, page) -> None:
         except NotRunning as exc:
             raise HTTPException(409, str(exc))
         return JSONResponse({"status": "stopping"}, status_code=202)
+
+    guide_pages.register(app, templates, cfg, store, page)  # /guides and /guides/{code}, behind the same middleware

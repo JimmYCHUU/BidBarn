@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 
 from auction_bot.dashboard import status as st
 from auction_bot.dashboard.jobs import COMMANDS, Busy, DisabledJobManager, NotRunning, build_argv
-from auction_bot.dashboard.routes import summary_pairs
+from auction_bot.dashboard.routes import entry_pairs, summary_pairs
 from auction_bot.review.app import create_app
 from auction_bot.store import Store
 from tests.test_pipeline_offline import cfg  # noqa: F401  (fixture)
@@ -26,6 +26,7 @@ class FakeJobs(DisabledJobManager):
         super().__init__(cfg)
         self.live: int | None = None
         self.cancelled: list[int] = []
+        self.finished: list[int] = []
 
     def current(self):
         if self.live is None:
@@ -49,6 +50,23 @@ class FakeJobs(DisabledJobManager):
         if run_id != self.live:
             raise NotRunning(f"run {run_id} is not running")
         self.cancelled.append(run_id)
+
+    def finish_review(self, run_id):
+        cur = self.review_waiting()
+        if cur is None or run_id != cur["id"]:
+            raise NotRunning(f"run {run_id} is not waiting at the review")
+        path = self.cfg.runs_dir / f"{run_id}.finish"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("finish\n", encoding="utf-8")
+        self.finished.append(run_id)
+
+    def progress_is(self, progress: dict) -> None:
+        """What the live run last reported (the real manager reads it from the run's log)."""
+        s = Store(self.cfg.db_path)
+        try:
+            s.update_run_progress(self.live, progress)
+        finally:
+            s.close()
 
 
 def _client(cfg, jobs=None):
@@ -76,7 +94,8 @@ def test_every_page_renders_on_an_empty_database(cfg):
     client, _ = _client(cfg)
     r = client.get("/")
     assert r.status_code == 200
-    assert "Check the sign-in" in r.text and "Not checked yet on this PC." in r.text  # the first step of a first day
+    assert "Start Bid mode" in r.text and "Start Learn mode" in r.text  # the two things the page offers when nothing runs
+    assert "Sign-in not checked" in r.text and "Start a single step" not in r.text  # the steps live on the Runs page
     assert "Nothing has run today" in r.text and "TESTING: no bids are placed" in r.text
     assert "dashboard.js" in r.text and "gsap.min.js" in r.text
     stamp = re.search(r'/static/bidbarn\.css\?v=([0-9a-f]+)"', r.text).group(1)  # static files carry a version stamp
@@ -142,7 +161,7 @@ def test_a_stale_snapshot_asks_for_the_guides(cfg):
     s = client.get("/api/status").json()
     assert s["rules"]["stale"] is True
     assert [x["command"] for x in s["steps"] if x["next"]] == ["fetch-rules"]
-    assert "Stale" in client.get("/").text
+    assert "Guides stale" in client.get("/").text and "Fetch the guides" in client.get("/").text  # the chip carries its repair
 
 
 def test_starting_and_stopping_through_the_api(cfg):
@@ -157,7 +176,10 @@ def test_starting_and_stopping_through_the_api(cfg):
     busy = client.post("/api/runs", json={"command": "replay"})
     assert busy.status_code == 409 and busy.json() == {"detail": f"scan is running (run {rid})", "run_id": rid}
 
-    for body in ({"command": "bid"}, {"command": "watch"}, {"command": "place", "options": {"live": True}},
+    for body in ({"command": "watch"}, {"command": "place", "options": {"live": True}},
+                 {"command": "bid", "options": {"live": True}}, {"command": "bid", "options": {"skip_scan": True}},
+                 {"command": "bid", "options": {"no_place": True}}, {"command": "learn", "options": {"har": "x.har"}},
+                 {"command": "learn", "options": {"save": True}},
                  {"command": "scan", "options": {"model": ["--live"]}}, {"command": "scan", "options": {"limit": "3"}},
                  {"command": "scan", "options": {"shell": "x"}}, {"options": {}}):
         assert client.post("/api/runs", json=body).status_code == 400, body
@@ -171,9 +193,9 @@ def test_starting_and_stopping_through_the_api(cfg):
     # The overview shows the run that is going, first and open.
     page = client.get("/").text
     assert f'data-run-id="{rid}"' in page and 'data-status="running"' in page and "Watch the run" in page
-    assert "Scanning Nichibo" in page and "One command runs at a time" in page
+    assert "Scanning Nichibo" in page and "One run at a time" in page
     assert "No scan yet today" not in page  # what is true of the step at rest is not said while it runs
-    assert page.index(f'data-run-id="{rid}"') < page.index("Commands")
+    assert "Start Bid mode" not in page and "Start a single step" in client.get("/runs").text  # the modes step aside while a run is going
 
 
 def test_the_page_cannot_ask_for_a_live_placement(cfg):
@@ -185,6 +207,96 @@ def test_the_page_cannot_ask_for_a_live_placement(cfg):
         assert flag not in client.get(page).text, page
     assert flag not in json.dumps(client.get("/api/commands").json())
     assert "Live placement cannot be started from the page" in client.get("/config").text
+
+
+def test_bid_and_learn_start_from_the_page_without_options(cfg):
+    client, jobs = _client(cfg)
+    r = client.post("/api/runs", json={"command": "bid"})
+    assert r.status_code == 201 and r.json()["args"] == ["bid", "--no-browser"] and r.json()["command"] == "bid"
+    assert client.post("/api/runs", json={"command": "learn"}).status_code == 409  # one at a time
+    s = client.get("/api/status").json()
+    assert s["current"]["command"] == "bid" and s["current"]["doing"] == "Running Bid mode" and s["current"]["label"] == "Bid mode"
+    assert s["current"]["stage"] is None and s["current"]["review_waiting"] is False
+    jobs.live = None
+    r = client.post("/api/runs", json={"command": "learn", "options": {}})
+    assert r.status_code == 201 and r.json()["args"] == ["learn"]
+    assert client.get("/api/status").json()["current"]["doing"] == "Recording your session"
+    for path in ("/", "/runs", f"/runs/{r.json()['id']}", "/runs?command=learn", "/runs?command=bid"):
+        assert client.get(path).status_code == 200, path
+
+
+def test_finish_ends_only_a_bid_run_waiting_at_the_review(cfg):
+    client, jobs = _client(cfg)
+    assert client.post("/finish").status_code == 404  # nothing runs
+    assert "Finish review" not in client.get("/review").text
+
+    scan = client.post("/api/runs", json={"command": "scan"}).json()["id"]
+    jobs.progress_is({"stage": "review", "pending": 2, "approved": 1, "waiting": True})  # a scan never waits there
+    assert client.post("/finish").status_code == 404 and "Finish review" not in client.get("/review").text
+    jobs.live = None
+
+    bid = client.post("/api/runs", json={"command": "bid"}).json()["id"]
+    jobs.progress_is({"stage": "scan", "guides": 3, "guide": 1})
+    assert client.post("/finish").status_code == 404 and "Finish review" not in client.get("/review").text
+    assert client.get("/api/status").json()["current"]["review_waiting"] is False
+
+    jobs.progress_is({"stage": "review", "step": 4, "steps": 5})  # the step boundary: waiting until told otherwise
+    s = client.get("/api/status").json()
+    assert s["current"]["stage"] == "review" and s["current"]["review_waiting"] is True
+    for path in ("/review", "/list", "/", "/runs", f"/runs/{bid}"):
+        assert "Finish review" in client.get(path).text, path
+    r = client.post("/finish")
+    assert r.status_code == 200 and f"run {bid}" in r.text and f'href="/runs/{bid}"' in r.text
+    assert jobs.finished == [bid] and (cfg.runs_dir / f"{bid}.finish").read_text(encoding="utf-8") == "finish\n"
+
+    jobs.progress_is({"stage": "review", "pending": 2, "approved": 1, "waiting": False})  # the run has moved on
+    assert client.post("/finish").status_code == 404 and "Finish review" not in client.get("/review").text
+    jobs.progress_is({"stage": "place", "i": 0, "total": 1, "dry_run": True})
+    assert client.post("/finish").status_code == 404
+    store = Store(cfg.db_path)
+    assert [r["command"] for r in store.list_runs()] == ["bid", "scan"]  # Finish started nothing and decided nothing
+    store.close()
+
+
+def test_status_marks_the_step_a_bid_run_is_at(cfg):
+    client, jobs = _client(cfg)
+    client.post("/api/runs", json={"command": "bid"})
+
+    def running():
+        steps = client.get("/api/status").json()["steps"]
+        return [(x["key"], x["detail"]) for x in steps if x["state"] == "running"]
+
+    assert running() == []  # nothing reported yet
+    for stage, key in (("signin", "signin"), ("guides", "guides"), ("scan", "scan"), ("judge", "scan"), ("place", "place")):
+        jobs.progress_is({"stage": stage})
+        assert running() == [(key, "Running now.")], stage
+    jobs.progress_is({"stage": "review", "pending": 3, "approved": 0, "waiting": True})
+    assert running() == [("review", "Waiting for your review.")]
+    review = next(x for x in client.get("/api/status").json()["steps"] if x["key"] == "review")
+    assert review["href"] == "/review" and review["next"] is True
+    jobs.progress_is({"stage": "review", "pending": 3, "approved": 0, "waiting": False})
+    assert running() == [("review", "Running now.")]
+
+    # A finished Bid run is a sign-in check too: its first step was one.
+    jobs.live = None
+    _run(cfg, "bid", ["bid", "--no-browser"], summary={"steps": 5, "nichibo": True, "carbarn": True, "guides": 46, "approved": 0,
+                                                       "dry_run": True, "lines": []})
+    s = client.get("/api/status").json()
+    assert s["signin"]["known"] and s["signin"]["ok"] and s["signin"]["fresh"] and s["current"] is None
+
+
+def test_the_runs_page_filters_steps_apart_from_the_modes(cfg):
+    learn = _run(cfg, "learn", ["learn"], summary={"counts": {"lots": 2, "agree": 1, "disagree": 0}})
+    bid = _run(cfg, "bid", ["bid", "--no-browser"], summary={"approved": 1, "dry_run": True, "lines": ["x"]})
+    scan = _run(cfg, "scan", ["scan", "--headless"], summary={"guides": 1})
+    client, _ = _client(cfg)
+    steps = client.get("/runs?command=steps").text
+    assert f'href="/runs/{scan}"' in steps and f'href="/runs/{learn}"' not in steps and f'href="/runs/{bid}"' not in steps
+    only = client.get("/runs?command=learn").text
+    assert f'href="/runs/{learn}"' in only and f'href="/runs/{scan}"' not in only
+    assert client.get("/runs?command=bid").status_code == 200 and client.get("/runs?command=step").status_code == 404
+    for rid in (learn, bid, scan):
+        assert client.get(f"/runs/{rid}").status_code == 200
 
 
 def test_the_review_inside_bot_bid_starts_nothing(cfg):
@@ -303,6 +415,9 @@ def test_options_are_shown_in_words():
     assert options_words({"command": "insights", "args": ["insights", "--days", "7", "--min-support", "2"]}) == \
         "the last 7 days, 2 rejections per rule"
     assert options_words({"command": "login", "args": ["login", "--wait"]}) == "" and options_words({"command": "place"}) == ""
+    assert options_words({"command": "bid", "args": ["bid", "--no-browser"]}) == ""
+    assert options_words({"command": "bid", "args": ["bid", "--headed", "--no-browser"]}) == "browser window shown"
+    assert options_words({"command": "learn", "args": ["learn"]}) == ""
 
 
 def test_summary_pairs_read_in_order_and_leave_lists_out():
@@ -312,6 +427,38 @@ def test_summary_pairs_read_in_order_and_leave_lists_out():
         [("Nichibo", "signed in"), ("Carbarn dashboard", "signed out")]
     assert summary_pairs({"command": "place", "summary": {"dry_run": True, "lines": ["x", "y"]}}) == [("Bids", "2"), ("Dry run", "yes")]
     assert summary_pairs({"command": "scan", "summary": None}) == []
+    bid = {"command": "bid", "summary": {"steps": ["a", "b"], "nichibo": True, "carbarn": True, "guides": 46, "cards": 1200,
+                                         "review": 3, "bid": 0, "skip": 40, "reused": 9, "pending": 1, "model_calls": 0,
+                                         "errors": ["x"], "errors_total": 1, "approved": 2, "dry_run": True, "lines": ["p", "q"]}}
+    assert summary_pairs(bid) == [("Bids", "2"), ("Guides", "46"), ("Cards read", "1,200"), ("For review", "3"), ("Bid", "0"),
+                                  ("Skipped", "40"), ("Reused", "9"), ("Images pending", "1"), ("Model calls", "0"),
+                                  ("Approved", "2"), ("Nichibo", "signed in"), ("Carbarn dashboard", "signed in"),
+                                  ("Dry run", "yes"), ("Errors", "1")]
+    learn = {"command": "learn", "summary": {"session": "s", "counts": {"lots": 4, "opened": 3, "carted": 1, "bids": 2, "agree": 1,
+                                                                          "disagree": 1, "searches": 2, "notes": 1, "candidates": 2,
+                                                                          "actions_saved": 5, "screenshots": 9}, "lots": [{}] * 4}}
+    assert summary_pairs(learn) == [("Lots", "4"), ("Opened", "3"), ("Your bids", "2"), ("Agree", "1"), ("Disagree", "1"),
+                                    ("Candidate rules", "2"), ("Notes", "1"), ("Kept in the store", "5")]
+    assert summary_pairs({"command": "learn", "summary": {"counts": "odd"}}) == [] and summary_pairs({"command": "learn"}) == []
+
+
+def test_entry_pairs_keep_a_few_figures_per_command():
+    scan = {"command": "scan", "summary": {"guides": 46, "cards": 1200, "review": 3, "skip": 40, "errors": ["a"], "reused": 2}}
+    assert entry_pairs(scan) == [("For review", "3"), ("Skipped", "40"), ("Errors", "1")]
+    assert entry_pairs({"command": "scan", "summary": {"guides": 46, "cards": 1200}}) == []  # nothing on the list: nothing shown
+    assert entry_pairs({"command": "fetch-rules", "summary": {"guides": 46, "snapshot": "rules_x.json"}}) == [("Guides", "46")]
+    assert entry_pairs({"command": "judge", "summary": {"checked": 5, "judged": 4, "unavailable": 1}}) == [("Judged", "4"), ("Model unavailable", "1")]
+    assert entry_pairs({"command": "replay", "summary": {"checked": 9, "changed": 2, "applied": 2}}) == [("Changed", "2"), ("Stored", "2")]
+    assert entry_pairs({"command": "place", "summary": {"dry_run": True, "lines": ["x"]}}) == [("Bids", "1"), ("Dry run", "yes")]
+    assert entry_pairs({"command": "check-login", "summary": {"nichibo": True, "carbarn": False}}) == \
+        [("Nichibo", "signed in"), ("Carbarn dashboard", "signed out")]
+    assert entry_pairs({"command": "login", "summary": {"nichibo": True, "carbarn": True}}) == \
+        [("Nichibo", "signed in"), ("Carbarn dashboard", "signed in")]
+    learn = {"command": "learn", "summary": {"counts": {"lots": 4, "opened": 3, "bids": 2, "agree": 1, "disagree": 0, "candidates": 2}}}
+    assert entry_pairs(learn) == [("Lots", "4"), ("Agree", "1"), ("Disagree", "0")]
+    bid = {"command": "bid", "summary": {"guides": 46, "review": 3, "approved": 2, "lines": ["p", "q"], "dry_run": True}}
+    assert entry_pairs(bid) == [("For review", "3"), ("Bids", "2")]
+    assert entry_pairs({"command": "insights", "summary": {"lines": 40, "decisions": 12}}) == [] and entry_pairs({"summary": None}) == []
 
 
 def test_requests_from_other_sites_are_refused(cfg):
@@ -353,8 +500,9 @@ def test_the_dashboard_package_decides_nothing():
     for path in folder.glob("*.py"):
         source = path.read_text(encoding="utf-8")
         assert ".decide(" not in source and "record_placement" not in source and "place_bid" not in source, path.name
+        assert "finish_event" not in source, path.name  # the console's own review is not the dashboard's business
     js = (folder.parent / "review" / "static" / "dashboard.js").read_text(encoding="utf-8")
-    assert "/decide" not in js and "/finish" not in js
+    assert "/decide" not in js and "/finish" not in js  # Finish is a form in the header, posted by the page itself
 
 
 def test_the_day_log_groups_decisions_into_sessions(cfg):
@@ -419,4 +567,10 @@ def test_insights_and_settings_pages(cfg, monkeypatch):
     assert s["judge"]["providers"][0] == {"name": "gemini", "model": "flash-lite", "calls": 1, "rpd": 400, "rpm": 10, "vision": True,
                                           "has_key": True, "share": 0.0025, "level": "ok"}
     assert s["judge"]["providers"][1]["has_key"] is False
-    assert "1 / 400" in client.get("/").text
+    assert '<td class="num">1</td><td class="num">10</td><td class="num">400</td>' in page  # calls today, per minute, per day
+    assert "Gemini:" not in client.get("/").text  # the quota is a chip on the overview only when it runs short
+    store = Store(cfg.db_path)
+    store.conn.execute("UPDATE model_calls SET calls=380")
+    store.conn.commit()
+    store.close()
+    assert "Gemini: 380 of 400 calls" in client.get("/").text

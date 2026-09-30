@@ -116,9 +116,15 @@ def card_facts(card: VehicleFacts, rule: ModelRule) -> VehicleFacts:
 
 
 def pending_images_proposal(rule: ModelRule, card: VehicleFacts, evidence: dict) -> dict:
-    """Nichibo still serves placeholder images: park the lot until the next scan, no page opened."""
+    """Nichibo still serves placeholder images: park the lot until the next scan, no page opened.
+
+    The card already carries year, odometer and grade, so the grid amount is worked out and stored
+    with the parked lot (Jim, 2026-09-30: such a lot must be approvable at its grid value); the
+    sheet and photos, when they arrive, can only move it to SKIP or change the modifiers."""
+    hard = evaluate_hard(card_facts(card, rule), rule)
     return dict(ref_no=card.ref_no, guide_id=rule.guide_id, model_code=rule.model_code, summary=summary_line(card),
-                status=NEEDS_REVIEW, stage="manual", facts_json=card.to_dict(), hard_json={"checks": []},
+                status=NEEDS_REVIEW, stage="manual", facts_json=card.to_dict(), hard_json=hard.to_dict(),
+                bid_jpy_k=hard.bid_jpy_k, base_jpy_k=hard.base_jpy_k,
                 evidence_json=evidence,
                 soft_json={"mode": "manual", "images_pending": True, "checklist": [], "hints": [],
                            "reasons": ["Nichibo has not published the sheet and photos yet (placeholder images); "

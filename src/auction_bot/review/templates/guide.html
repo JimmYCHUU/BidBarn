@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% block title %}{{ code }} · {{ guides[0].name }} · BidBarn{% endblock %}
+{% block body %}
+{% set g0 = guides[0] %}
+{% macro guide_sub(g) -%}
+{%- set bits = [] -%}
+{%- if g.min_grade is not none %}{% set _ = bits.append('Grade ' ~ ('%g' % g.min_grade) ~ ' and up') %}{% endif -%}
+{%- if g.years %}{% set _ = bits.append(g.years[0] ~ ' to ' ~ g.years[1]) %}{% endif -%}
+{%- if g.max_odo %}{% set _ = bits.append('up to ' ~ '{:,}'.format(g.max_odo) ~ ' km') %}{% endif -%}
+{{ bits|join(' · ') }}
+{%- endmacro %}
+{% macro active_pill(g) -%}
+{% if g.active %}<span class="pill pill--ok">{{ icon('circle-check') }} Active</span>{% else %}<span class="pill pill--plain">Off</span>{% endif %}
+{%- endmacro %}
+
+<div class="page-head">
+  <h1 class="page-title">{{ g0.name }} <span class="mono muted">{{ code }}</span></h1>
+  {{ active_pill(g0) }}
+  <span class="page-sub">{{ guide_sub(g0) }}{% if guides|length > 1 %} · {{ guides|length }} guides share this code{% endif %}</span>
+  <div class="end">
+    {% if model_counts.to_review %}<a class="btn btn--primary" href="/review?model={{ code }}">{{ icon('list-checks') }} Review {{ model_counts.to_review }}</a>{% endif %}
+    <a class="btn" href="/list?model={{ code }}">{{ icon('table-2') }} All lots</a>
+  </div>
+</div>
+
+<section class="card">
+  <div class="card-body row">
+    <a class="pill {{ 'pill--warn' if model_counts.to_review else 'pill--plain' }}" href="/review?model={{ code }}">{{ model_counts.to_review }} to review</a>
+    <a class="pill pill--ok" href="/list?model={{ code }}&amp;decision=approved">{{ model_counts.approved }} approved</a>
+    <a class="pill pill--plain" href="/list?model={{ code }}&amp;decision=rejected">{{ model_counts.rejected }} rejected</a>
+    <a class="pill pill--plain" href="/list?model={{ code }}&amp;status=SKIP">{{ model_counts.skipped }} skipped</a>
+    <span class="faint push">{{ model_counts.lots }} lot{{ 's' if model_counts.lots != 1 }} stored{% if model_counts.last_seen %}, last seen {{ ago(model_counts.last_seen) }}{% endif %}</span>
+  </div>
+</section>
+
+{% for g in guides %}
+{% if guides|length > 1 %}
+<div class="section-title"><h2>{{ g.name }}</h2><span class="faint">guide {{ g.guide_id }} · {{ guide_sub(g) }}</span> {{ active_pill(g) }}</div>
+{% endif %}
+
+    <section class="card">
+      <div class="card-head"><h2>Requirements</h2>{% if g.updated_at %}<span class="faint push">guide updated {{ ago(g.updated_at) }}</span>{% endif %}</div>
+      <div class="card-body">
+        {% if g.text_rules %}
+        <ul class="checks">
+          {% for t in g.text_rules %}<li>{{ icon('circle-check', 'mark-ok') }}<span>{{ t }}</span></li>{% endfor %}
+        </ul>
+        {% else %}
+        <p class="muted">No text rules on this guide. The grid, the grade and the odometer decide.</p>
+        {% endif %}
+        {% if g.eligibility_summary %}<p class="faint">{{ g.eligibility_summary }}</p>{% endif %}
+        {% if g.chips %}
+        <h3>Chips you judge</h3>
+        <ul class="checks">
+          {% for c in g.chips %}<li>{{ icon('circle-alert', 'mark-unk') }}<span>{{ c.label }} <b class="num">{{ '%+d' % c.amount_k }}K</b>{% if g.variants|length > 1 and c.variants|length < g.variants|length %} <span class="faint">({{ c.variants|join(', ') }})</span>{% endif %}</span></li>{% endfor %}
+        </ul>
+        <p class="faint">The bot applies the grid and the modifiers below; these chips are yours to judge.</p>
+        {% endif %}
+      </div>
+    </section>
+
+{% for v in g.variants %}
+<section class="card">
+  <div class="card-head"><h2>Bid grid</h2><span class="mono">{{ v.label }}</span><span class="faint push">K JPY, odometer bands upper bound inclusive</span></div>
+  {% if v.rows %}
+  <div class="table-wrap">
+  <table class="lots grid-table">
+    <thead><tr><th class="num">Year</th>{% for b in v.bands %}<th class="num">{{ b }}</th>{% endfor %}</tr></thead>
+    <tbody>
+    {% for row in v.rows %}
+      <tr data-year="{{ row.year }}"{% if not row.biddable %} class="muted"{% endif %}>
+        <td class="num"><b>{{ row.year }}</b></td>
+        {% for c in row.cells %}
+          {% if c.no_bid %}<td class="num muted" title="{{ c.reason or 'no bid' }}">no bid</td>{% else %}<td class="num">{{ '{:,}'.format(c.k) }}</td>{% endif %}
+        {% endfor %}
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="card-body"><p class="muted">No grid values for this variant.</p></div>
+  {% endif %}
+  {% if v.applied or v.rows_off or v.dials or v.off %}
+  <div class="card-foot">
+    {% if v.applied or v.rows_off %}<div>Modifiers the bot applies: {% for m in v.applied %}<span title="{{ m.text }}">{{ m.text }}</span>{% if not loop.last or v.rows_off %}; {% endif %}{% endfor %}{% if v.rows_off %}no bid for {{ v.rows_off }} (rows off){% endif %}</div>{% endif %}
+    {% for m in v.dials %}<div>{{ m.text }}: already in the grid values, not applied again.</div>{% endfor %}
+    {% if v.off %}<div>Off: {% for m in v.off %}{{ m.text }}{{ ' (stale)' if m.stale and m.active }}{% if not loop.last %}; {% endif %}{% endfor %}</div>{% endif %}
+  </div>
+  {% endif %}
+</section>
+{% endfor %}
+{% endfor %}
+
+<div class="cols cols--even">
+  <div>
+    <section class="card" id="instructions">
+      <div class="card-head"><h2>Standing instructions</h2><span class="faint push">{{ code }}.md</span></div>
+      <div class="card-body">
+        {% set lines = g0.instructions.lines %}
+        {% if lines %}
+        <ul class="checks">
+          {% for l in lines %}
+          <li>
+            {% if l.kind == 'skip' %}{{ icon('ban', 'mark-bad') }}<span><span class="mono">{{ l.text }}</span> <span class="faint">{% if l.every_lot %}skips every lot of this code{% else %}skips a lot when {{ l.conditions|join(' and ') }}{% endif %}{% if l.needs_detail %}; needs the lot's page{% endif %}{% if l.stamp %} · {{ l.stamp }}{% endif %}</span></span>
+            {% elif l.kind == 'error' %}{{ icon('circle-alert', 'mark-unk') }}<span><span class="mono">{{ l.text }}</span> <span class="faint">not understood, so never applied: {{ l.error }}{% if l.stamp %} · {{ l.stamp }}{% endif %}</span></span>
+            {% else %}{{ icon('file-text') }}<span>{{ l.text }} <span class="faint">shown on every lot{% if l.stamp %} · {{ l.stamp }}{% endif %}</span></span>{% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="muted">No standing instructions for {{ code }} yet.</p>
+        {% endif %}
+        <form method="post" action="/rules/{{ code }}/skip" class="row">
+          <input type="hidden" name="next" value="/guides/{{ code }}">
+          <div class="field"><label for="new-line">New skip rule</label><input id="new-line" type="text" name="line" placeholder="skip: variant contains DUMP" required autocomplete="off" spellcheck="false"><span class="help">skip is the only verb. Fields: year, make, model, variant, transmission, km, cc, grade, start, seats, chassis, colour, equipment, hall, date, bid.</span></div>
+          <button class="btn--sm">Add</button>
+        </form>
+      </div>
+      <div id="suggested" class="{{ 'suggest suggest--foot' if suggestions else 'card-foot' }}">
+        {% if suggestions %}
+        <div><b>Skip rules your rejections justify.</b> Each would have skipped no lot you approved.</div>
+        {% for sg in suggestions %}
+        <form method="post" action="/rules/{{ code }}/skip">
+          <input type="hidden" name="line" value="{{ sg.line }}"><input type="hidden" name="next" value="/guides/{{ code }}">
+          <span class="mono">{{ sg.line }}</span> <span class="faint">({{ sg.support }} rejection{{ 's' if sg.support != 1 }})</span>
+          <button class="btn--sm">Add</button>
+        </form>
+        {% endfor %}
+        {% endif %}
+        <div class="faint">Nothing is stored until you add it. A new rule applies at the next scan; Replay on the Runs page applies it to the stored lots.</div>
+      </div>
+    </section>
+  </div>
+
+  <div>
+    <section class="card">
+      <div class="card-head"><h2>Playbook and comments</h2><span class="faint push">your words, shown to the model and to you</span></div>
+      <div class="card-body">
+        {% if playbook or notes %}
+        <ul class="checks">
+          {% for l in playbook %}<li>{{ icon('graduation-cap' if 'learn' in l.stamp else ('list-checks' if 'review' in l.stamp else 'file-text')) }}<span>{{ l.text }}{% if l.stamp %} <span class="faint">{{ l.stamp }}</span>{% endif %}</span></li>{% endfor %}
+          {% for n in notes %}<li>{{ icon('graduation-cap') }}<span>{{ n }} <span class="faint">learn mode</span></span></li>{% endfor %}
+        </ul>
+        {% else %}
+        <p class="muted">Nothing yet. Your review corrections and learn-mode comments on this model appear here.</p>
+        {% endif %}
+      </div>
+    </section>
+  </div>
+</div>
+
+    <section class="card">
+      <div class="card-head"><h2>Recent decisions</h2><span class="faint push">{% if decisions_total > decisions|length %}last {{ decisions|length }} of {{ decisions_total }}{% else %}{{ decisions_total }} decision{{ 's' if decisions_total != 1 }}{% endif %}</span></div>
+      {% if decisions %}
+      <div class="table-wrap">
+      <table class="lots wide">
+        <thead><tr><th>Lot</th><th>Decision</th><th class="num">Amount</th><th>Reason</th></tr></thead>
+        <tbody>
+        {% for d in decisions %}
+          <tr>
+            <td><a class="lot-title" href="/p/{{ d.proposal_id }}">{{ lot_title(d.summary) or d.ref_no }}</a><div class="faint num">{{ local_time(d.at) }}</div></td>
+            <td><span class="pill {{ 'approved' if d.action == 'approve' else 'rejected' }}">{{ 'Approved' if d.action == 'approve' else 'Rejected' }}</span></td>
+            <td class="num">{% if d.amount_jpy_k %}<b>{{ '{:,}'.format(d.amount_jpy_k) }}</b>K{% endif %}</td>
+            <td class="why">{{ d.reason or '' }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      </div>
+      {% else %}
+      <div class="card-body"><p class="muted">No decisions on this model yet.</p></div>
+      {% endif %}
+    </section>
+{% endblock %}

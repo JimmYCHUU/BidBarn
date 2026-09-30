@@ -73,7 +73,7 @@
     b.addEventListener("click", function () {
       if (b.dataset.confirm && b.dataset.armed !== "1") return;  // review.js arms it on the first click
       var what = JSON.parse(b.dataset.start);
-      var scope = b.closest(".card, section, main") || document;
+      var scope = b.closest(".mode, .card, section, main") || document;
       start(what.command, what.options, one("[data-start-error]", scope) || one(".form-error", scope), b);
     });
   });
@@ -234,8 +234,28 @@
         count.x + " with an error, " + (n - marks.length) + " to come");
     }
 
+    // the five stages of a Bid run, drawn on the run page and the overview
+    var STAGES = ["signin", "guides", "scan", "review", "place"];
+    function setStages(stage) {
+      var here = stage === "judge" ? "scan" : stage;
+      var cur = STAGES.indexOf(here);
+      all("[data-stages]").forEach(function (list) {
+        list.dataset.stage = here || "";
+        all("li", list).forEach(function (li, i) {
+          var st = i < cur ? "done" : (i === cur ? "running" : "idle");
+          li.className = "step step--" + st + (st === "running" ? " is-next" : "");
+          var use = one("use", li), svg = one("svg", li);
+          if (use) use.setAttribute("href", use.getAttribute("href").split("#")[0] + "#i-" + (st === "done" ? "circle-check" : (st === "running" ? "loader-circle" : "circle")));
+          if (svg) svg.classList.toggle("spin", st === "running");
+        });
+      });
+      var banner = one("[data-review-banner]");
+      if (banner) banner.hidden = !(here === "review" && status === "running");
+    }
+
     function render(p) {
       if (!p || !p.stage) return;
+      if (root.dataset.command === "bid" && status === "running") setStages(p.stage);  // a finished run keeps the server's stages
       if (p.stage === "scan") {
         showGuides(p);
         where.textContent = p.guide ? "Guide " + p.guide + " of " + p.guides + (p.code ? ", " + p.code : "") : "Reading the guides";
@@ -255,6 +275,19 @@
       } else if (p.stage === "place") {
         showMeter(p.dry_run ? "Bids typed (dry run)" : "Bids placed", p.i, p.total);
         where.textContent = p.total ? (p.ref_no ? p.ref_no + ": " + (p.message || "") : "Bid " + p.i + " of " + p.total) : "No approved bids waiting";
+      } else if (p.stage === "signin") {
+        where.textContent = p.waiting ? "Waiting for the sign-in in the browser window" :
+          (p.nichibo && p.carbarn ? "Signed in to Nichibo and the Carbarn dashboard" : "Checking the sign-in");
+      } else if (p.stage === "guides") {
+        where.textContent = p.guides ? p.guides + " bidding guides fetched" : "Fetching the bidding guides";
+      } else if (p.stage === "review") {
+        where.textContent = p.waiting === false ? "Review finished" :
+          "Waiting for your review" + (p.pending != null ? ": " + p.pending + " to review, " + (p.approved || 0) + " approved" : "");
+      } else if (p.stage === "learn") {
+        var phase = p.phase || "recording";
+        where.textContent = phase === "recording" ? "Recording. Close the browser window when you are done. Stop abandons the session." :
+          phase === "guides" ? "Fetching the bidding guides" : phase === "scan" ? "Scanning the codes you searched, for comparison" : "Comparing your session with the bot";
+        if (phase === "recording") showCounters([["events", p.events, "Events"], ["lots", p.lots, "Lots"], ["bids", p.bids, "Your bids"]]);
       }
     }
 
@@ -346,6 +379,9 @@
         .then(function (s) {
           var now = s.current ? String(s.current.id) : "";
           if (now !== current && !one("[data-console][data-status=running]")) { window.location.reload(); return; }
+          // a Bid run that moved to another stage: the band and the stages line are drawn by the server
+          var stage = s.current && s.current.command === "bid" ? (s.current.stage || "") : "";
+          if (s.current && s.current.command === "bid" && stage !== (overview.dataset.stage || "")) { window.location.reload(); return; }
           all("[data-count]").forEach(function (node) {
             var v = s.counts[node.dataset.count];
             if (v != null) tweenNumber(node, v);

@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import json
 import logging
-import socket
 import threading
 import webbrowser
 from pathlib import Path
@@ -17,6 +16,7 @@ import typer
 
 from auction_bot import progress
 from auction_bot.config import ROOT, load_config
+from auction_bot.run import port_in_use  # noqa: F401  (the dashboard command and its test use it from here)
 
 app = typer.Typer(add_completion=False, no_args_is_help=True, help="BidBarn: Carbarn's Nichibo auction bidding assistant",
                   pretty_exceptions_enable=False)
@@ -229,15 +229,6 @@ def review() -> None:
     host, port = cfg.review.get("host", "127.0.0.1"), int(cfg.review.get("port", 8765))
     typer.echo(f"Review page: http://{host}:{port}/review")
     uvicorn.run(create_app(cfg), host=host, port=port, log_level="warning")
-
-
-def port_in_use(host: str, port: int, timeout: float = 0.5) -> bool:
-    """Does something already accept connections there (a dashboard that is running)?"""
-    try:
-        with socket.create_connection((host, port), timeout=timeout):
-            return True
-    except OSError:
-        return False
 
 
 @app.command()

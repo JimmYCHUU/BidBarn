@@ -1,14 +1,18 @@
-"""`bot run` (bidbarn.cmd): the steps in order, the Finish button, and placement through place_bid."""
+"""`bot run` (bidbarn.cmd): the steps in order, the Finish button, and placement through place_bid.
+Under the dashboard the run waits for the finish file instead of serving its own review page."""
+import os
 import threading
+import time
 from contextlib import nullcontext
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
+from auction_bot import lock
 from auction_bot.pipeline import scan
 from auction_bot.review.app import create_app
-from auction_bot.run import place_approved, run
+from auction_bot.run import place_approved, run, wait_for_review
 from auction_bot.store import Store
 from tests.test_card_sheet import _BidBrowser
 from tests.test_pipeline_offline import FakeBrowser, cfg  # noqa: F401  (fixture)
@@ -125,6 +129,296 @@ def test_learn_watches_then_compares_and_suggests(cfg, tmp_path):
     assert [r["action"] for r in rows] == ["reason", "reason"] and rows[1]["note"].startswith("would normally skip")
     store.close()
     assert any("candidate rule becomes a rule only when you add it" in ln for ln in lines)
+
+
+# -- Bid mode under the dashboard: the finish file ------------------------------------------------------------
+
+def _events(text: str) -> list[dict]:
+    from auction_bot import progress
+    parsed = [progress.parse(ln) for ln in text.splitlines()]
+    return [p[1] for p in parsed if p and p[0] == "progress"]
+
+
+def test_wait_for_review_returns_on_the_finish_file(cfg, monkeypatch, tmp_path, capsys):
+    flag = tmp_path / "7.finish"
+    flag.write_text("finish", encoding="utf-8")  # Finish was clicked before the run got here: it goes straight on
+    monkeypatch.setenv("BIDBARN_FINISH_FILE", str(flag))
+    monkeypatch.setenv("BIDBARN_PROGRESS", "1")
+    lines = []
+    capsys.readouterr()
+    wait_for_review(cfg, echo=lines.append, open_browser=True, poll_seconds=0.01)
+    assert _events(capsys.readouterr().out) == [{"stage": "review", "pending": 0, "approved": 0, "waiting": True},
+                                                {"stage": "review", "pending": 0, "approved": 0, "waiting": False}]
+    assert not flag.exists() and lines[-1] == "Review finished." and "Finish review" in lines[0]
+
+
+def test_wait_for_review_stops_on_cancel(cfg, monkeypatch, tmp_path, capsys):
+    from auction_bot.progress import Cancelled
+    monkeypatch.setenv("BIDBARN_FINISH_FILE", str(tmp_path / "8.finish"))
+    monkeypatch.setenv("BIDBARN_CANCEL_FILE", str(tmp_path / "8.cancel"))
+    monkeypatch.setenv("BIDBARN_PROGRESS", "1")
+    (tmp_path / "8.cancel").write_text("stop", encoding="utf-8")
+    capsys.readouterr()
+    with pytest.raises(Cancelled, match="stopped from the dashboard"):
+        wait_for_review(cfg, echo=lambda s: None, poll_seconds=0.01)
+    out = capsys.readouterr().out
+    assert _events(out) == [] and _summaries(out) == []  # stopped before the first look: nothing reported, no summary
+
+
+def test_wait_for_review_reports_count_changes(cfg, monkeypatch, tmp_path, capsys):
+    from tests.test_triage import _seed
+    store = Store(cfg.db_path)
+    pid = _seed(store, "A", "GDH206", "4", 90_000)
+    store.close()
+    flag = tmp_path / "9.finish"
+    monkeypatch.setenv("BIDBARN_FINISH_FILE", str(flag))
+    monkeypatch.setenv("BIDBARN_PROGRESS", "1")
+    page = TestClient(create_app(cfg))
+
+    def jim():
+        time.sleep(0.3)  # approves the lot on the review page while the run waits
+        assert page.post(f"/p/{pid}/decide", data={"action": "approve", "amount": "1000"}, follow_redirects=False).status_code == 303
+        time.sleep(0.3)
+        flag.write_text("finish", encoding="utf-8")
+
+    t = threading.Thread(target=jim)
+    capsys.readouterr()
+    t.start()
+    wait_for_review(cfg, echo=lambda s: None, poll_seconds=0.02)
+    t.join()
+    events = _events(capsys.readouterr().out)
+    assert events[0] == {"stage": "review", "pending": 1, "approved": 0, "waiting": True}
+    assert events[1] == {"stage": "review", "pending": 0, "approved": 1, "waiting": True}  # told once, when it changed
+    assert events[-1] == {"stage": "review", "pending": 0, "approved": 1, "waiting": False} and len(events) == 3
+    assert not flag.exists()
+
+
+def test_run_under_the_dashboard_waits_for_the_finish_file_and_reports(cfg, monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("BIDBARN_FINISH_FILE", str(tmp_path / "3.finish"))
+    monkeypatch.setenv("BIDBARN_PROGRESS", "1")
+    order, held = [], []
+
+    def fake(name, result=None):
+        def f(c, echo, **kw):
+            order.append(name)
+            held.append(lock.holder(c)["pid"] == os.getpid())  # the profile is this run's for the whole day
+            return result
+        return f
+
+    scan_result = {"guides": 7, "cards": 120, "opened": 9, "sheet_only": 6, "pages": 3, "review": 4, "bid": 1, "skip": 30,
+                   "reused": 80, "pending": 2, "model_calls": 5, "cache_hits": 40, "errors": [f"E{i}" for i in range(25)]}
+    steps = {"ensure_signed_in": fake("login"), "fetch_guides": fake("guides", (7, None)), "scan_all": fake("scan", scan_result),
+             "serve_review": fake("served"), "wait_for_review": fake("waited"),
+             "place_approved": fake("place", ["GDH206 x -> 1240K: OK dry run", "GDH206 y -> 1190K: OK dry run"])}
+    capsys.readouterr()
+    out = run(cfg, echo=lambda s: None, steps=steps, open_browser=False)
+    assert order == ["login", "guides", "scan", "waited", "place"] and all(held) and lock.holder(cfg) is None
+    assert not lock.lock_path(cfg).exists()
+    text = capsys.readouterr().out
+    assert _events(text) == [{"stage": "signin", "step": 1, "steps": 5}, {"stage": "guides", "step": 2, "steps": 5},
+                             {"stage": "scan", "step": 3, "steps": 5}, {"stage": "review", "step": 4, "steps": 5},
+                             {"stage": "place", "step": 5, "steps": 5}]
+    told = _summaries(text)
+    assert len(told) == 1 and told[0] == {
+        "steps": out.steps, "nichibo": True, "carbarn": True, "guides": 7, "cards": 120, "opened": 9, "review": 4, "bid": 1,
+        "skip": 30, "reused": 80, "pending": 2, "model_calls": 5, "errors": [f"E{i}" for i in range(20)], "errors_total": 25,
+        "approved": 2, "dry_run": True, "lines": ["GDH206 x -> 1240K: OK dry run", "GDH206 y -> 1190K: OK dry run"]}
+    # Without the variable it is the console's own review page, and no summary line.
+    monkeypatch.delenv("BIDBARN_FINISH_FILE")
+    monkeypatch.delenv("BIDBARN_PROGRESS")
+    order.clear()
+    run(cfg, echo=lambda s: None, steps=steps, skip_scan=True, no_place=True)
+    assert order == ["login", "guides", "served"] and "SUMMARY" not in capsys.readouterr().out
+
+
+def test_run_gives_the_profile_back_when_a_step_fails(cfg):
+    def broken(c, echo, **kw):
+        raise RuntimeError("Nichibo timed out")
+
+    with pytest.raises(RuntimeError, match="Nichibo timed out"):
+        run(cfg, echo=lambda s: None, steps={"ensure_signed_in": broken})
+    assert lock.holder(cfg) is None and not lock.lock_path(cfg).exists()
+
+
+def test_serve_review_refuses_a_busy_port(cfg, monkeypatch):
+    import socket
+    import auction_bot.run as runmod
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    listener.listen(5)
+    served = []
+    monkeypatch.setattr(runmod, "wait_for_review", lambda *a, **k: served.append("waited"))
+    try:
+        cfg.review = {"host": "127.0.0.1", "port": listener.getsockname()[1]}
+        with pytest.raises(RuntimeError, match="dashboard is running on that address"):
+            runmod.serve_review(cfg, echo=lambda s: None, open_browser=False)
+    finally:
+        listener.close()
+    assert served == [] and runmod.port_in_use("127.0.0.1", cfg.review["port"]) is False
+
+
+def test_sign_in_step_reports_progress(cfg, monkeypatch, capsys):
+    import auction_bot.run as runmod
+    _fake_browser(monkeypatch)
+    monkeypatch.setattr(runmod, "nichibo_signed_in", lambda b, c: True)
+    monkeypatch.setattr(runmod, "carbarn_signed_in", lambda b, c: True)
+    monkeypatch.setenv("BIDBARN_PROGRESS", "1")
+    lines = []
+    capsys.readouterr()
+    runmod.ensure_signed_in(cfg, echo=lines.append)
+    assert _events(capsys.readouterr().out) == [{"stage": "signin", "nichibo": True, "carbarn": True, "waiting": False}]
+    assert lines == ["Signed in to Nichibo and the Carbarn dashboard."]
+
+    # Signed out of Nichibo: a window opens (waiting), Jim signs in, and the second line says both are in.
+    class Signed(_Tab):
+        url = "https://autosearch.nichibojapan.com/auction"
+
+        def on(self, event, fn):
+            pass
+
+        def wait_for_timeout(self, ms):
+            pass
+
+    class Window:
+        def __init__(self, c, headless=False):
+            self.page, self.context = Signed([]), self
+
+        def new_page(self):
+            return Signed([])
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return None
+
+    import auction_bot.nichibo.browser as browser_mod
+    monkeypatch.setattr(browser_mod, "Browser", Window)
+    monkeypatch.setattr(runmod, "nichibo_signed_in", lambda b, c: False)
+    lines.clear()
+    runmod.ensure_signed_in(cfg, echo=lines.append)
+    assert _events(capsys.readouterr().out) == [{"stage": "signin", "nichibo": False, "carbarn": True, "waiting": True},
+                                                {"stage": "signin", "nichibo": True, "carbarn": True, "waiting": False}]
+    assert lines[0].startswith("Not signed in to Nichibo.") and lines[-1] == "Signed in. Continuing."
+
+
+def test_guides_step_reports_progress(cfg, monkeypatch, capsys):
+    import auction_bot.carbarn.client as client_mod
+    import auction_bot.run as runmod
+    _fake_browser(monkeypatch)
+
+    class Guides:
+        def __init__(self, browser, c):
+            pass
+
+        def fetch_team_guides(self, codes, include_inactive):
+            return [{"item": {"modelCode": "GDH206", "make": "Toyota", "model": "Hiace", "minGrade": 3.5,
+                              "variants": [{"name": None, "active": True}]}, "tree": {}}]
+
+    monkeypatch.setattr(client_mod, "CarbarnClient", Guides)
+    monkeypatch.setenv("BIDBARN_PROGRESS", "1")
+    capsys.readouterr()
+    n, path = runmod.fetch_guides(cfg, echo=lambda s: None)
+    assert n == 1 and path.exists()
+    assert _events(capsys.readouterr().out) == [{"stage": "guides", "guides": 1, "snapshot": path.name}]
+
+
+# -- Learn mode's structured summary ---------------------------------------------------------------------------
+
+def _jims_session(cfg, tmp_path):
+    """The bot's own view of one GDH206 lot, and a recorded session in which Jim carts it, types an amount and why."""
+    import json
+    from auction_bot.pipeline import scan as real_scan
+
+    N = "https://autosearch.nichibojapan.com"
+    store = Store(cfg.db_path)
+    real_scan(cfg, FakeBrowser(), store, ["GDH206"], limit_per_model=1)
+    row = store.list_proposals(decision="pending", status="NEEDS_REVIEW")[0]
+    ref, bot_bid, pid = row["ref_no"], row["bid_jpy_k"], row["id"]
+    store.close()
+    session = tmp_path / "sessions" / "20260926-100000"
+    session.mkdir(parents=True)
+    card = {"tag": "button", "text": "cart", "refno": ref, "card_ref": ref, "card": "2020 Toyota Hiace"}
+    events = [
+        {"t": "2026-09-26T10:00:00.000", "type": "session", "started": "2026-09-26T10:00:00.000"},
+        {"t": "2026-09-26T10:00:01.000", "type": "nav", "url": N + "/auction?Chassis=GDH206", "ref": None, "chassis": "GDH206"},
+        {"t": "2026-09-26T10:00:05.000", "type": "click", "url": N + "/auction?Chassis=GDH206", "el": card},
+        {"t": "2026-09-26T10:00:08.000", "type": "reason", "url": N + "/auction?Chassis=GDH206", "text": "grade 4 and under the cap"},
+        {"t": "2026-09-26T10:00:20.000", "type": "nav", "url": N + "/auction/cart", "ref": None, "chassis": None},
+        {"t": "2026-09-26T10:00:25.000", "type": "input", "url": N + "/auction/cart", "el": {"tag": "input", "card_ref": ref, "card": "2020 Toyota Hiace"}, "value": str(bot_bid + 50)},
+        {"t": "2026-09-26T10:00:30.000", "type": "reason", "url": N + "/auction/cart", "text": "would normally skip, already 122k odo"},
+        {"t": "2026-09-26T10:03:00.000", "type": "reason", "url": N + "/auction/cart", "text": "never click the stock cards"},
+        {"t": "2026-09-26T10:03:10.000", "type": "session_end", "ended": "2026-09-26T10:03:10.000"},
+    ]
+    (session / "events.jsonl").write_text("\n".join(json.dumps(e) for e in events) + "\n", encoding="utf-8")
+    return session, ref, bot_bid, pid
+
+
+def test_learn_summary_is_structured(cfg, tmp_path, monkeypatch, capsys):
+    from auction_bot.run import learn
+    session, ref, bot_bid, pid = _jims_session(cfg, tmp_path)
+    steps = {"watch": lambda c, echo: session, "fetch_guides": lambda c, echo: (1, None), "scan_codes": lambda c, codes, echo: {}}
+    monkeypatch.setenv("BIDBARN_PROGRESS", "1")
+    capsys.readouterr()
+    learn(cfg, echo=lambda s: None, steps=steps)
+    out = capsys.readouterr().out
+    assert [(e["stage"], e["phase"], e["searched"]) for e in _events(out)] == [("learn", "guides", ["GDH206"]), ("learn", "scan", ["GDH206"]),
+                                                                              ("learn", "compare", ["GDH206"])]
+    told = _summaries(out)
+    assert len(told) == 1
+    told = told[0]
+    assert told["session"] == "20260926-100000" and told["report"] == str(session / "report.txt") and told["searched"] == ["GDH206"]
+    assert told["counts"] == {"lots": 1, "opened": 0, "carted": 1, "bids": 0, "agree": 0, "disagree": 0, "searches": 1, "notes": 1,
+                              "candidates": 1, "actions_saved": 2, "screenshots": 0}
+    lot = told["lots"][0]
+    assert lot["ref_no"] == ref and lot["title"] == "2020 Toyota Hiace" and lot["code"] == "GDH206" and lot["proposal_id"] == pid
+    assert lot["jim"] == {"opened": False, "carted": True, "cart_clicks": 1, "bid_k": None, "typed_k": bot_bid + 50,
+                          "reasons": ["grade 4 and under the cap", "would normally skip, already 122k odo"], "seconds": None,
+                          "sheet_viewed": False}
+    assert lot["bot"]["status"] == "NEEDS_REVIEW" and lot["bot"]["bid_k"] == bot_bid and lot["bot"]["delta_k"] == 50
+    assert lot["bot"]["decision"] == "pending" and lot["model"] is None  # sheet_check none: no judgement to agree with
+    assert lot["candidates"] == [{"line": "skip: km >= 122000", "from_reason": "would normally skip, already 122k odo"}]
+    assert told["candidates"] == [{"code": "GDH206", "ref_no": ref, "line": "skip: km >= 122000",
+                                   "from_reason": "would normally skip, already 122k odo"}]
+    assert told["notes"] == [{"where": "cart", "text": "never click the stock cards"}]
+    assert told["dashboard"] == {"active_seconds": 0, "headings": []}
+
+
+def test_compare_lines_is_the_report_text(cfg, tmp_path):
+    from auction_bot.run import compare_lines, compare_lots, compare_session
+    from auction_bot.watch import load_events, timeline
+    session, ref, bot_bid, _ = _jims_session(cfg, tmp_path)
+    s = timeline(load_events(session), str(session))
+    store = Store(cfg.db_path)
+    try:
+        lots = compare_lots(s, store)
+        lines = compare_lines(lots, s.notes)
+        assert lines == compare_session(cfg, s, store)
+    finally:
+        store.close()
+    assert lines[0].startswith(f"- 2020 Toyota Hiace: Jim typed {bot_bid + 50}K, left in the cart | bot NEEDS_REVIEW {bot_bid:,}K")
+    assert lines[0].endswith(" (Jim +50K against the grid)")
+    assert lines[1:] == ["     why: grade 4 and under the cap", "     why: would normally skip, already 122k odo",
+                         "     candidate rule for GDH206: skip: km >= 122000", "- note [cart]: never click the stock cards"]
+    # A lot the bot never saw, and a judged lot Jim disagreed with, in plain data and in text.
+    never = {"ref_no": "Z", "title": "Z", "code": None, "proposal_id": None, "bot": None, "model": None, "candidates": [],
+             "jim": {"opened": True, "carted": False, "cart_clicks": 0, "bid_k": 900, "typed_k": None, "reasons": [], "seconds": 4,
+                     "sheet_viewed": True}}
+    assert compare_lines([never], []) == ["- Z: Jim bid 900K, opened the page | bot never seen (not in the bot's scan)"]
+    judged = dict(never, bot={"status": "SKIP", "bid_k": None, "reason": "grade: 3 below 3.5", "decision": "pending", "delta_k": None},
+                  model={"recommendation": "skip", "proposed_k": None, "summary": "", "agree": False, "line": "model recommends skip | DISAGREE: you bid, the model would skip"})
+    assert compare_lines([judged], []) == ["- Z: Jim bid 900K, opened the page | bot SKIP because grade: 3 below 3.5",
+                                           "     model recommends skip | DISAGREE: you bid, the model would skip"]
+
+
+def test_model_agrees_reads_the_judgement():
+    from auction_bot.run import model_agrees
+    bid, skip = {"mode": "judge", "recommendation": "bid"}, {"mode": "judge", "recommendation": "skip"}
+    assert model_agrees(bid, jim_acted=True, jim_passed=False) is True
+    assert model_agrees(skip, jim_acted=True, jim_passed=False) is False
+    assert model_agrees(bid, jim_acted=False, jim_passed=True) is False
+    assert model_agrees(skip, jim_acted=False, jim_passed=True) is None and model_agrees({}, True, False) is None
+    assert model_agrees({"mode": "manual"}, True, False) is None
 
 
 def test_learn_and_bid_commands_dispatch(cfg, monkeypatch):

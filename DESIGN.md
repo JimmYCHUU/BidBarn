@@ -404,14 +404,16 @@ The page is a sticky header over a two-column shell. The shell is centred, at mo
 Inside the main column a page starts with its head: the title, a subtitle in secondary ink, and the page's controls at the right end. Cards follow, 14px apart. A section title has 22px above it and 8px below. Cards hold 16px at the sides, 12px above and below in the head, 14px in the body. Rows of controls use a 10px gap. Most spacing falls on 2, 4, 6, 8, 10, 12, 14, 16 and 18px. These values are written in the rules. They are not tokens.
 
 Page compositions in the build:
-- **Overview:** the next-step band across the full width, then two columns. The log takes 1.9 parts and the state column takes 1 part with a 300px minimum, 18px apart.
+- **Overview:** the band across the full width (the date and the two mode cells, or the live run and its stages), then two columns that start alike, each with a 15px section title ("Today", "State") 14px under the band and its first card 8px under that. The log takes 1.9 parts and the State column 1 part with a 300px minimum, 18px apart. Nothing else sits beside the log: no commands, no meters.
+- **Guide:** everything across the full width except one pair: the lot counts as a strip of pills under the head, the requirements, the bid grid of each variant (as many as sixteen odometer bands), then the standing instructions beside the playbook in two even columns, then the recent decisions as a wide table. Nothing short stands beside anything tall.
 - **Lot detail:** two columns, 1 to 1.25, 16px apart. The evidence column (sheet, photos) stays in view while the left column is read down to the decision.
 - **Settings:** two even columns.
-- **Review, all lots, runs:** full-width cards that hold tables. A wide table keeps a 960px minimum and scrolls sideways inside its card. The review table pins its last column, where the decision buttons are.
+- **Review, all lots, runs:** full-width cards that hold tables. A wide table keeps a 960px minimum and scrolls sideways inside its card. The review table pins nothing; below 1130px of its own box it lays each lot out as a block instead.
 
 Responsive behaviour:
 - **Up to 1279px** (beside Nichibo on half a screen): the nav becomes a wrapping strip above the page, its foot is hidden, and the shell's side padding is 14px.
-- **Up to 1279px also:** the overview becomes one column in the order state, log, tools. The state and tools cards flow into as many columns as fit.
+- **Up to 1279px also:** the overview becomes one column, the State card above the log, its chips as a wrapping row.
+- **Up to 860px:** the two mode cells stack, with a hairline between them.
 - **The review table answers to its own box, not to the window** (a container query on `.triage-wrap`), because the nav column and a half screen both take room from it. With 1130px or more it is a table. Below that a lot is a block: status, lot, bid, sheet and the two buttons on one line, the reasons on a line of their own under the lot. Below 830px the lot reads top to bottom: status and bid, the lot beside its sheet, the reasons, the buttons last. Nothing is pinned and nothing scrolls sideways.
 - **Up to 860px:** the two-column pages stack. From 861px the evidence column is sticky.
 - **Up to 640px:** the header is 60px, the wordmark is 15px high, the lock pill shows its short word, the finish button leaves the header, the step connectors are hidden, and table cells take 8px by 9px of padding.
@@ -424,11 +426,12 @@ The system is flat. A card is declared by its 1px line and carries no shadow. De
 - **Header** (`box-shadow: 0 8px 28px rgba(16, 24, 40, 0.05)`): under the sticky header, so that the page passes beneath it.
 - **Segment** (`box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06)`): the chosen item of a segmented control.
 - **Field focus** (`box-shadow: 0 0 0 3px rgba(4, 115, 234, 0.18)`): a ring around a focused input, with a blue border. It is a focus mark, not depth.
+- **Popover** (`shadow-pop`, `0 14px 32px -10px rgba(16, 24, 40, 0.2), 0 2px 6px rgba(16, 24, 40, 0.06)`): the keys popover on the review page, the one surface that floats above the page.
 
-Layers, lowest first: the header at 30, the lightbox at 50.
+Layers, lowest first: the header at 30, the popover at 40, the lightbox at 50.
 
 ### Named Rules
-**The Line Not Shadow Rule.** A surface is declared once, by its line. Cards, tiles, log entries, tables and notices have a 1px border and no shadow. A shadow belongs to the header and to the chosen segment, nowhere else.
+**The Line Not Shadow Rule.** A surface is declared once, by its line. Cards, tiles, log entries, tables and notices have a 1px border and no shadow. A shadow belongs to the header, to the chosen segment and to the one popover, nowhere else.
 
 ## Shapes
 
@@ -457,7 +460,8 @@ Plain and quick. They change colour under the pointer and give 2% when pressed.
 - **Pill:** fully round, at least 22px high, 10px at the sides, 12px text at weight 600, a 1px border, an optional 13px icon. Slate by default. The variants are ok, warn, bad, info, violet, tan and plain (white, `line-strong` border, `ink-3` text, used for rejected, superseded and unknown).
 - **Lock pill:** the pill in the header, 30px high with 12px at the sides and 12.5px text. Warn while the testing lock is on, info for a dry run, bad for live placement.
 - **Count:** a round chip for a number, `surface-3` ground, 11.5px at weight 700, tabular. When something waits for the reviewer it takes the warn ground and ink with a 1px inset line.
-- **Badge:** a requirement's verdict in the review table. 6px radius, `line-strong` border, 11.5px at weight 600, a 12px icon. Ok, bad and unclear variants take the ok, bad and warn families. Its evidence is in the tooltip.
+- **Badge:** a requirement's verdict. 6px radius, `line-strong` border, 11.5px at weight 600, a 12px icon. Ok, bad and unclear variants take the ok, bad and warn families. On the lot page each requirement has its own badge with its evidence in the tooltip.
+- **Verdict counts:** on the review page the badges are counts, one per family (a check and 3, a cross and 1, an alert and 1), only the non-zero ones, in a row under the one line of why; the whole list of requirements is the tooltip and a screen reader hears "3 pass, 1 fail, 1 unclear". The list itself lives on the lot page.
 
 ### Cards / Containers
 - **Corner Style:** 12px.
@@ -514,8 +518,23 @@ The signature component. It shows one run while it happens and keeps the guide r
 
 **The Still On Load Rule.** Nothing animates when a page opens. What the page opens with is drawn as it is. Only a change that arrives afterwards moves: a counter counts to its new value in 0.4 seconds, a meter grows to its share in 0.3 seconds, a new log line fades in over 150ms unless more than five arrive together. When a scan ends well the cells of the guide row sweep once from 30% to full opacity, 12ms apart. The spinning icon and the pulsing cell mark a run that is running and stop with it.
 
-### Day steps
-The five steps of the day in one row under the next step, joined by 20px hairlines. Each is a 15px icon and a 12.5px label in `ink-3`. A done step has the ok check and `ink-2` text. A step that is due or running has a blue icon. The next step is `ink` at weight 700. An idle step has the `ink-faint` circle. Each step also states its condition in text for a screen reader.
+### Mode cell
+One of the two things the overview offers when nothing runs: Learn mode and Bid mode, side by side under the date with a hairline between them. Each is a 15px title with a blue 18px icon, one sentence at 13px in `ink-3` held to 52ch, and one button. Bid's button is primary, Learn's is default. Both cells leave the band while a run is going; the band then shows the run instead. An error from a refused start appears under the cell's own button.
+
+### State chip list
+The state of the day as a list of pills in one card, one per thing: sign-in, guides, lots to review, approved bids not placed, placed, and a model quota only when it is short. A pill carries its word and its family (ok, warn, bad, info, plain). A faint note beside it gives the age or the count. A small default button appears only when something is wrong and the page can repair it: Sign in, Fetch the guides. Pills that lead somewhere are links and take the `blue-line` border under the pointer. Under 1280px the list becomes a wrapping row.
+
+### Stages
+The five stages of a Bid run (Sign in, Guides, Scan, Review, Place) in one row, joined by 20px hairlines, under the run's name on the overview and above the console on the run page. Each is a 15px icon and a 12.5px label in `ink-3`. A done stage has the ok check and `ink-2` text. The running stage has the spinning blue icon and `ink` at weight 700. A failed stage has the `bad` cross. A stage to come has the `ink-faint` circle. Each also states its condition in text for a screen reader. The row is shown for Bid runs only; nothing runs, nothing is shown.
+
+### Keys popover
+The keyboard list of the review page, opened by the keyboard icon button in the page head or by the ? key. A white card with the 8px radius, a 1px line and the popover shadow, anchored under the head's right end at layer 40, holding the key caps and their words in a wrapping row. Esc or a click outside closes it. It does not animate: a key opens it.
+
+### Session table
+A Learn run's session on its run page: one row per lot Jim touched, in five columns. Lot (the title linking to the lot when the bot has it, the reference in mono under it); You (pills for what he did: "bid 1,400K" in ok, "carted" in info, "opened" in plain, or "passed"; his typed reasons as faint lines); The bot (its status pill and amount, his difference against the grid, its reason); The model (its recommendation pill, its amount, then "agree" in ok or "disagree" in warn); Guide (the code in mono, linking to the guide page). Notes follow as a check list, then the candidate rules in the suggest strip, each with an Add button that stores it only when clicked.
+
+### Guide grid
+A bidding guide's grid as a table: years down, odometer bands across, amounts in K JPY as tabular figures, "no bid" in `ink-4` where the guide bids nothing, its reason in the tooltip. Cells take 8px of padding so that sixteen bands fit the main column at 1440px; narrower, the table scrolls inside its card. Under it the card foot names the modifiers the bot applies and the rows that are off.
 
 ### Lightbox
 The auction sheet at full size. It covers the window in `navy` at 86%, above every other layer, with the image contained in it. A click closes it. On the review pages any key closes it as well.
@@ -548,3 +567,6 @@ Selection is #cfe3fc with `ink` text. The caret is `blue`. Scrollbar thumbs are 
 - **Don't** use a Unicode mark or an emoji where an icon belongs.
 - **Don't** load a font, a script or an icon from the network. Everything is served from `static/vendor/`.
 - **Don't** introduce a second typeface for headings. Manrope carries every level.
+- **Don't** state the lock outside the header pill, the nav foot, Settings, the finish page and the approve row's hint.
+- **Don't** put a command's options in front of Learn or Bid. The single steps and their options live in the fold on the Runs page.
+- **Don't** offer a suggested skip rule anywhere but the guide page and a Learn run's page; elsewhere, link there.

@@ -1,8 +1,13 @@
-"""Watch mode: the recorder's file format and the offline timeline built from it (no browser)."""
+"""Watch mode: the recorder's file format and the offline timeline built from it (no browser), and the
+recording loop against a stand-in browser: it reports to the dashboard and stops at its Stop."""
 import json
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 
+import pytest
+
+from auction_bot import lock, progress
 from auction_bot.config import Config
 from auction_bot.watch import INIT_SCRIPT, Recorder, load_events, ref_from_url, render_session, search_chassis, session_dir, timeline
 
@@ -57,6 +62,176 @@ def test_recorder_writes_jsonl_and_queues_screenshots(tmp_path):
     events = load_events(tmp_path / "s1")
     assert [e["type"] for e in events] == ["session", "click", "nav", "screenshot"]
     assert events[2]["ref"] == "R1" and events[3]["file"] == "0001_lot.png"
+
+
+class _Page:
+    """A tab of the stand-in browser: it remembers its handlers and calls back on every wait."""
+
+    def __init__(self, url, on_wait):
+        self.url = url
+        self.main_frame = SimpleNamespace(url=url)
+        self.handlers = {}
+        self.closed = False
+        self._on_wait = on_wait
+        self.visited = []
+
+    def on(self, name, fn):
+        self.handlers.setdefault(name, []).append(fn)
+
+    def evaluate(self, script):
+        pass
+
+    def goto(self, url):
+        self.visited.append(url)
+
+    def bring_to_front(self):
+        pass
+
+    def is_closed(self):
+        return self.closed
+
+    def wait_for_timeout(self, ms):
+        self._on_wait(self)
+
+    def screenshot(self, path, full_page=False):
+        Path(path).write_bytes(b"png")
+
+
+class _Context:
+    def __init__(self, first_url, on_wait):
+        self.handlers = {}
+        self.closed = False
+        self.launched = None
+        self._on_wait = on_wait
+        self.pages = [_Page(first_url, on_wait)]
+
+    def expose_binding(self, name, fn):
+        self.binding = (name, fn)
+
+    def add_init_script(self, script):
+        self.script = script
+
+    def on(self, name, fn):
+        self.handlers.setdefault(name, []).append(fn)
+
+    def new_page(self):
+        page = _Page("about:blank", self._on_wait)
+        self.pages.append(page)
+        for fn in self.handlers.get("page", []):
+            fn(page)
+        return page
+
+    def close(self):
+        self.closed = True
+        for fn in self.handlers.get("close", []):
+            fn()
+
+
+def _stand_in_browser(monkeypatch, ctx):
+    """`sync_playwright()` as `watch._record` imports it, opening `ctx` instead of Chromium."""
+    pw_mod = pytest.importorskip("playwright.sync_api")
+
+    class PW:
+        def __init__(self):
+            self.chromium = SimpleNamespace(launch_persistent_context=self._launch)
+
+        def _launch(self, **kw):
+            ctx.launched = kw
+            return ctx
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return None
+
+    monkeypatch.setattr(pw_mod, "sync_playwright", lambda: PW())
+
+
+def _cfg(tmp_path) -> Config:
+    cfg = Config()
+    cfg.db_path = tmp_path / "data" / "bot.sqlite"
+    cfg.profile_dir = tmp_path / "data" / "profile"
+    cfg.nichibo = {"base_url": N}
+    cfg.carbarn = {"dashboard_url": "https://dashboard.carbarn.com.au/?view=bidding"}
+    return cfg
+
+
+def test_record_reports_while_recording_and_ends_when_the_window_closes(tmp_path, monkeypatch, capsys):
+    from auction_bot import watch as watch_mod
+    monkeypatch.setenv("BIDBARN_PROGRESS", "1")
+    monkeypatch.delenv("BIDBARN_CANCEL_FILE", raising=False)
+    monkeypatch.setattr(watch_mod, "PROGRESS_SECONDS", 0.0)
+    waits = []
+
+    def on_wait(page):
+        waits.append(page)
+        if len(waits) == 1:  # Jim opens a lot in a new tab, then closes the window
+            tab = ctx.new_page()
+            tab.url = tab.main_frame.url = N + "/auction/R1"
+            for fn in tab.handlers.get("framenavigated", []):
+                fn(tab.main_frame)
+        elif len(waits) == 2:
+            ctx.close()
+
+    ctx = _Context(N + "/auction?Chassis=GDH206", on_wait)  # the profile's last page: a GDH206 search
+    _stand_in_browser(monkeypatch, ctx)
+    cfg = _cfg(tmp_path)
+    lines = []
+    capsys.readouterr()
+    out = watch_mod.watch(cfg, echo=lines.append)
+    assert out.parent == cfg.db_path.parent / "sessions" and ctx.closed and ctx.launched["headless"] is False
+    assert str(ctx.launched["user_data_dir"]) == str(cfg.profile_dir) and ctx.binding[0] == "__bidbarn_event"
+    assert ctx.pages[0].visited == [N + "/auction"] and ctx.pages[1].visited == ["https://dashboard.carbarn.com.au/?view=bidding"]
+    events = load_events(out)
+    assert [e["type"] for e in events] == ["nav", "session", "nav", "session_end"]
+    assert events[0]["chassis"] == "GDH206" and events[2]["ref"] == "R1"  # the new tab's own navigation was heard
+    assert events[-1]["events"] == 3 and lock.holder(cfg) is None and not lock.lock_path(cfg).exists()
+    told = [progress.parse(ln)[1] for ln in capsys.readouterr().out.splitlines() if progress.parse(ln)]
+    assert told == [{"stage": "learn", "phase": "recording", "session": out.name, "events": 2, "lots": 0, "bids": 0, "searched": ["GDH206"]},
+                    {"stage": "learn", "phase": "recording", "session": out.name, "events": 3, "lots": 1, "bids": 0, "searched": ["GDH206"]}]
+    assert any("Watching. Two tabs are open" in ln for ln in lines)
+
+
+def test_record_stops_on_the_cancel_file_and_keeps_the_recording(tmp_path, monkeypatch, capsys):
+    from auction_bot import watch as watch_mod
+    flag = tmp_path / "4.cancel"
+    monkeypatch.setenv("BIDBARN_CANCEL_FILE", str(flag))
+    monkeypatch.setenv("BIDBARN_PROGRESS", "1")
+    monkeypatch.setattr(watch_mod, "PROGRESS_SECONDS", 0.0)
+    waits = []
+
+    def on_wait(page):
+        waits.append(page)
+        flag.write_text("stop", encoding="utf-8")  # Stop is clicked on the dashboard
+
+    ctx = _Context("about:blank", on_wait)
+    _stand_in_browser(monkeypatch, ctx)
+    cfg = _cfg(tmp_path)
+    capsys.readouterr()
+    with pytest.raises(progress.Cancelled, match="stopped from the dashboard"):
+        watch_mod.watch(cfg, echo=lambda s: None)
+    assert len(waits) == 1 and ctx.closed  # one look, then the stop; the window was closed for Jim
+    assert lock.holder(cfg) is None and not lock.lock_path(cfg).exists()  # the profile is free again
+    session = next((cfg.db_path.parent / "sessions").iterdir())
+    events = load_events(session)
+    assert [e["type"] for e in events] == ["session", "session_end"]  # what was recorded is kept, closed properly
+    told = [progress.parse(ln)[1] for ln in capsys.readouterr().out.splitlines() if progress.parse(ln)]
+    assert told == [{"stage": "learn", "phase": "recording", "session": session.name, "events": 1, "lots": 0, "bids": 0, "searched": []}]
+    assert not any(k == "summary" for k in [progress.parse(ln)[0] for ln in capsys.readouterr().out.splitlines() if progress.parse(ln)])
+
+
+def test_a_cancel_file_present_at_the_start_stops_before_the_browser_opens(tmp_path, monkeypatch):
+    from auction_bot import watch as watch_mod
+    flag = tmp_path / "5.cancel"
+    flag.write_text("stop", encoding="utf-8")
+    monkeypatch.setenv("BIDBARN_CANCEL_FILE", str(flag))
+    ctx = _Context("about:blank", lambda page: None)
+    _stand_in_browser(monkeypatch, ctx)
+    cfg = _cfg(tmp_path)
+    with pytest.raises(progress.Cancelled):
+        watch_mod.watch(cfg, echo=lambda s: None)
+    assert ctx.closed and lock.holder(cfg) is None  # the window opened and was closed again at the first look
 
 
 def test_session_dir_under_data():

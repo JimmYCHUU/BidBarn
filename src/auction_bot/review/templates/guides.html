@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Guides · BidBarn{% endblock %}
+{% block body %}
+<div class="page-head">
+  <h1 class="page-title">Guides</h1>
+  <span class="page-sub">{% if rules.snapshot %}{{ rules.guides }} guide{{ 's' if rules.guides != 1 }} in the snapshot, fetched {{ ago(rules.fetched_at) }}{% else %}No snapshot on this PC{% endif %}</span>
+</div>
+
+{% if rules.error %}
+<div class="banner banner--bad">{{ icon('circle-alert') }}<div><b>The snapshot could not be read.</b> {{ rules.error }}</div></div>
+{% endif %}
+
+<section class="card">
+  {% if rules.snapshot and rows %}
+  <div class="table-wrap">
+  <table class="lots">
+    <thead><tr><th>Code</th><th>Guide</th><th>Active</th><th class="num">To review</th><th class="num">Approved</th><th class="num">Rejected</th><th class="num">Last seen</th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td class="mono nowrap">{% if r.in_snapshot %}<a href="/guides/{{ r.code }}">{{ r.code }}</a>{% else %}{{ r.code }}{% endif %}</td>
+        <td>{{ r.name }}</td>
+        <td>{% if r.active %}<span class="pill pill--ok">{{ icon('circle-check') }} Active</span>{% else %}<span class="pill pill--plain">Off</span>{% endif %}</td>
+        <td class="num">{% if r.to_review %}<a href="/review?model={{ r.code }}"><span class="count count--hot">{{ r.to_review }}</span></a>{% else %}<span class="count">0</span>{% endif %}</td>
+        <td class="num">{{ r.approved }}</td>
+        <td class="num">{{ r.rejected }}</td>
+        <td class="num nowrap">{% if r.last_seen %}{{ local_time(r.last_seen) }}{% else %}<span class="muted">never</span>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="empty">
+    {{ icon('book-open') }}
+    <h3>No guides on this PC</h3>
+    <p>Fetch the guides from the Runs page, or start Bid mode.</p>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

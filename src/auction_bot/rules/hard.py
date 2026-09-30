@@ -241,7 +241,7 @@ def _bid_for_variant(variant: Variant, facts: VehicleFacts) -> int | None:
     """Grid bid for one candidate variant (used to show options when the variant is ambiguous)."""
     if facts.year is None or facts.km is None:
         return None
-    cell = variant.cell_for(facts.year, facts.km)
+    cell = variant.cell_for(facts.year, facts.km) or variant.nearest_cell(facts.year, facts.km)
     if cell is None or cell.no_bid or cell.bid_jpy_k is None:
         return None
     bid, _applied, _deferred, _checks = apply_modifiers(variant, facts, cell.bid_jpy_k, facts.year, facts.km)
@@ -314,7 +314,12 @@ def evaluate_hard(facts: VehicleFacts, rule: ModelRule, final: bool = False) -> 
         return fail("odo", f"{facts.km:,} km exceeds {variant.name} cap of {variant.max_odo:,} km")
     cell = variant.cell_for(facts.year, facts.km)
     if cell is None:
-        return fail("odo", f"no odo band covers {facts.km:,} km for {facts.year}")
+        # Jim, 2026-09-30: a km that no band covers (0 km under a grid that starts higher, or a
+        # gap between bands) takes the closest band. The cap above was checked first.
+        cell = variant.nearest_cell(facts.year, facts.km)
+        if cell is None:
+            return fail("odo", f"no odo band covers {facts.km:,} km for {facts.year}")
+        checks.append(Check("odo", True, f"no band covers {facts.km:,} km; the closest band {cell.band.label} is used"))
     res.band_label = cell.band.label
     if cell.no_bid or cell.bid_jpy_k is None:
         return fail("cell", f"grid cell {facts.year} / {cell.band.label} is empty or switched off ({cell.reason or 'no value'})")
@@ -391,7 +396,7 @@ def card_grid_check(facts: VehicleFacts, rule: ModelRule) -> Check | None:
         return None
     ceiling: int | None = None
     for v in rule.variants:
-        cell = v.cell_for(facts.year, facts.km)
+        cell = v.cell_for(facts.year, facts.km) or v.nearest_cell(facts.year, facts.km)
         if cell is None or cell.no_bid or cell.bid_jpy_k is None:
             continue
         extra = sum(m.amount_jpy_k for m in v.modifiers

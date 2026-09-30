@@ -34,7 +34,8 @@ def test_triage_order_and_content(cfg):
     order = [int(x) for x in re.findall(r'data-pid="(\d+)"', r.text)]
     assert order == [d, b, c, a]  # models alphabetically; within GDH206: grade 4.5 first, then fewest km
     assert "2020 Toyota Hiace" in r.text and "https://img.example/A.jpg" in r.text  # sheet straight from Nichibo when not downloaded
-    assert 'data-ev="photos_click"' in r.text and "/evidence/" not in r.text.split("data-pid")[1]
+    assert 'data-ev="nichibo_click"' in r.text and 'data-ev="photos_click"' not in r.text  # one link to Nichibo, not two
+    assert "/evidence/" not in r.text.split("data-pid")[1]
     assert 'data-bid="1000"' in r.text and "review.js" in r.text
     assert client.get("/static/review.js").status_code == 200 and "triageKeys" in client.get("/static/review.js").text
     assert client.get("/list").status_code == 200  # the old table still exists
@@ -84,7 +85,9 @@ def test_triage_shows_suggested_skip_rules(cfg):
     store.close()
     client = TestClient(create_app(cfg))
     r = client.get("/review")
-    assert "skip: variant contains DUMP" in r.text and "3 rejections" in r.text
+    assert "1 skip rule suggested" in r.text and 'href="/guides/GDH206#suggested"' in r.text  # the review page only points at it
+    r = client.get("/guides/GDH206")
+    assert r.status_code == 200 and "skip: variant contains DUMP" in r.text and "3 rejections" in r.text  # the guide page holds it
     r = client.post("/rules/GDH206/skip", data={"line": "skip: variant contains DUMP", "next": "/"}, follow_redirects=False)
     assert r.status_code == 303
     assert "skip: variant contains DUMP" in (cfg.override_dir / "GDH206.md").read_text(encoding="utf-8")
