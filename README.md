@@ -8,14 +8,17 @@
 
 Carbarn's auction bidding assistant for Nichibo. BidBarn reads the bidding guides from the
 Carbarn dashboard, searches Nichibo AutoSearch for every model code we buy, works out each
-lot's bid from the grid, reads the auction sheet with a local OCR engine, and puts every
-candidate on a review page with the sheet, a link to the photos and every rule check beside
-it. A person approves or rejects each one. Nothing is placed on Nichibo without that click, and
-while the testing lock is on nothing is placed at all. The scan judges a lot from the search
-result and the sheet alone; it opens the lot's page only when a rule needs something more.
+lot's bid from the grid, reads the auction sheet with a local OCR engine, lets a free vision
+model pre-read the sheet and the photos where the guide asks for a look, and puts every
+candidate on a review page with the sheet, the model's recommendation and every rule check
+beside it. A person approves or rejects each one. Nothing is placed on Nichibo without that
+click, and while the testing lock is on nothing is placed at all. The scan judges a lot from the
+search result and the sheet alone; it opens the lot's page only when a rule or the model needs
+something more.
 
-The whole day runs from a dashboard in the browser: it says what is next, starts it, shows it
-running, and holds the review pages. It looks like the Carbarn dashboard on purpose.
+The whole day runs from a dashboard in the browser: it starts Learn mode or Bid mode with one
+click, shows the run, holds the review pages, and has a page per bidding guide. It looks like
+the Carbarn dashboard on purpose.
 
 `Python 3.12` · `Playwright` · `RapidOCR` · `FastAPI` · `SQLite`
 
@@ -31,6 +34,8 @@ running, and holds the review pages. It looks like the Carbarn dashboard on purp
 - [The dashboard](#the-dashboard)
 - [The review page](#the-review-page)
 - [Rules as Carbarn confirmed them](#rules-as-carbarn-confirmed-them)
+- [The judgement layer](#the-judgement-layer)
+- [Standing instructions](#standing-instructions)
 - [CLI](#cli)
 - [Where your files live](#where-your-files-live)
 - [Troubleshooting](#troubleshooting)
@@ -55,7 +60,10 @@ as standing instructions for that model, so the checklist gets stricter over tim
 machine learning. A standing instruction written as `skip: ...` is applied by the bot before a
 lot is even opened; `bot insights` proposes such lines from your own rejections, and
 `bot learn --har` compares one of your manual sessions with what the bot would have done.
-Learning only ever adds skips, ordering and pre-fills: an approval is always your click.
+With the judgement layer on, a free vision model reads the sheet and the photos against the
+guide's requirements and your playbook, and recommends bid, review or skip with its evidence.
+Learning and the model only ever add skips, ordering and pre-fills: an approval is always your
+click.
 
 ## How a lot is judged
 
@@ -102,7 +110,9 @@ Learning only ever adds skips, ordering and pre-fills: an approval is always you
 Every stage writes its result to SQLite with the facts, the rule snapshot and the evidence
 files, so any bid can be explained afterwards. Per lot the scan now spends about 6 seconds
 (one sheet download and one OCR pass) instead of 22; only lots whose guide needs the page
-cost the extra page load.
+cost the extra page load, and only lots with something to look at cost a model call. A lot
+whose sheet is not published yet waits for the next scan, but it keeps its grid amount from the
+search card, so it can be approved in the meantime.
 
 ## Non-negotiable rules
 
@@ -210,20 +220,23 @@ CLI is always run through `bot.cmd` (or `.venv\Scripts\python -m auction_bot.cli
 
 ```bat
 bot.cmd fetch-rules
-bot.cmd scan -m GDH206 --limit 3
+bot.cmd scan -m CODE --limit 3
 review.cmd
 ```
 
-You should see the parsed guides listed, three Hiace lots evaluated, and the review page open
-at http://127.0.0.1:8765/review with the sheet of each candidate.
+`CODE` is any model code from the list the first command prints (the guides change, so pick
+one that is there today). You should see the parsed guides listed, up to three lots of that
+model evaluated, and the review page open at http://127.0.0.1:8765/review with the sheet of
+each candidate.
 
 ---
 
 ## The daily workflow
 
-From the dashboard the day is five steps, and the page always says which one is next: check the
-sign-in, fetch the guides, scan, review, place. Each of them is one button. The same steps as
-separate launchers, for when the dashboard is not running:
+From the dashboard the day is one run. **Start Bid mode** on the overview passes through five
+stages (sign-in, guides, scan, review, place), shows which one it is at, waits at the review,
+and continues when you click **Finish review** in the header. The single steps are in the fold
+on the Runs page. The same steps as separate launchers, for when the dashboard is not running:
 
 1. **`scan.cmd`** fetches a fresh guide snapshot and scans every active guide. Lots already
    evaluated are reused; only new listings are judged. The sheet comes straight from the search
@@ -231,9 +244,9 @@ separate launchers, for when the dashboard is not running:
    re-checked automatically next time, without opening their page.
 2. **`review.cmd`** opens the triage view: pending lots grouped by model, best grade first, then
    fewest km, the sheet beside each. Approve, change the amount, or reject with a reason, with
-   the mouse or the keyboard. Photos are one click away on Nichibo in your own browser. Tick
-   "save as standing instruction" to make a reason part of that model's checklist from then on;
-   write it as `skip: ...` and the bot applies it itself.
+   the mouse or the keyboard. The lot on Nichibo is one click away in your own browser. On the
+   lot's own page, tick "save as standing instruction" to make a reason part of that model's
+   checklist from then on; write it as `skip: ...` and the bot applies it itself.
 3. **`place.cmd`** places the approved bids. Dry run by default (the amount is typed on Nichibo
    and screenshotted, nothing is submitted). Live placement needs the testing lock lifted,
    `dry_run: false` in `config.yaml` **and** `bot.cmd place --live`.
@@ -257,7 +270,8 @@ separate launchers, for when the dashboard is not running:
 | Runs (`/runs`) | Every run, filtered as All, Learn, Bid or Steps, with its options, duration and outcome. A closed fold, **Start a single step**, starts one part of the day on its own: sign in, check the sign-in, fetch the guides, scan (model codes, lots per model), judge pending lots, replay (store or report), place as a dry run. |
 | Guides (`/guides`, `/guides/<code>`) | Every bidding guide in the snapshot, and one guide as a page: its requirements and the chips you judge, the bid grid per variant, your standing instructions with the form to add one, the skip rules your rejections justify, the playbook and your learn-mode comments, recent decisions, and the lots under the code. Every lot links to its guide. |
 | A run (`/runs/<n>`) | Live while it runs: one cell per guide in a single row (tall and blue where lots were found, short where nothing was new, red on an error, the lit cell is the guide being scanned), the running totals, the log as it is written, and **Stop**. A Bid run shows its five stages and, at the review stage, **Open the review**. Afterwards: the outcome, the placements with their screenshots, and the whole log, also as a file. A Learn run shows your session: per lot what you did, what the bot would have done and what the model said, the notes you typed, and the rules your comments suggest with an **Add** button each. |
-| Insights (`/insights`) | What `bot.cmd insights` prints, as a page: per model how many you decided, how long a decision takes, what you looked at, rejection themes, and the skip rules your rejections justify, each with an *Add rule* button. |
+| Review and All lots (`/review`, `/list`, `/p/<n>`) | The review pages, described in the next section. |
+| Insights (`/insights`) | What `bot.cmd insights` prints, as a page: per model how many you decided, how long a decision takes, what you looked at, rejection themes, and how many skip rules your rejections justify, with a link to the guide's page where they are added. |
 | Settings (`/config`) | What `config.yaml` says, read only: the locks, the scan settings, the judgement providers (whether a key is set, never the key), the sites and the folders. |
 
 What the page can start: Learn mode, Bid mode, and the single steps (scan, fetch the guides,
@@ -277,14 +291,15 @@ another website's page, is refused, so no page you visit can start a command or 
 
 | Panel | What it shows |
 |---|---|
-| Triage (`/review`) | Every pending lot, grouped by model and sorted the way the manual pass goes: best grade first, then fewest km. Sheet thumbnail, bid, the top reasons, Approve / Reject, links to the lot and its photos on Nichibo. Approve and Reject open a row under the lot with the amount or the reason; nothing is recorded until you confirm there. Keys: `j`/`k` move, `a` approve, `r` reject with a reason, `e` change the amount (each then `Enter` to confirm, `Esc` to cancel), `z` sheet full size, `o` Nichibo, `p` photos, `Enter` detail, `?` the key list. Skip rules your rejections justify are offered at the top of each model with an *Add rule* button. |
-| Header | Status, guide, decision state, link to the lot on Nichibo, `×2` when the same vehicle is proposed under another guide (both rows are shown, approve once) |
+| Triage (`/review`) | Every pending lot, grouped by model and sorted the way the manual pass goes: best grade first, then fewest km. Per lot: the sheet thumbnail, the bid (the model's proposed amount with the grid's beside it when they differ), one line of why, and for a judged lot the model's recommendation and its verdicts as counts (pass, fail, unclear); Approve / Reject, a link to the lot on Nichibo and one to its detail page. Approve and Reject open a row under the lot with the amount or the reason; nothing is recorded until you confirm there. Keys: `j`/`k` move, `a` approve, `r` reject with a reason, `e` change the amount (each then `Enter` to confirm, `Esc` to cancel), `z` sheet full size, `o` Nichibo, `Enter` detail, `?` the key list. The head of each model links to its guide page and says how many skip rules your rejections suggest; they are added there. |
+| Header (`/p/<n>`) | Status, decision state, link to the guide's page, link to the lot on Nichibo, Next; a note when the same vehicle is proposed under another guide (`×2 guides` on the triage row; both rows are shown, approve once) |
 | Listing facts | Chassis and resolved variant (or "judged from the search card" when the page was not opened), year, km, grade, start price, hall and date when known, Nichibo's own sheet translation when it has one |
 | Grid lookup and hard rules | The bid in K JPY, the grid cell used, the bonus applied, every check with a green, amber or red dot, dashboard chips that are *not* applied |
 | Your checklist | The guide's text rules and your standing instructions (skip lines are listed as "auto-skip rule in force"), the seat count read from the sheet, "confirm the variant" when it was matched from trim words, keyword hints |
-| Auction sheet and photos | The downloaded sheet, full size on click; photos as a link to the lot on Nichibo (the scan no longer downloads them) |
-| Your decision | Amount, reason, "save as standing instruction" with a suggested `skip:` line filled in from the reason, Approve / Reject; the testing-lock banner. Decided lots show how long the decision took and what was looked at. |
-| All proposals (`/list`) | The plain table with filters by decision, status and model |
+| The model's judgement | For a judged lot: the recommendation, the proposed amount beside the grid's, a verdict with evidence per requirement, whether each chip applies, the odd cases, the sheet notes and the candidate amounts; "model unavailable" when no provider could answer |
+| Auction sheet and photos | The downloaded sheet, full size on click; the photos the model looked at, when the judgement layer fetched them. Otherwise the scan downloads no photos and the full set is on Nichibo in your own browser |
+| Your decision | Amount, reason, "The model was wrong about … because …" for a judged lot, "save as standing instruction" with a suggested `skip:` line filled in from the reason, Approve / Reject. The lock is stated in the page header. Decided lots show how long the decision took and what was looked at. |
+| All lots (`/list`) | The plain table with filters by decision, status and model |
 
 ## Rules as Carbarn confirmed them
 
@@ -304,6 +319,7 @@ Recorded here so the code and the team agree. Change the code only when this lis
 | Year | Nichibo's "Year of Registration" |
 | Detail page | Opened only when the guide's variants differ by chassis suffix (GDH206V / GDH206K), a modifier depends on the colour, a skip line needs a page-only fact, or the search card lacks a fact. Otherwise the lot is judged from the card and the sheet; placement re-opens the page and re-verifies it anyway |
 | Card-stage ceiling | A lot whose start price is above the highest bid any variant could reach (cell plus every positive modifier) is skipped before anything is downloaded |
+| Images not published yet | The lot is parked until the next scan, without opening its page. It keeps its grid amount from the card, so it can be approved; the sheet and photos, when they arrive, can only skip it or change the modifiers (Jim, 2026-09-30) |
 
 ## The judgement layer
 
@@ -326,18 +342,21 @@ cases (odometer at the cap, conversions, sheet notes). It works like this:
    cases, one of the candidate amounts or none, and a recommendation: bid, review or skip.
    The bot turns that into a proposal deterministically (`judge/judge.py::decide`).
 5. **You confirm.** Every judged lot stays on the triage view with the model's recommendation,
-   badges per requirement (hover for the evidence), the proposed amount beside the grid's,
-   and the photos it looked at. Approve, change the amount, or reject. Telling it what it got
-   wrong ("The model was wrong about … because …") writes a line into the playbook for that
-   model code, so the next judgement reads your correction.
+   its verdicts as counts and the proposed amount beside the grid's; the lot's page has the
+   verdict and evidence per requirement and the photos it looked at. Approve, change the
+   amount, or reject. Telling it what it got wrong ("The model was wrong about … because …")
+   writes a line into the playbook for that model code, so the next judgement reads your
+   correction. `bot.cmd playbook CODE` prints what the model is told, and the guide's page
+   shows it.
 
 Providers are free tiers, tried in order: Google Gemini 3.5 Flash-Lite, then Gemini 3.1
 Flash-Lite (a separate free quota on the same key), then Groq's text-only model for lots that
 need no photos (Groq had no free vision model on 2026-09-28). Limits and model names live in
 `config.yaml`, keys in `.env` (see `.env.example`); when a provider retires a model, the next one
 takes over and the name is a one-line config change. Google may use free-tier content to
-improve its products; Groq states it does not train on it. Neither ever receives the bid grid. When no provider can answer, the lot still
-reaches you, marked "model unavailable", and `bot.cmd judge --pending` catches up later.
+improve its products; Groq states it does not train on it. Neither ever receives the bid grid.
+When no provider can answer, the lot still reaches you, marked "model unavailable", and
+`bot.cmd judge --pending` (or **Judge pending lots** on the Runs page) catches up later.
 
 ## Standing instructions
 
@@ -359,7 +378,8 @@ Examples: `skip: variant contains DUMP`, `skip: hall USS Kyushu`, `skip: km > 12
 `skip: start >= bid` (start in yen, bid in K JPY), `skip: seats > 6`,
 `skip: colour is white and year < 2019`. A condition on a fact the bot does not have yet is
 undecided and never fires. Lines that cannot be read are ignored with a warning and shown on
-the checklist as "NOT understood". Add lines on the review page, with
+the checklist as "NOT understood". Add lines on the guide's page (`/guides/<code>`, which also
+lists the rules your rejections suggest), when rejecting a lot on its page, with
 `bot.cmd skip-line CODE "..."`, or by editing the file.
 
 ## CLI
@@ -377,7 +397,8 @@ the checklist as "NOT understood". Add lines on the review page, with
 | `bot.cmd review` | Serve the same pages without opening the browser (triage at `/review`, table at `/list`) |
 | `bot.cmd replay [--apply]` | Re-apply current rules, skip lines and code to stored proposals, offline |
 | `bot.cmd place [--live]` | Place approved bids (dry run unless every lock is off) |
-| `bot.cmd judge [--pending] [-m CODE] [--limit N]` | Ask the free vision model about stored lots still waiting for a judgement (rate-limited, resumable) |
+| `bot.cmd judge [--pending] [-m CODE] [--limit N] [--no-browser]` | Ask the free vision model about stored lots still waiting for a judgement (rate-limited, resumable). `--no-browser` opens no lot page for photos; such lots stay pending |
+| `bot.cmd playbook [CODE]` | What the judgement model is told about how you decide: your principles, and your corrections and comments per model code. Without a code, lists every code with notes |
 | `bot.cmd insights [-m CODE] [--days N] [--min-support N]` | How you decide per model, how often the model was corrected, and the skip lines your rejections justify |
 | `bot.cmd skip-line CODE "skip: ..."` | Add a structured standing instruction (validated first) |
 | `bot.cmd learn --har FILE [-m CODE] [--save]` | Learn from a HAR saved in your own browser instead of watching; offline |
@@ -415,7 +436,7 @@ Everything the bot downloads stays on the office PC. Git never sees any of it.
 | "STOPPED: No rules snapshot found" | Run `bot.cmd fetch-rules` (or `scan.cmd`, which does it first). |
 | "Rules snapshot is N h old" | Snapshots older than `max_rules_age_hours` are refused. Fetch again. |
 | OCR "unavailable" on the review page | Install the Visual C++ runtime linked above and restart. |
-| "Images not published yet" banner | Nichibo still serves placeholder images for that lot. Leave it; the next scan re-checks it. |
+| "Images not published yet" banner | Nichibo still serves placeholder images for that lot. The next scan re-checks it. It carries its grid amount from the card, so you can leave it or approve it as it is. |
 | A page load times out | Nichibo stalls now and then; loads retry once. Re-run the scan, it continues where it stopped. |
 | `bot.exe` "Permission denied" | Windows App Control blocks the launcher. Use `bot.cmd`. |
 | A DLL "could not be found" or "blocked by policy" | Same policy. `jiter` is pinned to a version it allows; do not upgrade it blindly. |
@@ -430,17 +451,23 @@ Everything the bot downloads stays on the office PC. Git never sees any of it.
 resolution on captured Alphard and E-Class guides, the seat rule, OCR parsing on three real sheets
 plus the header-band crop and its fallback, an offline end-to-end scan against captured Nichibo
 pages, the card-and-sheet path that opens no page, the placeholder path that parks a lot
-without a page, the grid ceiling, placement re-verification of card-judged lots, the cache and
-replay paths, the skip-line grammar and where the scan applies it, review telemetry and
+without a page and carries its grid amount, the odometer bands (0 km, a km no band covers,
+above the last band), the grid ceiling, placement re-verification of card-judged lots, the
+cache and replay paths, the skip-line grammar and where the scan applies it, review telemetry and
 insights, the triage view, the HAR parser and join (with a socket guard proving no network),
-the learn and bid modes (card attribution of comments, the Finish hand-off), the judgement layer (provider fallback and quotas, requirement classification, candidates, playbook, the stubbed model in the scan, the pending pass, replay, the review page and corrections), the Stock URL guard and the testing lock,
+the learn and bid modes (card attribution of comments, the Finish hand-off), the judgement
+layer (provider fallback and quotas, requirement classification, candidates, playbook, the
+stubbed model in the scan, the pending pass, replay, the review page and corrections), the
+Stock URL guard and the testing lock, the guide pages (grid, chips, standing instructions,
+suggestions, a code shared by two guides, hostile codes),
 and the dashboard: the progress lines a run prints and that a signed-out or stopped scan ends at
 once, the browser profile lock, the runs table on an old database, the job runner on harmless
 stand-in commands (finish, fail, stop, a second start refused, a run left by a closed
 dashboard), the command table (no option and no value can produce a live placement), every page
-on an empty database, the status and the day's steps, the log and its live stream, that a
-request from another site can neither start a command nor approve a lot, and that the dashboard
-package decides nothing.
+on an empty database, the status and the day's steps, the log and its live stream, the folded
+single steps, the slim review row, a Bid run waiting at the review, a Learn run's session page,
+that a request from another site can neither start a command nor approve a lot, and that the
+dashboard package decides nothing.
 
 ## Project layout
 
@@ -449,12 +476,15 @@ bidbarn/
 ├── dashboard.cmd                                            the dashboard in your browser
 ├── bidbarn.cmd                                              one click: Learn mode or Bid mode
 ├── bot.cmd · login.cmd · scan.cmd · review.cmd · place.cmd   the separate steps
-├── config.yaml                                              locks, cache, pacing, review address
+├── config.yaml                                              locks, judgement providers, cache, pacing, review address
+├── .env.example                                             the keys the judgement layer reads from .env
 ├── CLAUDE.md                                                rules for anyone working on the code
 ├── PRODUCT.md · DESIGN.md                                   who the page is for, and how it looks
 ├── docs/endpoints.md                                        both sites' endpoints, from the HAR captures
 ├── docs/dashboard.md                                        the dashboard's routes, runs and progress lines
+├── docs/observations.md                                     what watch mode has shown about the manual flow
 ├── rules/overrides/                                         standing instructions (git-ignored)
+├── rules/playbook/                                          the playbook the judgement model reads (git-ignored)
 ├── src/auction_bot/
 │   ├── carbarn/      client.py (dashboard API) · models.py (guides, variants, grids, modifiers)
 │   ├── nichibo/      browser.py (session + URL guard) · search.py · parsers.py · vehicle.py
@@ -466,7 +496,8 @@ bidbarn/
 │   ├── review/       the local page (FastAPI): app.py (review routes, the only place a lot is decided),
 │   │                 templates, static/ (bidbarn.css, review.js, dashboard.js, icons, vendor/)
 │   ├── dashboard/    jobs.py (the command table and the job runner) · status.py (the state of the day)
-│   │                 routes.py (overview, runs, insights, settings, the API)
+│   │                 routes.py (overview, runs, insights, settings, the API) · guides.py (a page per guide)
+│   ├── config.py     config.yaml as an object; placement_mode() holds the testing lock
 │   ├── progress.py   the PROGRESS and SUMMARY lines a run prints for the dashboard, and Stop
 │   ├── lock.py       one command at a time on the bot's browser profile
 │   ├── pipeline.py   scan (card + sheet first, page only when needed) and offline replay
@@ -483,10 +514,15 @@ bidbarn/
 
 Testing phase. The testing lock is on and every approval is test data. The speed rework is in:
 lots are judged from the search card and the sheet, the page is opened only when a rule needs
-it, photos are a link, and the OCR reads the sheet header first. The dashboard is in
-(2026-09-29): it has been exercised on stand-in commands and on a throwaway database, not yet
-on a real scan. Next: the first real scan started from the dashboard, the first review pass on
-the triage view, and the first look at Insights once decisions exist.
+it, and the OCR reads the sheet header first. The judgement layer is in (2026-09-28): a free
+vision model pre-reads the lots that need a look, and photos are downloaded only for those. The
+dashboard is in (2026-09-29) and was simplified the day after: Learn mode and Bid mode start
+from the overview, the single steps sit in a fold on the Runs page, and every guide has its own
+page. It has been exercised on stand-in commands and on a throwaway database; no run started
+from the page has gone through to the end on real data yet, and the points still to confirm on
+the office PC are listed under "Not verified yet" in `docs/dashboard.md`. Next: the first
+complete Bid run from the dashboard, the first review pass on the triage view, and the first
+look at Insights once decisions exist.
 
 ### Open questions for Carbarn
 
@@ -494,7 +530,9 @@ the triage view, and the first look at Insights once decisions exist.
   already at the last band's cap ("already 80k") and, for a lot exactly on a band boundary
   ("50k on the mark"), uses the next band's value, because the odometer rises between the
   auction and the warehouse. Bands are upper-bound inclusive today, so the bot would price
-  50,000 km in the 40-50K band and would bid on an 80,000 km lot with an 80K cap. What margin
-  should the bot apply, in km, and does it apply to every model?
+  50,000 km in the 40-50K band and would bid on an 80,000 km lot with an 80K cap. With the
+  judgement layer on, such a lot is flagged as an odd case and the next band's value is offered
+  as a candidate amount, a pre-fill for the reviewer. What margin should the bot itself apply,
+  in km, and does it apply to every model?
 - The GDH206K variant is inactive on the guide although the walkthrough bids on it; the bot
   treats every variant as biddable (the dot is the selected tab). Confirm.
