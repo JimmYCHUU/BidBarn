@@ -2,10 +2,14 @@
 
 A delete is never a decision (CLAUDE.md, rules 0c and 1): the row stays, nothing goes to `decisions`,
 and the next scan checks the vehicle again."""
+import json
 import sqlite3
 
+import pytest
+
+from auction_bot.pipeline import scan
 from auction_bot.store import Store
-from tests.test_pipeline_offline import cfg  # noqa: F401  (fixture)
+from tests.test_pipeline_offline import FakeBrowser, cfg  # noqa: F401  (fixture)
 from tests.test_triage import _seed
 
 
@@ -133,3 +137,105 @@ def test_a_run_from_before_sessions_puts_its_lots_under_earlier_scans(cfg):
         assert s.delete_session(None) == 1 and s.proposal(pid)["decision"] == "deleted"
     finally:
         s.close()
+
+
+# -- the run side: the pause file, the run id, the scan -----------------------------------------------
+
+def test_the_pause_file_pauses_and_the_cancel_file_wins(monkeypatch, tmp_path):
+    from auction_bot import progress
+    cancel, pause = tmp_path / "1.cancel", tmp_path / "1.pause"
+    monkeypatch.setenv("BIDBARN_CANCEL_FILE", str(cancel))
+    monkeypatch.setenv("BIDBARN_PAUSE_FILE", str(pause))
+    progress.check_cancel()  # neither file: the run carries on
+    pause.write_text("pause", encoding="utf-8")
+    with pytest.raises(progress.Paused, match="paused from the dashboard") as paused:
+        progress.check_cancel()
+    assert isinstance(paused.value, progress.Cancelled)  # every place that lets a stop through lets a pause through
+    cancel.write_text("stop", encoding="utf-8")
+    with pytest.raises(progress.Cancelled) as stopped:
+        progress.check_cancel()
+    assert not isinstance(stopped.value, progress.Paused)  # Stop wins
+
+
+def test_the_run_id_comes_from_the_dashboard(monkeypatch):
+    from auction_bot import progress
+    monkeypatch.delenv("BIDBARN_RUN_ID", raising=False)
+    assert progress.run_id() is None
+    monkeypatch.setenv("BIDBARN_RUN_ID", "12")
+    assert progress.run_id() == 12
+    monkeypatch.setenv("BIDBARN_RUN_ID", "x")
+    assert progress.run_id() is None
+
+
+def test_a_paused_scan_stops_before_the_first_page(cfg, monkeypatch, tmp_path):
+    from auction_bot import progress
+    flag = tmp_path / "1.pause"
+    flag.write_text("pause", encoding="utf-8")
+    monkeypatch.setenv("BIDBARN_PAUSE_FILE", str(flag))
+    store = Store(cfg.db_path)
+    browser = FakeBrowser()
+    with pytest.raises(progress.Paused):
+        scan(cfg, browser, store, ["GDH206"], limit_per_model=1)
+    assert browser.visited == []
+    store.close()
+
+
+def test_a_pause_that_lands_at_the_review_ends_the_wait(cfg, monkeypatch, tmp_path):
+    from auction_bot import progress
+    from auction_bot.run import wait_for_review
+    flag = tmp_path / "1.pause"
+    flag.write_text("pause", encoding="utf-8")  # clicked as the scan finished: the run is already waiting
+    monkeypatch.setenv("BIDBARN_PAUSE_FILE", str(flag))
+    monkeypatch.setenv("BIDBARN_FINISH_FILE", str(tmp_path / "1.finish"))
+    with pytest.raises(progress.Paused):
+        wait_for_review(cfg, echo=lambda _: None, poll_seconds=0.01)
+
+
+def test_the_scan_writes_its_run_on_every_lot_and_replay_keeps_it(cfg, monkeypatch):
+    from auction_bot.pipeline import reevaluate
+    monkeypatch.setenv("BIDBARN_RUN_ID", "7")
+    store = Store(cfg.db_path)
+    scan(cfg, FakeBrowser(), store, ["GDH206"], limit_per_model=2)
+    assert {r["run_id"] for r in store.list_proposals(decision=None, limit=1000)} == {7}
+    monkeypatch.setenv("BIDBARN_RUN_ID", "8")  # a replay run of its own: the lots stay in the session that found them
+    snap = cfg.snapshot_dir / "rules_test.json"
+    data = json.loads(snap.read_text(encoding="utf-8"))
+    data["guides"][0]["tree"]["minGrade"] = 4.5
+    data["guides"][0]["tree"]["updatedAt"] = "2026-09-15T00:00:00"
+    snap.write_text(json.dumps(data), encoding="utf-8")
+    assert reevaluate(cfg, store, ["GDH206"], apply=True).applied == 2
+    assert {r["run_id"] for r in store.list_proposals(decision=None, limit=1000)} == {7}
+    store.close()
+
+
+def test_a_deleted_lot_is_checked_again_and_keeps_its_judgement(cfg, monkeypatch):
+    import auction_bot.pipeline as pl
+    store = Store(cfg.db_path)
+    scan(cfg, FakeBrowser(), store, ["GDH206"], limit_per_model=1)
+    first = store.list_triage()[0]
+    assert store.delete_lot(first["id"]) and store.list_triage() == []
+    asked = []
+    real = pl.evaluate_vehicle
+
+    def spy(*args, **kwargs):
+        asked.append((args[2].ref_no, kwargs.get("previous_soft")))
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(pl, "evaluate_vehicle", spy)
+    stats = scan(cfg, FakeBrowser(), store, ["GDH206"], limit_per_model=1)
+    again = store.list_triage()
+    assert stats.opened == 1 and [r["ref_no"] for r in again] == [first["ref_no"]] and again[0]["id"] != first["id"]
+    assert asked == [(first["ref_no"], json.loads(first["soft_json"]))]  # its judgement goes along, to be reused
+    assert store.proposal(first["id"])["decision"] == "deleted"  # the deleted row stays as it was
+    store.close()
+
+
+def test_a_lot_left_superseded_by_a_forced_stop_is_checked_again(cfg):
+    store = Store(cfg.db_path)
+    scan(cfg, FakeBrowser(), store, ["GDH206"], limit_per_model=1)
+    first = store.list_triage()[0]
+    store.supersede_pending(first["ref_no"], first["guide_id"])  # the process was ended between the two writes
+    assert store.list_triage() == []
+    stats = scan(cfg, FakeBrowser(), store, ["GDH206"], limit_per_model=1)
+    assert stats.opened == 1 and [r["ref_no"] for r in store.list_triage()] == [first["ref_no"]]
+    store.close()

@@ -8,9 +8,12 @@ ordinary output, single lines the dashboard reads back from the run's log:
 
 Without the variable nothing is printed, so a command run from a console looks exactly as
 before. The dashboard stops a run by creating the file named in `BIDBARN_CANCEL_FILE`; the
-command notices at its next `check_cancel()` and ends with `Cancelled`. Its mirror is the file
+command notices at its next `check_cancel()` and ends with `Cancelled`. Pause creates the file
+named in `BIDBARN_PAUSE_FILE`: the same check points end the run with `Paused`, a kind of
+`Cancelled`, and Resume starts it again in the same session. The mirror of both is the file
 named in `BIDBARN_FINISH_FILE`: a Bid run waits at the review until the dashboard's Finish
 button creates it (`finish_requested()`), then removes it (`clear_finish()`) and goes on.
+`BIDBARN_RUN_ID` names the dashboard run (`run_id()`), so the lots a scan writes carry it.
 
 This module imports nothing from the package (the browser module imports it).
 """
@@ -23,10 +26,15 @@ import sys
 PROGRESS_PREFIX = "PROGRESS "
 SUMMARY_PREFIX = "SUMMARY "
 CANCEL_MESSAGE = "stopped from the dashboard"
+PAUSE_MESSAGE = "paused from the dashboard"
 
 
 class Cancelled(RuntimeError):
     """The run was stopped from the dashboard."""
+
+
+class Paused(Cancelled):
+    """The run was paused from the dashboard: it ends like a stop, and Resume starts it again in the same session."""
 
 
 def enabled() -> bool:
@@ -58,9 +66,25 @@ def cancel_requested() -> bool:
     return bool(path) and os.path.exists(path)
 
 
+def pause_requested() -> bool:
+    path = os.environ.get("BIDBARN_PAUSE_FILE")
+    return bool(path) and os.path.exists(path)
+
+
 def check_cancel() -> None:
+    """Stop or Pause from the dashboard ends the run here. Stop wins when both were clicked."""
     if cancel_requested():
         raise Cancelled(CANCEL_MESSAGE)
+    if pause_requested():
+        raise Paused(PAUSE_MESSAGE)
+
+
+def run_id() -> int | None:
+    """The dashboard run this command is (`BIDBARN_RUN_ID`); None from a console."""
+    try:
+        return int(os.environ.get("BIDBARN_RUN_ID") or "") or None
+    except ValueError:
+        return None
 
 
 def finish_file() -> str | None:

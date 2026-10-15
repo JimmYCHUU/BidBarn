@@ -137,6 +137,8 @@ def _should_skip_existing(store: Store, ref_no: str, rule: ModelRule, rescan: bo
     prev = store.latest_proposal(ref_no, rule.guide_id)
     if prev is None or rescan:
         return False
+    if prev["decision"] in ("deleted", "superseded"):
+        return False  # out of the review without a decision, or a stop forced between two writes: check it again
     if prev["decision"] != "pending":
         return True  # a human already decided on this vehicle
     if prev["status"] in ("BID", "NEEDS_REVIEW"):
@@ -146,6 +148,18 @@ def _should_skip_existing(store: Store, ref_no: str, rule: ModelRule, rescan: bo
             pending_images = False
         return not pending_images  # waiting for review, unless we are waiting for Nichibo's images
     return prev["rule_updated_at"] == rule.updated_at  # SKIP under identical rules
+
+
+def _deleted_soft(store: Store, ref_no: str, guide_id: int | None) -> dict | None:
+    """The judgement of a lot Jim deleted from the review, so it is reused when nothing changed (no new model call)."""
+    prev = store.latest_proposal(ref_no, guide_id)
+    if prev is None or prev["decision"] != "deleted":
+        return None
+    try:
+        soft = json.loads(prev["soft_json"] or "{}")
+    except json.JSONDecodeError:
+        return None
+    return soft if isinstance(soft, dict) else None
 
 
 def scan(cfg: Config, browser: Browser, store: Store, model_codes: list[str] | None = None,
@@ -168,6 +182,7 @@ def scan(cfg: Config, browser: Browser, store: Store, model_codes: list[str] | N
     marks: list[str] = []  # one letter per finished guide: f lots for review, e nothing new, x an error
     progress.emit(stage="scan", guides=len(guides), guide=0, codes=codes, marks="")
     told = [0.0]
+    run = progress.run_id()  # the dashboard run, so the review can show and delete the lots by session
     for n, rule in enumerate(guides, 1):
         progress.check_cancel()
         stats.guides += 1
@@ -217,7 +232,7 @@ def scan(cfg: Config, browser: Browser, store: Store, model_codes: list[str] | N
                 store.add_proposal(ref_no=card.ref_no, guide_id=rule.guide_id, model_code=rule.model_code,
                                    snapshot=snap_path.name, rule_updated_at=rule.updated_at, status=SKIP, stage="card",
                                    summary=summary_line(card), facts_json=card.to_dict(),
-                                   hard_json={"checks": [pre.__dict__]})
+                                   hard_json={"checks": [pre.__dict__]}, run_id=run)
                 stats.skip += 1
                 report(quiet=True)
                 continue
@@ -235,7 +250,7 @@ def scan(cfg: Config, browser: Browser, store: Store, model_codes: list[str] | N
                 if evidence.get("images_pending"):
                     stats.pending += 1
                     store.supersede_pending(card.ref_no, rule.guide_id)
-                    store.add_proposal(snapshot=snap_path.name, rule_updated_at=rule.updated_at,
+                    store.add_proposal(snapshot=snap_path.name, rule_updated_at=rule.updated_at, run_id=run,
                                        **pending_images_proposal(rule, card, evidence))
                     stats.review += 1
                     log.info("   %s -> images not published yet | sheet %.1fs, no page opened", summary_line(card), t_sheet)
@@ -273,9 +288,10 @@ def scan(cfg: Config, browser: Browser, store: Store, model_codes: list[str] | N
                     cfg, rule, facts, no_model, evidence_loader=load_evidence,
                     past_decisions=store.past_decisions(rule.model_code) if not no_model else [],
                     stats=stats, judge_client=judge_client, store=store, photo_loader=load_photos,
+                    previous_soft=_deleted_soft(store, card.ref_no, rule.guide_id),
                 )
                 store.supersede_pending(card.ref_no, rule.guide_id)
-                store.add_proposal(snapshot=snap_path.name, rule_updated_at=rule.updated_at, **proposal)
+                store.add_proposal(snapshot=snap_path.name, rule_updated_at=rule.updated_at, run_id=run, **proposal)
                 _count(stats, proposal["status"])
                 ocr_s = float((facts.sheet_ocr or {}).get("seconds") or 0)
                 bid_txt = f"{proposal['bid_jpy_k']:,}K" if proposal.get("bid_jpy_k") else ""
@@ -546,7 +562,7 @@ def reevaluate(cfg: Config, store: Store, model_codes: list[str] | None = None, 
                 store.add_proposal(ref_no=row["ref_no"], guide_id=rule.guide_id, model_code=rule.model_code,
                                    snapshot=snap_path.name, rule_updated_at=rule.updated_at, status=NEEDS_REVIEW,
                                    stage="card", summary=row["summary"], facts_json=facts.to_dict(),
-                                   hard_json={"checks": []},
+                                   hard_json={"checks": []}, run_id=row["run_id"],
                                    soft_json={"mode": "manual", "images_pending": True, "checklist": [], "hints": [],
                                               "reasons": ["passes the card checks under the current rules; the next scan opens the page"]})
                 st.applied += 1
@@ -577,7 +593,7 @@ def reevaluate(cfg: Config, store: Store, model_codes: list[str] | None = None, 
         st.changes.append(f"{label}: {old[0]} {old[1]} -> {new[0]} {new[1]}")
         if apply:
             store.supersede_pending(row["ref_no"], rule.guide_id)
-            store.add_proposal(snapshot=snap_path.name, rule_updated_at=rule.updated_at, **proposal)
+            store.add_proposal(snapshot=snap_path.name, rule_updated_at=rule.updated_at, run_id=row["run_id"], **proposal)
             st.applied += 1
     report()
     return st
