@@ -47,7 +47,8 @@ def test_runs_table_appears_in_a_database_from_before(tmp_path):
         assert store.proposal(1)["summary"] == "2020 Toyota Hiace"  # what was there is still there
         columns = {r["name"] for r in store.conn.execute("PRAGMA table_info(runs)")}
         assert columns == {"id", "command", "args_json", "source", "pid", "started_at", "finished_at", "status", "exit_code",
-                           "error", "progress_json", "summary_json", "log_path", "cancel_requested_at"}
+                           "error", "progress_json", "summary_json", "log_path", "cancel_requested_at",
+                           "session_id", "pause_requested_at", "deleted_at"}
         assert store.conn.execute("PRAGMA journal_mode").fetchone()[0].lower() == "wal"
         assert store.conn.execute("PRAGMA busy_timeout").fetchone()[0] == 5000
     finally:

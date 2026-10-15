@@ -31,12 +31,13 @@ CREATE TABLE IF NOT EXISTS proposals (
   soft_json TEXT,
   evidence_json TEXT,
   created_at TEXT NOT NULL,
-  decision TEXT NOT NULL DEFAULT 'pending',   -- pending | approved | rejected
+  decision TEXT NOT NULL DEFAULT 'pending',   -- pending | approved | rejected | superseded | deleted (out of the review, no decision)
   decision_reason TEXT,
   decided_at TEXT,
   approved_bid_jpy_k INTEGER,
   placed_at TEXT,
-  placement_json TEXT
+  placement_json TEXT,
+  run_id INTEGER                   -- the dashboard run that wrote it (BIDBARN_RUN_ID); NULL from a console
 );
 CREATE INDEX IF NOT EXISTS ix_proposals_ref ON proposals(ref_no);
 CREATE TABLE IF NOT EXISTS decisions (
@@ -112,13 +113,20 @@ CREATE TABLE IF NOT EXISTS runs (
   progress_json TEXT,
   summary_json TEXT,
   log_path TEXT,
-  cancel_requested_at TEXT
+  cancel_requested_at TEXT,
+  session_id INTEGER,              -- the first run of its session: its own id, or the paused session it resumed
+  pause_requested_at TEXT,
+  deleted_at TEXT                  -- Delete session took the session's waiting lots out of the review
 );
 CREATE INDEX IF NOT EXISTS ix_runs_command ON runs(command, id);
 """
 
-# A run started from the dashboard: running until its process ends, then one of the other three.
-RUN_STATUSES = ("running", "ok", "failed", "stopped")
+# A run started from the dashboard: running until its process ends, then one of the others. `paused` is a
+# Bid run ended by Pause; Resume starts the next run in the same session (`runs.session_id`).
+RUN_STATUSES = ("running", "ok", "failed", "stopped", "paused")
+RUN_COLUMNS = {"session_id": "INTEGER", "pause_requested_at": "TEXT", "deleted_at": "TEXT"}
+# A lot waiting for a person: what the review lists, and all that Delete may take out of it.
+WAITING = "decision='pending' AND status IN ('BID','NEEDS_REVIEW')"
 
 # What the reviewer did on the page, summarised per decision (added to `decisions` on first run).
 DECISION_COLUMNS = {
@@ -147,7 +155,10 @@ class Store:
         except sqlite3.Error:
             pass
         self.conn.executescript(SCHEMA)
-        self._ensure_columns("proposals", {"guide_id": "INTEGER"})  # databases created before guide_id existed
+        self._ensure_columns("proposals", {"guide_id": "INTEGER", "run_id": "INTEGER"})  # databases created before these
+        self._ensure_columns("runs", RUN_COLUMNS)
+        self.conn.execute("CREATE INDEX IF NOT EXISTS ix_proposals_run ON proposals(run_id)")  # after the column exists
+        self.conn.commit()
         self._ensure_columns("decisions", DECISION_COLUMNS)
         self._ensure_columns("manual_actions", {"note": "TEXT"})  # typed reasons from watch sessions
 
@@ -377,12 +388,14 @@ class Store:
         return out
 
     def list_triage(self, model_code: str | None = None) -> list[sqlite3.Row]:
-        """Pending proposals a person still has to decide."""
-        q = "SELECT * FROM proposals WHERE decision='pending' AND status IN ('BID','NEEDS_REVIEW')"
+        """Pending proposals a person still has to decide, each with the session of the run that wrote it
+        (`session_id`, None when no dashboard run did: "Earlier scans")."""
+        q = ("SELECT p.*, r.session_id AS session_id FROM proposals p LEFT JOIN runs r ON r.id = p.run_id "
+             "WHERE p.decision='pending' AND p.status IN ('BID','NEEDS_REVIEW')")
         args: list = []
         if model_code:
-            q += " AND model_code=?"; args.append(model_code)
-        return self.conn.execute(q + " ORDER BY model_code, id DESC", args).fetchall()
+            q += " AND p.model_code=?"; args.append(model_code)
+        return self.conn.execute(q + " ORDER BY p.model_code, p.id DESC", args).fetchall()
 
     def update_soft(self, pid: int, soft: dict, facts: dict | None = None, evidence: dict | None = None) -> None:
         """Store a (new) judgement on an existing pending proposal without superseding it."""
@@ -401,6 +414,41 @@ class Store:
             "UPDATE proposals SET decision='superseded', decided_at=? WHERE ref_no=? AND decision='pending'"
             + (" AND guide_id=?" if guide_id is not None else ""),
             (now(), ref_no, guide_id) if guide_id is not None else (now(), ref_no))
+        self.conn.commit()
+        return cur.rowcount
+
+    # -- out of the review without a decision (Delete) -------------------------------------
+    def delete_lot(self, pid: int) -> bool:
+        """Take one lot that waits for review out of it. Not a decision: nothing goes to `decisions`, so nothing
+        is learned from it, and the next scan checks the vehicle again. The row stays (rule 0c)."""
+        cur = self.conn.execute(f"UPDATE proposals SET decision='deleted', decided_at=?, decision_reason=? WHERE id=? AND {WAITING}",
+                                (now(), "deleted from the review", pid))
+        self.conn.commit()
+        return cur.rowcount == 1
+
+    def delete_session(self, session_id: int | None) -> int:
+        """Every lot of a session that still waits for review, out of it, and the session marked deleted.
+        `None` is the lots no dashboard run wrote ("Earlier scans"). Approved and rejected lots keep their
+        decision. Returns how many lots left the review."""
+        ts = now()
+        if session_id is None:
+            which, args = "(SELECT session_id FROM runs WHERE runs.id = proposals.run_id) IS NULL", ()
+        else:
+            which, args = "run_id IN (SELECT id FROM runs WHERE session_id=?)", (session_id,)
+            self.conn.execute("UPDATE runs SET deleted_at=COALESCE(deleted_at, ?) WHERE session_id=?", (ts, session_id))
+        cur = self.conn.execute(
+            f"UPDATE proposals SET decision='deleted', decided_at=?, decision_reason=? WHERE {WAITING} AND {which}",
+            (ts, "session deleted from the review", *args))
+        self.conn.commit()
+        return cur.rowcount
+
+    def sweep_deleted_sessions(self) -> int:
+        """Lots still waiting in a session marked deleted: written between Delete and the end of a run this
+        dashboard lost track of. Called when the dashboard starts."""
+        cur = self.conn.execute(
+            f"UPDATE proposals SET decision='deleted', decided_at=?, decision_reason=? WHERE {WAITING} AND run_id IN "
+            "(SELECT id FROM runs WHERE session_id IN (SELECT session_id FROM runs WHERE deleted_at IS NOT NULL))",
+            (now(), "session deleted from the review"))
         self.conn.commit()
         return cur.rowcount
 
@@ -457,12 +505,16 @@ class Store:
         return [dict(r) for r in rows]
 
     # -- runs (commands started from the dashboard) ------------------------------
-    def start_run(self, command: str, args: list[str], pid: int | None = None, source: str = "dashboard") -> int:
+    def start_run(self, command: str, args: list[str], pid: int | None = None, source: str = "dashboard",
+                  session_id: int | None = None) -> int:
+        """A new running run. It starts its own session unless `session_id` names the paused one it resumes."""
         cur = self.conn.execute(
             "INSERT INTO runs(command, args_json, source, pid, started_at, status) VALUES(?,?,?,?,?,'running')",
             (command, json.dumps(list(args), ensure_ascii=False), source, pid, now()))
+        run_id = int(cur.lastrowid)
+        self.conn.execute("UPDATE runs SET session_id=? WHERE id=?", (session_id or run_id, run_id))
         self.conn.commit()
-        return int(cur.lastrowid)
+        return run_id
 
     def set_run_pid(self, run_id: int, pid: int | None) -> None:
         self.conn.execute("UPDATE runs SET pid=? WHERE id=?", (pid, run_id))
@@ -483,11 +535,17 @@ class Store:
                           (now(), run_id))
         self.conn.commit()
 
+    def request_run_pause(self, run_id: int) -> None:
+        """Note when Pause was clicked (the first click counts). The run itself ends through `finish_run`."""
+        self.conn.execute("UPDATE runs SET pause_requested_at=COALESCE(pause_requested_at, ?) WHERE id=? AND status='running'",
+                          (now(), run_id))
+        self.conn.commit()
+
     def finish_run(self, run_id: int, status: str, exit_code: int | None = None, summary: dict | None = None,
                    error: str | None = None) -> bool:
-        """Close a running run as ok, failed or stopped. A run that is already closed is left as it is."""
+        """Close a running run as ok, failed, stopped or paused. A run that is already closed is left as it is."""
         if status not in RUN_STATUSES or status == "running":
-            raise ValueError(f"a run finishes as ok, failed or stopped, not {status!r}")
+            raise ValueError(f"a run finishes as ok, failed, stopped or paused, not {status!r}")
         cur = self.conn.execute(
             "UPDATE runs SET status=?, finished_at=?, exit_code=?, error=?, summary_json=COALESCE(?, summary_json) "
             "WHERE id=? AND status='running'",
@@ -515,3 +573,31 @@ class Store:
 
     def running_runs(self) -> list[sqlite3.Row]:
         return self.conn.execute("SELECT * FROM runs WHERE status='running' ORDER BY id").fetchall()
+
+    # -- sessions: a Bid run and the runs that resumed it ----------------------------------
+    def paused_session(self) -> sqlite3.Row | None:
+        """The newest run of the paused session, or None: a session whose newest run ended paused and that
+        was not deleted. Its `session_id` names the session; Resume starts the next run in it."""
+        return self.conn.execute(
+            "SELECT * FROM runs r WHERE status='paused' AND deleted_at IS NULL AND session_id IS NOT NULL "
+            "AND id=(SELECT MAX(id) FROM runs WHERE session_id=r.session_id) ORDER BY id DESC LIMIT 1").fetchone()
+
+    def session_info(self, session_id: int) -> dict | None:
+        """A session as the pages name it: its first run (command, start) and its newest (id, status, progress,
+        deleted). None when no run has that session."""
+        rows = self.conn.execute("SELECT * FROM runs WHERE session_id=? ORDER BY id", (session_id,)).fetchall()
+        if not rows:
+            return None
+        first, last = rows[0], rows[-1]
+        try:
+            prog = json.loads(last["progress_json"]) if last["progress_json"] else None
+        except json.JSONDecodeError:
+            prog = None
+        return {"id": session_id, "command": first["command"], "started_at": first["started_at"], "run_id": last["id"],
+                "status": last["status"], "progress": prog if isinstance(prog, dict) else None,
+                "deleted_at": last["deleted_at"], "runs": [r["id"] for r in rows]}
+
+    def session_waiting(self, session_id: int) -> int:
+        """How many lots of the session wait for review."""
+        return self.conn.execute(f"SELECT COUNT(*) FROM proposals WHERE {WAITING} AND run_id IN "
+                                 "(SELECT id FROM runs WHERE session_id=?)", (session_id,)).fetchone()[0]
