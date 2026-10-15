@@ -381,3 +381,24 @@ def test_a_filtered_review_says_how_many_lots_delete_session_takes(cfg):
     filtered = client.get("/review?model=GDH206").text
     assert filtered.count("1 of 2 lots shown") == 2  # the filter hides lots that Delete session would still take
     assert "of 2 lots shown" not in client.get("/review").text
+
+
+def test_a_lot_deleted_during_a_session_stays_out_until_the_next_session(cfg, monkeypatch):
+    store = Store(cfg.db_path)
+    first = store.start_run("bid", ["bid"])
+    monkeypatch.setenv("BIDBARN_RUN_ID", str(first))
+    scan(cfg, FakeBrowser(), store, ["GDH206"], limit_per_model=1)
+    gone = store.list_triage()[0]
+    assert store.delete_lot(gone["id"])
+    store.finish_run(first, "paused")
+    resumed = store.start_run("bid", ["bid"], session_id=first)  # Resume: the same session
+    monkeypatch.setenv("BIDBARN_RUN_ID", str(resumed))
+    stats = scan(cfg, FakeBrowser(), store, ["GDH206"], limit_per_model=1)
+    assert stats.opened == 1 and gone["ref_no"] not in {r["ref_no"] for r in store.list_triage()}  # it stays out
+    assert store.latest_proposal(gone["ref_no"], gone["guide_id"])["id"] == gone["id"]  # no new row for it
+    store.finish_run(resumed, "stopped")
+    fresh = store.start_run("bid", ["bid"])  # a new session: the lot is checked again
+    monkeypatch.setenv("BIDBARN_RUN_ID", str(fresh))
+    scan(cfg, FakeBrowser(), store, ["GDH206"], limit_per_model=2)
+    assert gone["ref_no"] in {r["ref_no"] for r in store.list_triage()}
+    store.close()

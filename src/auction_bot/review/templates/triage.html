@@ -98,7 +98,7 @@
         <div class="row">
           <button class="approve act" data-act="approve"{% if not p.bid_jpy_k %} data-nobid="1" title="No grid amount for this lot: you type the amount"{% endif %}>Approve</button>
           <button class="reject act" data-act="reject">Reject</button>
-          <button type="button" class="btn--quiet btn--sm" data-delete data-confirm="Confirm delete" title="Out of the review without a decision: nothing is learned from it, and the next scan shows it again if it still matches a guide">Delete</button>
+          <button type="button" class="btn--quiet btn--sm" data-delete data-confirm="Confirm delete" title="Out of the review without a decision: nothing is learned from it. It stays out for the rest of this session; the next session's scan shows it again if it still matches a guide">Delete</button>
         </div>
         <div class="lot-links">
           <a href="{{ f.url }}" target="_blank" rel="noopener" data-ev="nichibo_click">Nichibo {{ icon('external-link', 'icon--sm') }}</a>

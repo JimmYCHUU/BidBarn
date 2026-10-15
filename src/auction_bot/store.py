@@ -420,7 +420,7 @@ class Store:
     # -- out of the review without a decision (Delete) -------------------------------------
     def delete_lot(self, pid: int) -> bool:
         """Take one lot that waits for review out of it. Not a decision: nothing goes to `decisions`, so nothing
-        is learned from it, and the next scan checks the vehicle again. The row stays (rule 0c)."""
+        is learned from it, and the next session's scan checks the vehicle again. The row stays (rule 0c)."""
         cur = self.conn.execute(f"UPDATE proposals SET decision='deleted', decided_at=?, decision_reason=? WHERE id=? AND {WAITING}",
                                 (now(), "deleted from the review", pid))
         self.conn.commit()
@@ -598,6 +598,15 @@ class Store:
         return {"id": session_id, "command": first["command"], "started_at": first["started_at"], "run_id": last["id"],
                 "status": last["status"], "progress": prog if isinstance(prog, dict) else None,
                 "deleted_at": last["deleted_at"], "runs": [r["id"] for r in rows]}
+
+    def session_runs(self, run_id: int | None) -> set[int]:
+        """The ids of every run in the session `run_id` belongs to: a lot deleted by one of them stays out of the
+        review for the rest of that session. Empty from a console, or for a run from before sessions existed."""
+        if run_id is None:
+            return set()
+        rows = self.conn.execute("SELECT id FROM runs WHERE session_id=(SELECT session_id FROM runs WHERE id=?)",
+                                 (run_id,)).fetchall()
+        return {r["id"] for r in rows}
 
     def session_waiting(self, session_id: int | None) -> int:
         """How many lots of the session wait for review (`None`: the lots no dashboard run wrote, "Earlier scans")."""

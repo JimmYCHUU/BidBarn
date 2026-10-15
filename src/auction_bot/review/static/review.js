@@ -267,7 +267,7 @@
     });
   }
 
-  // Delete: out of the review without a decision. Nothing is learned from it; the next scan shows it again.
+  // Delete: out of the review without a decision. Nothing is learned from it; the next session's scan shows it again.
   function deleteLot(r, b) {
     closePanel();
     b.disabled = true;

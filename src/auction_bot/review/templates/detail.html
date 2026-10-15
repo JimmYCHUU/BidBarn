@@ -185,14 +185,14 @@
         <div class="row">
           <button class="approve" name="action" value="approve" data-confirm="Confirm approve" {% if not (p.proposed_bid_jpy_k or p.bid_jpy_k) %}disabled{% endif %}>Approve bid</button>
           <button class="reject" name="action" value="reject">Reject</button>
-          <button type="submit" class="btn--quiet" formaction="/p/{{ p.id }}/delete" formnovalidate data-confirm="Confirm delete" title="Out of the review without a decision: nothing is learned from it, and the next scan shows it again if it still matches a guide">Delete</button>
+          <button type="submit" class="btn--quiet" formaction="/p/{{ p.id }}/delete" formnovalidate data-confirm="Confirm delete" title="Out of the review without a decision: nothing is learned from it. It stays out for the rest of this session; the next session's scan shows it again if it still matches a guide">Delete</button>
         </div>
       </form>
     </section>
     {% elif p.decision == 'deleted' %}
     <section class="card">
       <div class="card-head"><h2>Deleted</h2><span class="pill deleted">Deleted</span></div>
-      <div class="card-body"><p>Deleted from the review at {{ local_time(p.decided_at) }}. No decision was recorded, so nothing is learned from it. The next scan shows it again if it still matches a guide.</p></div>
+      <div class="card-body"><p>Deleted from the review at {{ local_time(p.decided_at) }}. No decision was recorded, so nothing is learned from it. It stays out for the rest of the session that found it; the next session's scan shows it again if it still matches a guide.</p></div>
     </section>
     {% elif p.decision != 'pending' %}
     <section class="card">

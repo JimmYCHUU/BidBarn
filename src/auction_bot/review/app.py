@@ -5,7 +5,7 @@ The triage view (`/`) lists pending lots the way Jim sorts them by hand; the det
 which is the only place a proposal can be approved (CLAUDE.md, rule 1). What the
 reviewer looks at and how long a decision takes is logged for `bot insights`. Delete
 (`/p/{id}/delete`, `/sessions/{key}/delete`) takes waiting lots out of the review without a
-decision: nothing is recorded for the learning, and the next scan checks them again.
+decision: nothing is recorded for the learning, and the next session's scan checks them again.
 """
 from __future__ import annotations
 
@@ -468,7 +468,7 @@ def create_app(cfg: Config, finish_event=None, jobs=None) -> FastAPI:
     @app.post("/p/{pid}/delete")
     def delete_lot(request: Request, pid: int):
         """Take one waiting lot out of the review. Not a decision: nothing is learned from it, no amount is
-        recorded, and the next scan checks the vehicle again (CLAUDE.md, rules 0c and 1)."""
+        recorded, and the next session's scan checks the vehicle again (CLAUDE.md, rules 0c and 1)."""
         s = store()
         try:
             if s.proposal(pid) is None:

@@ -157,7 +157,7 @@ Delete takes lots out of the review without a decision. `proposals.decision` bec
 - **Only waiting lots.** Only lots waiting for review can be deleted (`store.WAITING`).
 - **Which lots are a session's.** A scan writes the dashboard run on each lot (`proposals.run_id`, from `BIDBARN_RUN_ID`). A session's lots are therefore those of its runs. Lots from a console have no run and show as "Earlier scans".
 - **Delete on a running session.** It calls `JobManager.cancel(run_id, delete=True)`, which deletes the waiting lots at once and again when the process ends. A start of the dashboard sweeps sessions marked deleted (`Store.sweep_deleted_sessions`).
-- **What the next scan does.** It checks a deleted lot again, because `_should_skip_existing` treats a deleted newest row as unseen. It passes that row's judgement as `previous_soft`, so the model is not asked again when nothing changed.
+- **What the next scan does.** A lot deleted in a session stays out for the rest of that session: a Resume skips it, because its deleted row was written by one of the session's runs (`Store.session_runs`). The next session's scan checks it again, because `_should_skip_existing` treats a deleted newest row from another session as unseen. It passes that row's judgement as `previous_soft`, so the model is not asked again when nothing changed.
 
 ## Finish
 

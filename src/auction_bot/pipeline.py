@@ -131,14 +131,17 @@ def pending_images_proposal(rule: ModelRule, card: VehicleFacts, evidence: dict)
                                        "the next scan re-checks this vehicle automatically"]})
 
 
-def _should_skip_existing(store: Store, ref_no: str, rule: ModelRule, rescan: bool) -> bool:
+def _should_skip_existing(store: Store, ref_no: str, rule: ModelRule, rescan: bool, session_runs: set[int] = frozenset()) -> bool:
+    """`session_runs`: the runs of the session this scan belongs to (empty from a console)."""
     if store.already_bid(ref_no):
         return True
     prev = store.latest_proposal(ref_no, rule.guide_id)
     if prev is None or rescan:
         return False
-    if prev["decision"] in ("deleted", "superseded"):
-        return False  # out of the review without a decision, or a stop forced between two writes: check it again
+    if prev["decision"] == "deleted":
+        return prev["run_id"] in session_runs  # Jim deleted it in this session: stays out until the next one
+    if prev["decision"] == "superseded":
+        return False  # a stop forced between two writes left no live row: check it again
     if prev["decision"] != "pending":
         return True  # a human already decided on this vehicle
     if prev["status"] in ("BID", "NEEDS_REVIEW"):
@@ -183,6 +186,7 @@ def scan(cfg: Config, browser: Browser, store: Store, model_codes: list[str] | N
     progress.emit(stage="scan", guides=len(guides), guide=0, codes=codes, marks="")
     told = [0.0]
     run = progress.run_id()  # the dashboard run, so the review can show and delete the lots by session
+    session_runs = store.session_runs(run)  # a lot deleted in this session is not proposed again before it ends
     for n, rule in enumerate(guides, 1):
         progress.check_cancel()
         stats.guides += 1
@@ -221,7 +225,7 @@ def scan(cfg: Config, browser: Browser, store: Store, model_codes: list[str] | N
         opened = 0
         for card in cards:
             progress.check_cancel()
-            if _should_skip_existing(store, card.ref_no, rule, rescan):
+            if _should_skip_existing(store, card.ref_no, rule, rescan, session_runs):
                 stats.reused += 1
                 report(quiet=True)
                 continue
