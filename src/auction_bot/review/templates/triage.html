@@ -33,10 +33,11 @@
 <section class="session" aria-labelledby="s-{{ sess.key }}">
   <div class="session-head">
     <h2 id="s-{{ sess.key }}">{{ sess.title }}</h2>
-    <span class="faint">{% if sess.state %}{{ sess.state }} · {% endif %}{{ sess.count }} lot{{ 's' if sess.count != 1 }}</span>
+    {% set hidden = sess.total > sess.count %}
+    <span class="faint">{% if sess.state %}{{ sess.state }} · {% endif %}{{ sess.count }}{% if hidden %} of {{ sess.total }}{% endif %} lot{{ 's' if sess.total != 1 }}{% if hidden %} shown{% endif %}</span>
     <span class="end">
       <span class="form-error" role="alert" data-session-error></span>
-      {% if sess.can_delete %}<button type="button" class="btn--danger btn--sm" data-delete-session="{{ sess.key }}" data-confirm="{{ 'Confirm: stop and delete' if sess.live else 'Confirm delete' }}" title="Takes the session's waiting lots out of the review without a decision{{ ' and stops its run' if sess.live }}">{{ icon('trash-2', 'icon--sm') }} Delete session</button>{% endif %}
+      {% if sess.can_delete %}<button type="button" class="btn--danger btn--sm" data-delete-session="{{ sess.key }}" data-confirm="{{ 'Confirm: stop and delete' if sess.live else 'Confirm delete' }}" title="Takes {% if hidden %}all {{ sess.total }} of the session's{% else %}the session's{% endif %} waiting lots out of the review without a decision{{ ' and stops its run' if sess.live }}">{{ icon('trash-2', 'icon--sm') }} Delete session</button>{% endif %}
     </span>
   </div>
 {% for g in sess.groups %}

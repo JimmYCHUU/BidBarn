@@ -443,11 +443,13 @@ class Store:
         return cur.rowcount
 
     def sweep_deleted_sessions(self) -> int:
-        """Lots still waiting in a session marked deleted: written between Delete and the end of a run this
-        dashboard lost track of. Called when the dashboard starts."""
+        """Lots still waiting that a run wrote between Delete session and its own end, when this dashboard lost
+        track of it. Only those: a lot `bot replay` brought into the review later keeps waiting. Called when the
+        dashboard starts."""
         cur = self.conn.execute(
-            f"UPDATE proposals SET decision='deleted', decided_at=?, decision_reason=? WHERE {WAITING} AND run_id IN "
-            "(SELECT id FROM runs WHERE session_id IN (SELECT session_id FROM runs WHERE deleted_at IS NOT NULL))",
+            f"UPDATE proposals SET decision='deleted', decided_at=?, decision_reason=? WHERE {WAITING} AND EXISTS "
+            "(SELECT 1 FROM runs r WHERE r.id = proposals.run_id AND r.deleted_at IS NOT NULL "
+            "AND proposals.created_at >= r.deleted_at AND (r.finished_at IS NULL OR proposals.created_at <= r.finished_at))",
             (now(), "session deleted from the review"))
         self.conn.commit()
         return cur.rowcount
@@ -597,7 +599,10 @@ class Store:
                 "status": last["status"], "progress": prog if isinstance(prog, dict) else None,
                 "deleted_at": last["deleted_at"], "runs": [r["id"] for r in rows]}
 
-    def session_waiting(self, session_id: int) -> int:
-        """How many lots of the session wait for review."""
+    def session_waiting(self, session_id: int | None) -> int:
+        """How many lots of the session wait for review (`None`: the lots no dashboard run wrote, "Earlier scans")."""
+        if session_id is None:
+            return self.conn.execute(f"SELECT COUNT(*) FROM proposals WHERE {WAITING} AND "
+                                     "(SELECT session_id FROM runs WHERE runs.id = proposals.run_id) IS NULL").fetchone()[0]
         return self.conn.execute(f"SELECT COUNT(*) FROM proposals WHERE {WAITING} AND run_id IN "
                                  "(SELECT id FROM runs WHERE session_id=?)", (session_id,)).fetchone()[0]

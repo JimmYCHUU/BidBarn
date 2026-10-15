@@ -340,3 +340,44 @@ def test_deleting_a_session_takes_only_its_waiting_lots_and_stops_its_run(cfg):
         assert s.conn.execute("SELECT COUNT(*) FROM decisions").fetchone()[0] == 0
     finally:
         s.close()
+
+
+# -- fixes from the branch review --------------------------------------------------------------------
+
+def test_the_startup_sweep_leaves_lots_written_after_the_session_ended(cfg):
+    s = Store(cfg.db_path)
+    try:
+        run = s.start_run("bid", ["bid"])
+        s.finish_run(run, "stopped")
+        s.delete_session(run)
+        s.conn.execute("UPDATE runs SET started_at='2026-10-15T01:00:00+00:00', deleted_at='2026-10-15T01:30:00+00:00', "
+                       "finished_at='2026-10-15T02:00:00+00:00' WHERE id=?", (run,))
+        late = lot(s, "L", run)  # the run wrote it after the click, before it ended: the sweep takes it
+        promoted = lot(s, "R", run)  # bot replay brought a skipped lot of that session into the review, hours later
+        s.conn.execute("UPDATE proposals SET created_at='2026-10-15T01:45:00+00:00' WHERE id=?", (late,))
+        s.conn.execute("UPDATE proposals SET created_at='2026-10-15T05:00:00+00:00' WHERE id=?", (promoted,))
+        s.conn.commit()
+        assert s.sweep_deleted_sessions() == 1
+        assert s.proposal(late)["decision"] == "deleted" and s.proposal(promoted)["decision"] == "pending"
+    finally:
+        s.close()
+
+
+def test_a_filtered_review_says_how_many_lots_delete_session_takes(cfg):
+    s = Store(cfg.db_path)
+    try:
+        run = s.start_run("bid", ["bid", "--no-browser"])
+        s.finish_run(run, "stopped")
+        lot(s, "A", run)
+        other = _seed(s, "B", "ANH20W", "4", 50_000, guide=2)
+        s.conn.execute("UPDATE proposals SET run_id=? WHERE id=?", (run, other))
+        s.conn.commit()
+        lot(s, "C")
+        _seed(s, "D", "ANH20W", "4", 50_000, guide=2)  # an earlier-scans lot of the other model
+        assert s.session_waiting(run) == 2 and s.session_waiting(None) == 2
+    finally:
+        s.close()
+    client = TestClient(create_app(cfg))
+    filtered = client.get("/review?model=GDH206").text
+    assert filtered.count("1 of 2 lots shown") == 2  # the filter hides lots that Delete session would still take
+    assert "of 2 lots shown" not in client.get("/review").text

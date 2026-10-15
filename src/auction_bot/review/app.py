@@ -158,21 +158,24 @@ def session_state(status: str, p: dict) -> str:
     return {"paused": "paused" + where, "stopped": "stopped", "ok": "finished", "failed": "failed"}.get(status, status)
 
 
-def session_view(key: int | None, info: dict | None, live: dict | None, groups: list[dict]) -> dict:
+def session_view(key: int | None, info: dict | None, live: dict | None, groups: list[dict],
+                 total: int | None = None) -> dict:
     """One section of the review page: the session's name, where it stands, its lots by model, and whether
-    Delete session is offered (not while it places bids)."""
+    Delete session is offered (not while it places bids). `total` is every waiting lot of the session, which
+    is what Delete session takes; it is more than the rows shown when the page is filtered by model."""
     from auction_bot.dashboard.jobs import COMMANDS
 
     count = sum(len(g["rows"]) for g in groups)
+    total = max(total or 0, count)
     if key is None or info is None:
-        return {"key": "earlier", "title": "Earlier scans", "state": "", "count": count, "live": False,
+        return {"key": "earlier", "title": "Earlier scans", "state": "", "count": count, "total": total, "live": False,
                 "can_delete": True, "groups": groups}
     running = bool(live and live.get("session_id") == key)
     p = (live.get("progress") if running else info.get("progress")) or {}
     label = COMMANDS[info["command"]].label if info["command"] in COMMANDS else info["command"]
     return {"key": str(key), "title": f"{label} · {dashboard_status.local_time(info['started_at'])}",
-            "state": session_state("running" if running else info["status"], p), "count": count, "live": running,
-            "can_delete": not (running and p.get("stage") == "place"), "groups": groups}
+            "state": session_state("running" if running else info["status"], p), "count": count, "total": total,
+            "live": running, "can_delete": not (running and p.get("stage") == "place"), "groups": groups}
 
 
 def _wants_json(request: Request) -> bool:
@@ -344,7 +347,8 @@ def create_app(cfg: Config, finish_event=None, jobs=None) -> FastAPI:
             live = jobs.current()
             keys = sorted({p["session_id"] for p in rows}, key=lambda k: (k is None, -(k or 0)))  # newest first, earlier last
             sessions = [session_view(k, s.session_info(k) if k is not None else None, live,
-                                     model_groups(s, [p for p in rows if p["session_id"] == k], names, multi))
+                                     model_groups(s, [p for p in rows if p["session_id"] == k], names, multi),
+                                     total=s.session_waiting(k))
                         for k in keys]
         finally:
             s.close()

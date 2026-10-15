@@ -27,18 +27,22 @@
     b.innerHTML = label;
     if (width) b.style.minWidth = width + "px";
   });
-  var armTimer = null;
+  // One armed button at a time: arming another disarms it, so no button is left waiting for a single click.
+  var armTimer = null, armedBtn = null;
   function disarm(b) {
     if (!b || b.dataset.armed !== "1") return;
     b.dataset.armed = "";
     b.innerHTML = b.dataset.label;
     b.classList.remove("is-armed");
+    if (armedBtn === b) armedBtn = null;
   }
   document.addEventListener("click", function (e) {
     var b = e.target.closest("[data-confirm]");
     if (!b || b.disabled) return;
     if (b.dataset.armed === "1") { clearTimeout(armTimer); return; }
     e.preventDefault();
+    if (armedBtn && armedBtn !== b) disarm(armedBtn);
+    armedBtn = b;
     b.dataset.label = b.innerHTML;
     b.dataset.armed = "1";
     b.textContent = b.dataset.confirm;
