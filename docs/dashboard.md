@@ -42,6 +42,10 @@ builds it: the review routes are defined there, the dashboard routes are registe
 | `GET /api/runs/{id}/log?after=&limit=` | Log lines from an index |
 | `GET /api/runs/{id}/events` | The live stream (server-sent events) |
 | `POST /api/runs/{id}/cancel` | Stop. 202, or 409 when it is not running |
+| `POST /api/runs/{id}/pause` | Pause a Bid run while it signs in, fetches the guides, scans or judges. 202, or 409 when it is not running or not at one of those stages |
+| `POST /api/sessions/{id}/resume` | Resume the paused session: Bid mode again, in the same session. 201 the run; 409 when that session is not the paused one, or something is running |
+| `POST /p/{id}/delete` | Delete one lot that waits for review, without a decision. JSON `{"ok", "decision", "next_id"}` or a 303 to the next lot; 409 unless it waits |
+| `POST /sessions/{id}/delete`, `/sessions/earlier/delete` | Delete session: its waiting lots leave the review; a running session is stopped first. 409 while it places bids |
 
 Option values are typed: booleans, whole numbers from 1 to 100000, model codes as a list of
 strings. A string where a number belongs is a 400.
@@ -68,6 +72,7 @@ A run ends as one of:
 | `ok` | The process ended with exit code 0 |
 | `failed` | Any other exit code. `error` holds the `STOPPED:` line, or the last line printed |
 | `stopped` | Stop was clicked, or the dashboard found the process gone |
+| `paused` | Pause was clicked; the run ended at its next check point, or after the 20 s grace |
 
 ## The command table is the fence
 
@@ -135,6 +140,24 @@ later the job runner ends the process and its children.
 Two places in the scan used to catch every error per guide and per lot and carry on. They now
 let `NotLoggedIn` and `Cancelled` through, so a signed-out scan stops at the first guide and a
 stopped scan stops.
+
+## Pause and Resume
+
+`POST /api/runs/{id}/pause` creates `data/runs/<id>.pause`, named in `BIDBARN_PAUSE_FILE`.
+
+- **The run ends at the same check points as Stop.** `progress.check_cancel()` raises `progress.Paused`, a kind of `Cancelled`. The run closes the browser, gives back the profile lock and is recorded as `paused`.
+- **Pause is offered only before the review.** It applies to a Bid run that is signing in, fetching the guides, scanning or judging (`PAUSABLE` in `jobs.py`). At the review the run waits for Jim anyway, and a placement is never paused.
+
+Every run has a `session_id`. Normally that is its own id. A Bid run started while a session is paused (`Store.paused_session()`) gets that session's id instead, and that is all Resume is: `POST /api/sessions/{id}/resume` checks that the session is the paused one, then starts `bid`. The scan walks the guides again. Their search pages within `cache_hours` come from the cache with no paced page load, and lots waiting for review are skipped, so it moves quickly to where it stopped.
+
+## Delete
+
+Delete takes lots out of the review without a decision. `proposals.decision` becomes `deleted` and `decided_at` and `decision_reason` are set. Nothing else is written: no `decisions` row, no review event, no judge feedback, no playbook line. No row is removed.
+
+- **Only waiting lots.** Only lots waiting for review can be deleted (`store.WAITING`).
+- **Which lots are a session's.** A scan writes the dashboard run on each lot (`proposals.run_id`, from `BIDBARN_RUN_ID`). A session's lots are therefore those of its runs. Lots from a console have no run and show as "Earlier scans".
+- **Delete on a running session.** It calls `JobManager.cancel(run_id, delete=True)`, which deletes the waiting lots at once and again when the process ends. A start of the dashboard sweeps sessions marked deleted (`Store.sweep_deleted_sessions`).
+- **What the next scan does.** It checks a deleted lot again, because `_should_skip_existing` treats a deleted newest row as unseen. It passes that row's judgement as `previous_soft`, so the model is not asked again when nothing changed.
 
 ## Finish
 

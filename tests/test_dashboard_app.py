@@ -593,3 +593,54 @@ def test_insights_and_settings_pages(cfg, monkeypatch):
     store.conn.commit()
     store.close()
     assert "Gemini: 380 of 400 calls" in client.get("/").text
+
+
+# -- pause, resume and the paused session ------------------------------------------------------------
+
+def test_pause_and_resume_from_the_overview(cfg):
+    from tests.test_sessions import lot
+    client, jobs = _client(cfg)
+    assert client.post("/api/runs/1/pause").status_code == 404
+    run = client.post("/api/runs", json={"command": "bid"}).json()
+    jobs.progress_is({"stage": "scan", "guides": 46, "guide": 21, "code": "GDH206"})
+    page = client.get("/").text
+    assert "data-pause" in page and f'data-delete-session="{run["id"]}"' in page and "data-stop" in page
+    assert client.post(f"/api/runs/{run['id']}/pause").status_code == 202 and jobs.paused == [run["id"]]
+    jobs.end("paused")  # what the real manager records once the run stopped at its check point
+    s = Store(cfg.db_path)
+    try:
+        lot(s, "A", run["id"])
+    finally:
+        s.close()
+    page = client.get("/").text
+    assert "Bid mode is paused" in page and "guide 21 of 46 (GDH206)" in page and "1 lot found so far waits in the review" in page
+    assert f'data-resume="{run["id"]}"' in page and "Start Learn mode" in page and "Start Bid mode" not in page
+    assert f'data-delete-session="{run["id"]}"' in page and "Paused at guide 21 of 46" in page  # the card and the day log
+    assert client.post("/api/sessions/999/resume").status_code == 409
+    again = client.post(f"/api/sessions/{run['id']}/resume")
+    assert again.status_code == 201 and again.json()["session_id"] == run["id"] and again.json()["id"] != run["id"]
+    assert client.post(f"/api/sessions/{run['id']}/resume").status_code == 409  # running again: nothing is paused
+
+
+def test_resume_waits_for_the_run_in_the_way(cfg):
+    paused = _run(cfg, "bid", status="paused", progress={"stage": "scan", "guide": 2, "guides": 46})
+    client, _ = _client(cfg)
+    other = client.post("/api/runs", json={"command": "learn"}).json()
+    r = client.post(f"/api/sessions/{paused}/resume")
+    assert r.status_code == 409 and r.json()["run_id"] == other["id"]
+
+
+def test_the_run_page_of_a_paused_and_of_a_deleted_session(cfg):
+    paused = _run(cfg, "bid", status="paused", progress={"stage": "scan", "guide": 3, "guides": 46})
+    deleted = _run(cfg, "bid", status="stopped")
+    s = Store(cfg.db_path)
+    try:
+        s.delete_session(deleted)
+    finally:
+        s.close()
+    client, _ = _client(cfg)
+    page = client.get("/").text
+    assert "Paused at guide 3 of 46" in page and "Session deleted" in page
+    run_page = client.get(f"/runs/{paused}").text
+    assert "The session is paused" in run_page and f'data-resume="{paused}"' in run_page
+    assert "This session was deleted" in client.get(f"/runs/{deleted}").text

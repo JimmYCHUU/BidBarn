@@ -19,6 +19,16 @@
 <div class="banner banner--bad">{{ icon('circle-x') }}<div><b>The run stopped with an error.</b> {{ run.error }}{% if 'login' in run.error|lower %} Sign in from the <a href="/">overview</a>, then start it again.{% endif %}</div></div>
 {% elif run.status == 'stopped' %}
 <div class="banner">{{ icon('square') }}<div><b>The run was stopped.</b> {% if run.command == 'bid' and stage == 'review' %}Your approvals are kept; nothing was placed.{% elif run.command == 'learn' %}The recording is kept; nothing was scanned or compared.{% else %}{{ run.error or 'What it had stored up to then is kept.' }}{% endif %}</div></div>
+{% elif run.status == 'paused' and not run.deleted_at %}
+<div class="banner">{{ icon('pause') }}<div><b>The session is paused.</b> The lots it found wait in the review.
+  {% if run.id == paused_run_id() %}
+  <div class="row"><button type="button" class="btn--primary btn--sm" data-resume="{{ run.session_id }}">{{ icon('play', 'icon--sm') }} Resume</button>
+    <button type="button" class="btn--danger btn--sm" data-delete-session="{{ run.session_id }}" data-confirm="Confirm delete">{{ icon('trash-2', 'icon--sm') }} Delete session</button>
+    <span class="form-error" role="alert" data-session-error></span></div>
+  {% else %}It was resumed or deleted later.{% endif %}</div></div>
+{% endif %}
+{% if run.deleted_at %}
+<div class="banner">{{ icon('trash-2') }}<div><b>This session was deleted.</b> The lots it found that still waited left the review; nothing was decided or learned.</div></div>
 {% endif %}
 
 {% if run.command == 'bid' %}

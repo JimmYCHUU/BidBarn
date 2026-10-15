@@ -281,7 +281,11 @@ lot: approving stays a click on the review page, and a suggested skip rule becom
 when you click **Add**. One command runs at a time; a second one is refused with a link to
 the one that is running. **Stop** asks the run to end at its next check point (before the next
 page load) and ends its process after 20 seconds if it has not; a placement is never stopped in
-the middle of a lot. If the dashboard window is closed while a command runs, the command
+the middle of a lot. **Pause** (Bid mode, before the review) ends the run at its next check point
+and frees the bot; the lots it found stay in the review, and you can review them during the break.
+**Resume** on the overview starts Bid mode again in the same session: the guides already done go
+quickly, from the cache. **Delete session** stops the session if it runs and takes its waiting lots
+out of the review without a decision. If the dashboard window is closed while a command runs, the command
 finishes by itself and the next start of the dashboard picks its record up.
 
 The page is served to this PC only. A request that names another host, or that comes from

@@ -577,7 +577,7 @@ button.is-armed:hover, .btn.is-armed:hover { background: var(--navy); border-col
 .step .icon { width: 15px; height: 15px; vertical-align: 0; color: var(--ink-faint); }
 .step--done { color: var(--ink-2); }
 .step--done .icon { color: var(--ok); }
-.step--due .icon, .step--running .icon { color: var(--blue); }
+.step--due .icon, .step--running .icon, .step--paused .icon { color: var(--blue); }
 .step.is-next { color: var(--ink); font-weight: 700; }
 .step--failed .icon { color: var(--bad); }
 

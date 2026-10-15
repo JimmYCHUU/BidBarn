@@ -3,6 +3,7 @@
 {% block title %}Overview · BidBarn{% endblock %}
 {% block body %}
 {% set cur = state.current %}
+{% set paused = state.paused if not cur else none %}
 {% set n = state.counts.to_review %}
 {% set m = state.counts.approved %}
 {% set dry = state.lock.dry %}
@@ -17,6 +18,10 @@
       {% elif cur %}
       <h1 class="next-title" id="next-title">{{ cur.doing }}</h1>
       <p class="next-why">Started {{ cur.started }}. One run at a time.</p>
+      {% elif paused %}
+      <h1 class="next-title" id="next-title">Bid mode is paused</h1>
+      <p class="next-why">Paused{% if paused.guide and paused.guides %} at guide {{ paused.guide }} of {{ paused.guides }}{% if paused.code %} ({{ paused.code }}){% endif %}{% endif %}{% if paused.at %} at {{ local_time(paused.at, false)[:5] }}{% endif %}.
+        {% if paused.waiting %}<a href="/review">{{ paused.waiting }} lot{{ 's' if paused.waiting != 1 }} found so far wait{{ 's' if paused.waiting == 1 }} in the review.</a> You can review them now.{% else %}Nothing it found waits in the review.{% endif %}</p>
       {% else %}
       <h1 class="next-title" id="next-title">{{ today }}</h1>
       <p class="next-why">
@@ -34,10 +39,21 @@
       <a class="btn btn--primary btn--lg" href="/runs/{{ cur.id }}">{{ icon('terminal') }} Watch the run</a>
       {% endif %}
     </div>
+    {% elif paused %}
+    <div class="next-action">
+      <button type="button" class="btn--primary btn--lg" data-resume="{{ paused.session_id }}">{{ icon('play') }} Resume</button>
+      <button type="button" class="btn--danger" data-delete-session="{{ paused.session_id }}" data-confirm="Confirm delete" title="Takes the lots it found that still wait out of the review, without a decision">{{ icon('trash-2') }} Delete session</button>
+      <span class="form-error" role="alert" data-session-error></span>
+    </div>
     {% endif %}
   </div>
   {% if cur and cur.command == 'bid' %}
     {{ stages(cur.stage, 'running') }}
+  {% elif paused %}
+    {{ stages(paused.stage or 'scan', 'paused') }}
+    <div class="modes">
+      {{ mode_cell('learn', 'Learn mode', "Bid as usual in the bot's browser and type why in the blue box; the bot only watches, and reports on your session here.", 'Start Learn mode') }}
+    </div>
   {% elif not cur %}
   <div class="modes">
     {{ mode_cell('learn', 'Learn mode', "Bid as usual in the bot's browser and type why in the blue box; the bot only watches, and reports on your session here.", 'Start Learn mode') }}

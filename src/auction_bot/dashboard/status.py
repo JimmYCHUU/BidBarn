@@ -239,8 +239,8 @@ DOING = {"bid": "Running Bid mode", "learn": "Recording your session", "scan": "
          "login": "Waiting for the sign-in", "check-login": "Checking the sign-in"}
 # A Bid run's progress stage, as the step of the day it is at (the scan step includes the judge).
 BID_STAGE_STEP = {"signin": "signin", "guides": "guides", "scan": "scan", "judge": "scan", "review": "review", "place": "place"}
-STATUS_ICONS = {"running": "loader-circle", "ok": "circle-check", "failed": "circle-x", "stopped": "square"}
-STATUS_WORDS = {"running": "Running", "ok": "Finished", "failed": "Failed", "stopped": "Stopped"}
+STATUS_ICONS = {"running": "loader-circle", "ok": "circle-check", "failed": "circle-x", "stopped": "square", "paused": "pause"}
+STATUS_WORDS = {"running": "Running", "ok": "Finished", "failed": "Failed", "stopped": "Stopped", "paused": "Paused"}
 SESSION_GAP_MINUTES = 30  # decisions closer together than this are one review session
 
 
@@ -352,6 +352,18 @@ def day_steps(s: dict, cache_hours: float) -> list[dict]:
     return steps
 
 
+def paused_state(store) -> dict | None:
+    """The paused Bid session, as the overview offers it: where it stopped, when, and how many of its lots wait."""
+    row = store.paused_session()
+    if row is None:
+        return None
+    run = run_dict(row)
+    p = run.get("progress") or {}
+    return {"session_id": run["session_id"], "run_id": run["id"], "stage": p.get("stage"), "guide": p.get("guide"),
+            "guides": p.get("guides"), "code": p.get("code"), "at": run["finished_at"],
+            "waiting": store.session_waiting(run["session_id"])}
+
+
 def gather_status(cfg, store, jobs) -> dict:
     dry, reason = cfg.placement_mode(False)
     current = jobs.current()
@@ -369,6 +381,7 @@ def gather_status(cfg, store, jobs) -> dict:
         "last_runs": {command: {k: d[k] for k in ("id", "command", "status", "started_at", "finished_at", "summary", "error")}
                       for command, d in ((c, run_dict(r)) for c, r in store.last_runs_by_command().items())},
         "current": current,
+        "paused": paused_state(store),
         "profile_lock": lock.holder(cfg),
     }
     s["steps"] = day_steps(s, float(cfg.cache_hours))

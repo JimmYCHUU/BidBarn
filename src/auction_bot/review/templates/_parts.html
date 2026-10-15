@@ -27,8 +27,8 @@
 <ol class="steps stages" data-stages data-stage="{{ here or '' }}" aria-label="The stages of Bid mode">
   {% for k in keys %}
   {% set i = loop.index0 %}
-  {% set st = 'done' if (status == 'ok' or i < cur) else ('running' if (i == cur and status == 'running') else ('failed' if (i == cur and status == 'failed') else 'idle')) %}
-  <li class="step step--{{ st }}{% if st == 'running' %} is-next{% endif %}" data-stage-key="{{ k }}">{{ icon('circle-check' if st == 'done' else ('loader-circle' if st == 'running' else ('circle-x' if st == 'failed' else 'circle')), 'spin' if st == 'running' else '') }}<span>{{ labels[i] }}</span><span class="sr-only">: {{ st }}</span></li>
+  {% set st = 'done' if (status == 'ok' or i < cur) else ('running' if (i == cur and status == 'running') else ('failed' if (i == cur and status == 'failed') else ('paused' if (i == cur and status == 'paused') else 'idle'))) %}
+  <li class="step step--{{ st }}{% if st in ('running', 'paused') %} is-next{% endif %}" data-stage-key="{{ k }}">{{ icon('circle-check' if st == 'done' else ('loader-circle' if st == 'running' else ('circle-x' if st == 'failed' else ('pause' if st == 'paused' else 'circle'))), 'spin' if st == 'running' else '') }}<span>{{ labels[i] }}</span><span class="sr-only">: {{ st }}</span></li>
   {% endfor %}
 </ol>
 {% endmacro %}
@@ -41,7 +41,11 @@
     {{ status_pill(run.status) }}
     <span class="console-where" data-where></span>
     <span class="faint push" data-elapsed></span>
-    {% if run.status == 'running' %}<button type="button" class="btn--danger btn--sm" data-stop data-confirm="Confirm stop"{% if run.cancel_requested %} disabled{% endif %}>{{ icon('square', 'icon--sm') }} {{ 'Stopping' if run.cancel_requested else 'Stop' }}</button>{% endif %}
+    {% if run.status == 'running' %}
+    {% if run.command == 'bid' %}<button type="button" class="btn--sm" data-pause{% if run.cancel_requested or run.pause_requested %} disabled{% endif %}>{{ icon('pause', 'icon--sm') }} {{ 'Pausing' if run.pause_requested else 'Pause' }}</button>{% endif %}
+    <button type="button" class="btn--danger btn--sm" data-stop data-confirm="Confirm stop"{% if run.cancel_requested %} disabled{% endif %}>{{ icon('square', 'icon--sm') }} {{ 'Stopping' if run.cancel_requested else 'Stop' }}</button>
+    {% if run.command == 'bid' and run.session_id %}<button type="button" class="btn--danger btn--sm" data-delete-session="{{ run.session_id }}" data-confirm="Confirm: stop and delete"{% if run.cancel_requested %} disabled{% endif %}>{{ icon('trash-2', 'icon--sm') }} Delete session</button><span class="form-error" role="alert" data-session-error></span>{% endif %}
+    {% endif %}
   </div>
   <div class="guides" data-guides hidden>
     <div class="guide-row" data-guide-row role="img" aria-label="One cell per guide"></div>
@@ -118,6 +122,8 @@
     {% else %}
       {% if r.error %}<p class="entry-error{% if r.status == 'stopped' %} entry-error--stopped{% endif %}">{{ icon('square' if r.status == 'stopped' else 'circle-alert', 'icon--sm') }} {{ r.error|capitalize }}</p>
       {% elif r.status == 'stopped' %}<p class="entry-error entry-error--stopped">{{ icon('square', 'icon--sm') }} Stopped from the dashboard</p>{% endif %}
+      {% if r.status == 'paused' and not r.deleted_at %}{% set rp = r.progress or {} %}<p class="entry-error entry-error--stopped">{{ icon('pause', 'icon--sm') }} Paused{% if rp.guide and rp.guides %} at guide {{ rp.guide }} of {{ rp.guides }}{% endif %}; the lots it found wait in the review</p>{% endif %}
+      {% if r.deleted_at %}<p class="entry-error entry-error--stopped">{{ icon('trash-2', 'icon--sm') }} Session deleted: its waiting lots left the review, nothing was decided</p>{% endif %}
       {% set pairs = entry_pairs(r) %}
       {% if pairs %}<p class="entry-facts num">{% for k, v in pairs %}<span>{{ k }} <b>{{ v }}</b></span>{% endfor %}</p>{% endif %}
     {% endif %}

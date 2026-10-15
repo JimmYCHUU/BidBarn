@@ -171,6 +171,17 @@ def register(app, templates, cfg, jobs, store, page) -> None:
         finally:
             s.close()
 
+    def paused_run_id() -> int | None:
+        """The newest run of the paused session, for the run page's Resume (None: nothing is paused)."""
+        s = store()
+        try:
+            row = s.paused_session()
+        finally:
+            s.close()
+        return row["id"] if row else None
+
+    templates.env.globals["paused_run_id"] = paused_run_id
+
     def run_or_404(run_id: int) -> dict:
         run = jobs.get(run_id)
         if run is None:
@@ -329,5 +340,30 @@ def register(app, templates, cfg, jobs, store, page) -> None:
         except NotRunning as exc:
             raise HTTPException(409, str(exc))
         return JSONResponse({"status": "stopping"}, status_code=202)
+
+    @app.post("/api/runs/{run_id}/pause", status_code=202)
+    def api_pause(run_id: int):
+        run_or_404(run_id)
+        try:
+            jobs.pause(run_id)
+        except NotRunning as exc:
+            raise HTTPException(409, str(exc))
+        return JSONResponse({"status": "pausing"}, status_code=202)
+
+    @app.post("/api/sessions/{session_id}/resume", status_code=201)
+    def api_resume(session_id: int):
+        """Resume: Bid mode again, in the paused session (the job manager joins it)."""
+        s = store()
+        try:
+            paused = s.paused_session()
+        finally:
+            s.close()
+        if paused is None or paused["session_id"] != session_id:
+            raise HTTPException(409, "this session is not paused")
+        try:
+            run = jobs.start("bid", {})
+        except Busy as exc:
+            return JSONResponse({"detail": str(exc), "run_id": getattr(exc, "run_id", None)}, status_code=409)
+        return JSONResponse(run, status_code=201)
 
     guide_pages.register(app, templates, cfg, store, page)  # /guides and /guides/{code}, behind the same middleware

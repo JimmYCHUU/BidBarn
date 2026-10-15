@@ -78,6 +78,25 @@
     });
   });
 
+  // Resume: Bid mode again in the paused session (the server joins it)
+  all("[data-resume]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      b.disabled = true;
+      var box = one("[data-session-error]", b.parentNode);
+      showError(box, "");
+      fetch("/api/sessions/" + b.dataset.resume + "/resume", { method: "POST", headers: { Accept: "application/json" } })
+        .then(function (r) { return r.json().then(function (d) { return { status: r.status, d: d }; }); })
+        .then(function (x) {
+          if (x.status === 201) { window.location.href = overview ? "/" : "/runs/" + x.d.id; return; }
+          b.disabled = false;
+          showError(box, (x.d && x.d.detail) || ("Bid mode could not be resumed (" + x.status + ")."), x.status === 409 ? x.d.run_id : null);
+        }).catch(function (err) {
+          b.disabled = false;
+          showError(box, "The dashboard did not answer: " + err + ". Is its window still open?");
+        });
+    });
+  });
+
   all("form[data-run-command]").forEach(function (form) {
     form.addEventListener("submit", function (e) {
       e.preventDefault();
@@ -99,7 +118,9 @@
     ok: { word: "Finished", icon: "circle-check" },
     failed: { word: "Failed", icon: "circle-x" },
     stopped: { word: "Stopped", icon: "square" },
+    paused: { word: "Paused", icon: "pause" },
   };
+  var PAUSABLE = ["signin", "guides", "scan", "judge"];  // the Bid stages Pause is offered at (jobs.PAUSABLE)
 
   function since(start, end) {
     var s = Math.max(0, Math.round(((end ? new Date(end) : new Date()) - new Date(start)) / 1000));
@@ -134,6 +155,7 @@
 
     var log = one("[data-log]", root), follow = one("[data-follow]", root), note = one("[data-log-note]", root);
     var where = one("[data-where]", root), elapsed = one("[data-elapsed]", root), stop = one("[data-stop]", root);
+    var pause = one("[data-pause]", root), drop = one("[data-delete-session]", root);
     var guidesBox = one("[data-guides]", root), guideRow = one("[data-guide-row]", root);
     var meter = one("[data-meter]", root), counters = one("[data-counters]", root);
     var keep = compact ? 200 : 3000;
@@ -255,6 +277,8 @@
 
     function render(p) {
       if (!p || !p.stage) return;
+      if (pause) pause.hidden = PAUSABLE.indexOf(p.stage) < 0;  // at the review it waits for you anyway; a placement is not paused
+      if (drop) drop.hidden = p.stage === "place";
       if (root.dataset.command === "bid" && status === "running") setStages(p.stage);  // a finished run keeps the server's stages
       if (p.stage === "scan") {
         showGuides(p);
@@ -315,6 +339,8 @@
       setStatus(d.status || "failed");
       tick();
       if (stop) stop.hidden = true;
+      if (pause) pause.hidden = true;
+      if (drop) drop.hidden = true;
       all(".is-now", guideRow).forEach(function (c) { c.classList.remove("is-now"); });
       var reload = function () { window.location.reload(); };
       if (gsap && !reduce && cells.length && d.status === "ok") {
@@ -353,6 +379,23 @@
             stop.textContent = "Stopping";
             if (note) note.textContent = x.status === 202 ? "Stopping at the next check point." : (x.d.detail || "It could not be stopped.");
           }).catch(function () { stop.disabled = false; });
+      });
+    }
+
+    if (pause) {
+      pause.addEventListener("click", function () {
+        pause.disabled = true;
+        fetch("/api/runs/" + id + "/pause", { method: "POST", headers: { Accept: "application/json" } })
+          .then(function (r) { return r.json().then(function (d) { return { status: r.status, d: d }; }); })
+          .then(function (x) {
+            if (x.status === 202) {
+              pause.textContent = "Pausing";
+              if (note) note.textContent = "Pausing at the next check point. The lots found so far stay in the review.";
+            } else {
+              pause.disabled = false;
+              if (note) note.textContent = x.d.detail || "It could not be paused.";
+            }
+          }).catch(function () { pause.disabled = false; });
       });
     }
 
