@@ -173,7 +173,7 @@ def model_rows(cfg, store, rules: dict | None = None) -> list[dict]:
         "SUM(decision='approved') AS approved, SUM(decision='rejected') AS rejected, "
         "SUM(decision='pending' AND status='SKIP') AS skipped, "
         "COUNT(*) AS lots, MAX(created_at) AS last_seen "
-        "FROM proposals WHERE decision <> 'superseded' GROUP BY model_code").fetchall()}
+        "FROM proposals WHERE decision NOT IN ('superseded', 'deleted') GROUP BY model_code").fetchall()}
     rows, seen = [], set()
     for g in rules["codes"]:
         code = g["code"]

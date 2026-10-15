@@ -3,13 +3,13 @@
 {% block body %}
 <div class="page-head">
   <h1 class="page-title">Review</h1>
-  <span class="page-sub">{{ total }} lot{{ 's' if total != 1 }} in {{ groups|length }} model{{ 's' if groups|length != 1 }}</span>
+  <span class="page-sub">{{ total }} lot{{ 's' if total != 1 }} in {{ models }} model{{ 's' if models != 1 }}{% if sessions|length > 1 %}, {{ sessions|length }} sessions{% endif %}</span>
   <div class="end">
     <form method="get" class="filter" role="search">
       <label class="sr-only" for="model-filter">Filter by model code</label>
       <input id="model-filter" type="search" name="model" value="{{ model }}" placeholder="Filter by model code">
     </form>
-    {% if groups %}
+    {% if sessions %}
     <button type="button" class="btn--icon" data-keys-toggle aria-controls="keys" aria-expanded="false" title="Keyboard keys">{{ icon('keyboard') }}<span class="sr-only">Keyboard keys</span></button>
     <div class="keys-pop" id="keys" hidden>
       <div class="keys-list">
@@ -17,6 +17,7 @@
         <span><kbd>a</kbd> approve</span>
         <span><kbd>r</kbd> reject with a reason</span>
         <span><kbd>e</kbd> change the amount</span>
+        <span><kbd>d</kbd> delete, no decision (press twice)</span>
         <span><kbd>z</kbd> sheet full size</span>
         <span><kbd>o</kbd> open on Nichibo</span>
         <span><kbd>Enter</kbd> detail</span>
@@ -28,10 +29,20 @@
   </div>
 </div>
 
-{% for g in groups %}
-<section class="card group" aria-labelledby="g-{{ g.model_code }}">
+{% for sess in sessions %}
+<section class="session" aria-labelledby="s-{{ sess.key }}">
+  <div class="session-head">
+    <h2 id="s-{{ sess.key }}">{{ sess.title }}</h2>
+    <span class="faint">{% if sess.state %}{{ sess.state }} · {% endif %}{{ sess.count }} lot{{ 's' if sess.count != 1 }}</span>
+    <span class="end">
+      <span class="form-error" role="alert" data-session-error></span>
+      {% if sess.can_delete %}<button type="button" class="btn--danger btn--sm" data-delete-session="{{ sess.key }}" data-confirm="{{ 'Confirm: stop and delete' if sess.live else 'Confirm delete' }}" title="Takes the session's waiting lots out of the review without a decision{{ ' and stops its run' if sess.live }}">{{ icon('trash-2', 'icon--sm') }} Delete session</button>{% endif %}
+    </span>
+  </div>
+{% for g in sess.groups %}
+<section class="card group" aria-labelledby="g-{{ sess.key }}-{{ g.model_code }}">
   <div class="card-head">
-    <h2 id="g-{{ g.model_code }}">{{ g.guide_name }}</h2>
+    <h3 id="g-{{ sess.key }}-{{ g.model_code }}">{{ g.guide_name }}</h3>
     <span class="count">{{ g.rows|length }}</span><span class="faint">pending</span>
     <span class="end">
       {% if g.suggestions %}<a class="faint" href="/guides/{{ g.model_code }}#suggested">{{ g.suggestions|length }} skip rule{{ 's' if g.suggestions|length != 1 }} suggested</a>{% endif %}
@@ -86,6 +97,7 @@
         <div class="row">
           <button class="approve act" data-act="approve"{% if not p.bid_jpy_k %} data-nobid="1" title="No grid amount for this lot: you type the amount"{% endif %}>Approve</button>
           <button class="reject act" data-act="reject">Reject</button>
+          <button type="button" class="btn--quiet btn--sm" data-delete data-confirm="Confirm delete" title="Out of the review without a decision: nothing is learned from it, and the next scan shows it again if it still matches a guide">Delete</button>
         </div>
         <div class="lot-links">
           <a href="{{ f.url }}" target="_blank" rel="noopener" data-ev="nichibo_click">Nichibo {{ icon('external-link', 'icon--sm') }}</a>
@@ -98,6 +110,8 @@
     </tbody>
   </table>
   </div>
+</section>
+{% endfor %}
 </section>
 {% else %}
 <div class="card">

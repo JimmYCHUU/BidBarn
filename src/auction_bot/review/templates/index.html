@@ -12,7 +12,7 @@
     <div class="field field--narrow">
       <label for="f-decision">Decision</label>
       <select id="f-decision" name="decision">
-        {% for d in ['pending', 'approved', 'rejected', ''] %}<option value="{{ d }}" {% if d == decision %}selected{% endif %}>{{ (d or 'all')|capitalize }}</option>{% endfor %}
+        {% for d in ['pending', 'approved', 'rejected', 'deleted', ''] %}<option value="{{ d }}" {% if d == decision %}selected{% endif %}>{{ (d or 'all')|capitalize }}</option>{% endfor %}
       </select>
     </div>
     <div class="field field--narrow">

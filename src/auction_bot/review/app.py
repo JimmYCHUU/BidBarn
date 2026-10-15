@@ -3,7 +3,9 @@
 The triage view (`/`) lists pending lots the way Jim sorts them by hand; the detail page
 (`/p/{id}`) shows everything about one lot. Both post to the same `decide` endpoint,
 which is the only place a proposal can be approved (CLAUDE.md, rule 1). What the
-reviewer looks at and how long a decision takes is logged for `bot insights`.
+reviewer looks at and how long a decision takes is logged for `bot insights`. Delete
+(`/p/{id}/delete`, `/sessions/{key}/delete`) takes waiting lots out of the review without a
+decision: nothing is recorded for the learning, and the next scan checks them again.
 """
 from __future__ import annotations
 
@@ -129,6 +131,48 @@ def triage_sort_key(p: dict) -> tuple:
     km = f.get("km")
     return (p["model_code"], REC_RANK.get(p.get("recommendation"), 1), -float(f.get("grade") or 0),
             km if km is not None else 10**9, -p["id"])
+
+
+def model_groups(s: Store, rows: list[dict], names: dict[int, str], multi: set[str]) -> list[dict]:
+    """Rows already in triage order, grouped by model code as the review page shows them."""
+    groups: list[dict] = []
+    for p in rows:
+        p["multi_guide"] = p["ref_no"] in multi
+        if not groups or groups[-1]["model_code"] != p["model_code"]:
+            groups.append({"model_code": p["model_code"], "guide_name": names.get(p["guide_id"], p["model_code"]),
+                           "rows": [], "suggestions": propose_skip_lines(s.decisions_with_facts(p["model_code"]))})
+        groups[-1]["rows"].append(p)
+    return groups
+
+
+def session_state(status: str, p: dict) -> str:
+    """Where a session stands, in the words of its section head on the review page."""
+    where = f" at guide {p['guide']} of {p['guides']}" if p.get("guide") and p.get("guides") else ""
+    if status == "running":
+        stage = p.get("stage")
+        if stage == "review":
+            return "waiting for your review"
+        if stage == "place":
+            return "placing the approved bids"
+        return "scanning" + where if stage in ("scan", "judge") else "starting"
+    return {"paused": "paused" + where, "stopped": "stopped", "ok": "finished", "failed": "failed"}.get(status, status)
+
+
+def session_view(key: int | None, info: dict | None, live: dict | None, groups: list[dict]) -> dict:
+    """One section of the review page: the session's name, where it stands, its lots by model, and whether
+    Delete session is offered (not while it places bids)."""
+    from auction_bot.dashboard.jobs import COMMANDS
+
+    count = sum(len(g["rows"]) for g in groups)
+    if key is None or info is None:
+        return {"key": "earlier", "title": "Earlier scans", "state": "", "count": count, "live": False,
+                "can_delete": True, "groups": groups}
+    running = bool(live and live.get("session_id") == key)
+    p = (live.get("progress") if running else info.get("progress")) or {}
+    label = COMMANDS[info["command"]].label if info["command"] in COMMANDS else info["command"]
+    return {"key": str(key), "title": f"{label} · {dashboard_status.local_time(info['started_at'])}",
+            "state": session_state("running" if running else info["status"], p), "count": count, "live": running,
+            "can_delete": not (running and p.get("stage") == "place"), "groups": groups}
 
 
 def _wants_json(request: Request) -> bool:
@@ -297,18 +341,17 @@ def create_app(cfg: Config, finish_event=None, jobs=None) -> FastAPI:
             multi = s.multi_guide_refs()
             rows.sort(key=triage_sort_key)
             names = guide_names()
-            groups = []
-            for p in rows:
-                p["multi_guide"] = p["ref_no"] in multi
-                if not groups or groups[-1]["model_code"] != p["model_code"]:
-                    groups.append({"model_code": p["model_code"], "guide_name": names.get(p["guide_id"], p["model_code"]),
-                                   "rows": [], "suggestions": propose_skip_lines(s.decisions_with_facts(p["model_code"]))})
-                groups[-1]["rows"].append(p)
+            live = jobs.current()
+            keys = sorted({p["session_id"] for p in rows}, key=lambda k: (k is None, -(k or 0)))  # newest first, earlier last
+            sessions = [session_view(k, s.session_info(k) if k is not None else None, live,
+                                     model_groups(s, [p for p in rows if p["session_id"] == k], names, multi))
+                        for k in keys]
         finally:
             s.close()
         return templates.TemplateResponse(request, "triage.html", {
-            "groups": groups, "total": len(rows), "counts": counts, "model": model or "", "lock_label": lock_label(),
-            "dry_run": cfg.dry_run, "lock_state": lock_state(), "nav": "review",
+            "sessions": sessions, "total": len(rows), "models": len({p["model_code"] for p in rows}), "counts": counts,
+            "model": model or "", "lock_label": lock_label(), "dry_run": cfg.dry_run, "lock_state": lock_state(),
+            "nav": "review",
         })
 
     @app.get("/list", response_class=HTMLResponse)
@@ -417,6 +460,48 @@ def create_app(cfg: Config, finish_event=None, jobs=None) -> FastAPI:
         if _wants_json(request):
             return JSONResponse({"ok": True, "decision": decision, "amount": amt, "next_id": nxt})
         return RedirectResponse(f"/p/{nxt}" if nxt else "/review", status_code=303)
+
+    @app.post("/p/{pid}/delete")
+    def delete_lot(request: Request, pid: int):
+        """Take one waiting lot out of the review. Not a decision: nothing is learned from it, no amount is
+        recorded, and the next scan checks the vehicle again (CLAUDE.md, rules 0c and 1)."""
+        s = store()
+        try:
+            if s.proposal(pid) is None:
+                raise HTTPException(404)
+            if not s.delete_lot(pid):
+                raise HTTPException(409, "only a lot that waits for review can be deleted")
+            nxt = next_pending(s, pid)
+        finally:
+            s.close()
+        if _wants_json(request):
+            return JSONResponse({"ok": True, "decision": "deleted", "next_id": nxt})
+        return RedirectResponse(f"/p/{nxt}" if nxt else "/review", status_code=303)
+
+    @app.post("/sessions/{key}/delete")
+    def delete_session(request: Request, key: str, next: str = Form("/review")):
+        """Every waiting lot of a session out of the review (`key`: a session id, or `earlier` for the lots no
+        dashboard run wrote). A session that is running is stopped; one placing bids is left alone."""
+        sid = None if key == "earlier" else (int(key) if key.isdigit() else -1)
+        cur = jobs.current()
+        live = cur if cur and sid is not None and cur.get("session_id") == sid else None
+        if live and (live.get("progress") or {}).get("stage") == "place":
+            raise HTTPException(409, "the approved bids are being placed: delete the session when the run has finished")
+        s = store()
+        try:
+            if sid == -1 or (sid is not None and s.session_info(sid) is None):
+                raise HTTPException(404, "no such session")
+            count = s.delete_session(sid)
+        finally:
+            s.close()
+        if live:
+            try:
+                jobs.cancel(live["id"], delete=True)  # stops it; a lot it writes before it ends goes too
+            except NotRunning:
+                pass  # it ended a moment ago
+        if _wants_json(request):
+            return JSONResponse({"ok": True, "deleted": count})
+        return RedirectResponse(next if next.startswith("/") and not next.startswith("//") else "/review", status_code=303)
 
     @app.get("/p/{pid}/suggest")
     def suggest(pid: int, reason: str = ""):

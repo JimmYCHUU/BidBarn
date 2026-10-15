@@ -26,6 +26,8 @@ class FakeJobs(DisabledJobManager):
         super().__init__(cfg)
         self.live: int | None = None
         self.cancelled: list[int] = []
+        self.deleted: list[int] = []  # runs stopped by Delete session
+        self.paused: list[int] = []
         self.finished: list[int] = []
 
     def current(self):
@@ -33,7 +35,7 @@ class FakeJobs(DisabledJobManager):
             return None
         r = self.get(self.live)
         return {"id": r["id"], "command": r["command"], "args": r["args"], "started_at": r["started_at"],
-                "progress": r["progress"], "cancel_requested": False}
+                "progress": r["progress"], "cancel_requested": False, "pause_requested": False, "session_id": r["session_id"]}
 
     def start(self, command, options=None):
         argv = build_argv(command, options, self.commands)
@@ -41,15 +43,32 @@ class FakeJobs(DisabledJobManager):
             raise Busy(f"{self.get(self.live)['command']} is running (run {self.live})", run_id=self.live)
         s = Store(self.cfg.db_path)
         try:
-            self.live = s.start_run(command, argv)
+            paused = s.paused_session() if command == "bid" else None  # as the real manager: a Bid start resumes
+            self.live = s.start_run(command, argv, session_id=paused["session_id"] if paused else None)
         finally:
             s.close()
         return self.get(self.live)
 
-    def cancel(self, run_id):
+    def cancel(self, run_id, delete=False):
         if run_id != self.live:
             raise NotRunning(f"run {run_id} is not running")
         self.cancelled.append(run_id)
+        if delete:
+            self.deleted.append(run_id)
+
+    def pause(self, run_id):
+        if run_id != self.live:
+            raise NotRunning(f"run {run_id} is not running")
+        self.paused.append(run_id)
+
+    def end(self, status: str) -> None:
+        """The live run ends (the real manager records this when the process exits)."""
+        s = Store(self.cfg.db_path)
+        try:
+            s.finish_run(self.live, status, exit_code=1)
+        finally:
+            s.close()
+        self.live = None
 
     def finish_review(self, run_id):
         cur = self.review_waiting()

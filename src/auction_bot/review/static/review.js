@@ -1,6 +1,7 @@
 /* BidBarn review pages: keyboard triage, the sheet lightbox, what-you-looked-at events and the
    in-place decision row. Every decision still goes through POST /p/{id}/decide, one lot at a
-   time, and only after the reviewer confirms it. */
+   time, and only after the reviewer confirms it. Delete (POST /p/{id}/delete, or a whole session
+   at /sessions/{key}/delete) records no decision and also needs the reviewer's second click. */
 (function () {
   "use strict";
 
@@ -83,6 +84,22 @@
   if (amount && pagePid) amount.addEventListener("change", function () { event(pagePid, "amount_edit", amount.value); });
   var approveBtn = document.querySelector("form.decide button.approve");
 
+  // -- Delete session: its waiting lots out of the review, no decision; armed by the confirm above -----
+  document.querySelectorAll("[data-delete-session]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      if (b.dataset.armed !== "1") return;
+      b.disabled = true;
+      var box = b.parentNode.querySelector("[data-session-error]");
+      post("/sessions/" + b.dataset.deleteSession + "/delete", "", false).then(function (resp) {
+        if (resp.ok) { window.location.reload(); return; }
+        return resp.json().then(function (d) {
+          b.disabled = false;
+          if (box) box.textContent = d.detail || ("Error " + resp.status);
+        });
+      }).catch(function (err) { b.disabled = false; if (box) box.textContent = String(err); });
+    });
+  });
+
   // -- triage view ----------------------------------------------------------------------------
   var rows = Array.prototype.slice.call(document.querySelectorAll("tr.lot"));
   if (!rows.length) {
@@ -109,6 +126,11 @@
     r.querySelectorAll("button.act").forEach(function (b) {
       b.addEventListener("click", function () { select(i, false); openPanel(r, b.dataset.act, null, false); });
     });
+    var del = r.querySelector("[data-delete]");
+    if (del) del.addEventListener("click", function () {
+      select(i, false);
+      if (del.dataset.armed === "1") deleteLot(r, del);  // the first click only arms it (the confirm at the top)
+    });
   });
 
   function mark(r, text, ok) {
@@ -120,7 +142,7 @@
     }
     if (ok) {
       r.classList.add("is-done");
-      r.querySelectorAll("button.act").forEach(function (b) { b.disabled = true; });
+      r.querySelectorAll("button.act, [data-delete]").forEach(function (b) { b.disabled = true; });
     }
   }
 
@@ -241,6 +263,24 @@
     });
   }
 
+  // Delete: out of the review without a decision. Nothing is learned from it; the next scan shows it again.
+  function deleteLot(r, b) {
+    closePanel();
+    b.disabled = true;
+    post("/p/" + r.dataset.pid + "/delete", "", false).then(function (resp) {
+      return resp.json().then(function (d) { return { status: resp.status, d: d }; });
+    }).then(function (x) {
+      if (x.status === 200 && x.d.ok) {
+        mark(r, "deleted, no decision", true);
+        var next = rows.indexOf(r) + 1;
+        if (next < rows.length) select(next, true);
+      } else {
+        b.disabled = false;
+        mark(r, x.d.detail || ("Error " + x.status), false);
+      }
+    }).catch(function (err) { b.disabled = false; mark(r, String(err), false); });
+  }
+
   // the keyboard list is a popover under the page head; a key opens it, so it does not animate
   var keysPop = document.getElementById("keys"), keysBtn = document.querySelector("[data-keys-toggle]");
   function help(force) {
@@ -270,6 +310,7 @@
       case "a": if (r) openPanel(r, "approve", null, true); break;
       case "r": if (r) openPanel(r, "reject", null, true); break;
       case "e": if (r) openPanel(r, "approve", "amount", true); break;
+      case "d": if (r) { var db = r.querySelector("[data-delete]"); if (db && !db.disabled) db.click(); } break;
       case "z": if (r) showSheet(r.dataset.sheet, r.dataset.pid); break;
       case "o": if (r) { event(r.dataset.pid, "nichibo_click", null); window.open(r.dataset.url, "_blank"); } break;
       case "Enter": if (r && !e.target.closest("a,button")) window.location.href = "/p/" + r.dataset.pid; else return; break;

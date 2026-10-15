@@ -61,7 +61,8 @@ is placed without his click. While the testing lock is on, nothing is placed at 
   instruction), playbook, proposal, decision, placement, dry run, testing lock, run.
   Amounts are in thousands of yen (K JPY).
 - States: proposal status BID, SKIP, NEEDS_REVIEW; decision pending, approved, rejected,
-  superseded; run status running, ok, failed, stopped.
+  superseded, deleted (out of the review without a decision; the row stays); run status
+  running, ok, failed, stopped, paused.
 - The full rule list for anyone changing code is `CLAUDE.md`.
 
 ## Brand Commitments
