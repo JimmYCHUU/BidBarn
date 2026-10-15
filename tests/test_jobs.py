@@ -69,12 +69,31 @@ print("finish file: " + path)
 print("stale finish file: " + ("yes" if os.path.exists(path) else "no"))
 open(path, "w").write("left behind")
 '''
+SCANNING = r'''
+import json, os, sys, time
+print("PROGRESS " + json.dumps({"stage": "scan", "guides": 46, "guide": 21, "code": "GDH206"}), flush=True)
+print("scanning", flush=True)
+cancel, pause = os.environ["BIDBARN_CANCEL_FILE"], os.environ["BIDBARN_PAUSE_FILE"]
+end = time.time() + 30
+while time.time() < end:
+    for path, word in ((cancel, "stopped"), (pause, "paused")):
+        if os.path.exists(path):
+            print("")
+            print("STOPPED: " + word + " from the dashboard")
+            sys.exit(1)
+    time.sleep(0.05)
+'''
 SCRIPTS = {"ok": OK, "wait": WAIT, "fail": FAIL, "crash": CRASH, "slow": SLOW, "deaf": DEAF, "later": LATER,
            "bid": REVIEW, "scan": REVIEW, "touch": TOUCH}
 
 
 def table(needs_profile: bool = False) -> dict[str, Cmd]:
     return {name: Cmd(name, needs_profile, {}, lambda v, s=script: ["-c", s]) for name, script in SCRIPTS.items()}
+
+
+def bid_with(script: str) -> dict[str, Cmd]:
+    """The stand-in table with `bid` running `script` (SCANNING scans until Stop or Pause)."""
+    return dict(table(), bid=Cmd("bid", False, {}, lambda v, s=script: ["-c", s]))
 
 
 def python(script: str, log_path: Path, env: dict) -> subprocess.Popen:
@@ -219,7 +238,7 @@ def test_cancel_stops_a_run_that_listens(cfg, make):
     seen(m, 1, "waiting for run 1 of wait")  # the run got its id and its name
     now = m.current()
     assert now == {"id": 1, "command": "wait", "args": ["-c", WAIT], "started_at": now["started_at"], "progress": None,
-                   "cancel_requested": False}
+                   "cancel_requested": False, "pause_requested": False, "session_id": 1}
     with pytest.raises(NotRunning):
         m.cancel(2)
     m.cancel(1)
@@ -466,6 +485,114 @@ def test_review_waiting_and_finish_review(cfg, make):
     assert finished(m, again["id"])["status"] == "stopped"
 
 
+# -- pause, resume, stop and delete --------------------------------------------------------------
+
+def test_pause_ends_a_bid_run_as_paused_and_the_next_bid_resumes_its_session(cfg, make):
+    m = make(commands=bid_with(SCANNING))
+    run = m.start("bid")
+    assert run["session_id"] == run["id"]  # a new session
+    seen(m, run["id"], "scanning")
+    m.pause(run["id"])
+    assert (m.current() or {"pause_requested": True})["pause_requested"] and m.review_waiting() is None
+    done = finished(m, run["id"])
+    assert done["status"] == "paused" and done["error"] is None and done["pause_requested"] and done["pause_requested_at"]
+    assert not (cfg.runs_dir / f"{run['id']}.pause").exists()  # tidied with the run
+    with pytest.raises(NotRunning):
+        m.pause(run["id"])
+    resumed = m.start("bid")  # Resume is a start while the session is paused
+    assert resumed["session_id"] == run["id"] and resumed["id"] != run["id"]
+    seen(m, resumed["id"], "scanning")
+    m.cancel(resumed["id"])
+    assert finished(m, resumed["id"])["status"] == "stopped"
+    fresh = m.start("bid")  # that session ended stopped: the next Bid run starts a new one
+    assert fresh["session_id"] == fresh["id"]
+    m.cancel(fresh["id"])
+    finished(m, fresh["id"])
+
+
+def test_pause_is_only_for_a_bid_run_before_its_review(cfg, make):
+    m = make()
+    with pytest.raises(NotRunning):
+        m.pause(1)
+    run = m.start("bid")  # the stand-in waits at the review
+    _waiting(m, run["id"])
+    with pytest.raises(NotRunning, match="cannot be paused"):
+        m.pause(run["id"])
+    m.cancel(run["id"])
+    finished(m, run["id"])
+    other = m.start("wait")
+    seen(m, other["id"], "waiting for run")
+    with pytest.raises(NotRunning, match="cannot be paused"):
+        m.pause(other["id"])
+    m.cancel(other["id"])
+    assert finished(m, other["id"])["status"] == "stopped"
+
+
+def test_a_pause_the_run_does_not_hear_ends_it_after_the_grace(cfg, make):
+    m = make(commands=bid_with(DEAF), grace=0.3)
+    run = m.start("bid")
+    seen(m, run["id"], "not listening")
+    m.pause(run["id"])
+    assert finished(m, run["id"])["status"] == "paused"
+
+
+def test_stop_and_delete_takes_the_sessions_waiting_lots_out_of_the_review(cfg, make):
+    from tests.test_sessions import lot
+    m = make(commands=bid_with(DEAF), grace=1.0)  # deaf, so the run is still going while a late lot is written
+    run = m.start("bid")
+    seen(m, run["id"], "not listening")
+    s = Store(cfg.db_path)
+    try:
+        mine, approved, earlier = lot(s, "A", run["id"]), lot(s, "B", run["id"]), lot(s, "C")
+        s.conn.execute("UPDATE proposals SET decision='approved', approved_bid_jpy_k=1000 WHERE id=?", (approved,))
+        s.conn.commit()
+    finally:
+        s.close()
+    m.cancel(run["id"], delete=True)
+    s = Store(cfg.db_path)
+    try:
+        assert s.proposal(mine)["decision"] == "deleted"  # at once, while the run is still ending
+        late = lot(s, "D", run["id"])  # a lot the run wrote between the click and its end
+    finally:
+        s.close()
+    done = finished(m, run["id"])
+    s = Store(cfg.db_path)
+    try:
+        assert done["status"] == "stopped" and done["deleted_at"]
+        assert s.proposal(late)["decision"] == "deleted"
+        assert s.proposal(approved)["decision"] == "approved" and s.proposal(earlier)["decision"] == "pending"
+        assert s.conn.execute("SELECT COUNT(*) FROM decisions").fetchone()[0] == 0
+    finally:
+        s.close()
+
+
+def test_reconcile_closes_a_paused_run_as_paused_and_sweeps_deleted_sessions(cfg, make):
+    from tests.test_sessions import lot
+    gone = subprocess.Popen([sys.executable, "-c", "pass"])
+    gone.wait(timeout=30)
+    make.started.append(gone)  # kept, so that its id is not handed out again
+    s = Store(cfg.db_path)
+    try:
+        paused = s.start_run("bid", ["bid", "--no-browser"], pid=gone.pid)
+        s.request_run_pause(paused)
+        deleted = s.start_run("bid", ["bid", "--no-browser"], pid=gone.pid)
+        s.delete_session(deleted)
+        late = lot(s, "L", deleted)  # written after the click by a run this dashboard lost
+    finally:
+        s.close()
+    cfg.runs_dir.mkdir(parents=True, exist_ok=True)
+    (cfg.runs_dir / f"{paused}.pause").write_text("pause", encoding="utf-8")
+    m = make()
+    assert m.get(paused)["status"] == "paused" and m.get(paused)["error"] is None
+    assert m.get(deleted)["status"] == "stopped"
+    assert not (cfg.runs_dir / f"{paused}.pause").exists()
+    s = Store(cfg.db_path)
+    try:
+        assert s.proposal(late)["decision"] == "deleted" and s.paused_session()["id"] == paused
+    finally:
+        s.close()
+
+
 # -- the review page inside `bot bid` --------------------------------------------------------------------
 
 def test_disabled_manager_shows_history_and_starts_nothing(cfg, make):
@@ -480,6 +607,10 @@ def test_disabled_manager_shows_history_and_starts_nothing(cfg, make):
         off.start("nonsense", {"live": True})
     with pytest.raises(NotRunning):
         off.cancel(1)
+    with pytest.raises(NotRunning):
+        off.cancel(1, delete=True)
+    with pytest.raises(NotRunning):
+        off.pause(1)
     with pytest.raises(NotRunning):
         off.finish_review(1)
     assert off.current() is None and off.review_waiting() is None and off.describe() == describe()

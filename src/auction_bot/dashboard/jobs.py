@@ -11,8 +11,10 @@ the log back, keeps the `PROGRESS` and `SUMMARY` lines (`progress.py`) apart fro
 and closes the run's row when the process ends. Closing the dashboard does not stop a run;
 the next dashboard adopts what is still going and closes what is not.
 
-Two files beside the log carry the page's two buttons to the run: `<id>.cancel` (Stop) and
-`<id>.finish` (Finish, while a Bid run waits at the review; `review_waiting`, `finish_review`).
+Three files beside the log carry the page's buttons to the run: `<id>.cancel` (Stop), `<id>.pause`
+(Pause, while a Bid run signs in, fetches the guides, scans or judges; `pause`) and `<id>.finish`
+(Finish, while a Bid run waits at the review; `review_waiting`, `finish_review`). Every run has a
+session (`runs.session_id`): a Bid run started while a session is paused joins it, which is Resume.
 
 This module imports the store, the config, the progress protocol and the profile lock, and
 nothing that loads Playwright: the dashboard can never hold the browser profile itself.
@@ -44,6 +46,8 @@ MODEL_CODE = re.compile(r"[A-Za-z0-9_-]{1,20}")
 WORD = re.compile(r"[A-Za-z0-9_.-]{1,40}")
 KINDS = ("bool", "int", "list", "str")
 CLOSED_MESSAGE = "the dashboard was closed while this run was going"
+# The Bid stages Pause is offered at. At the review the run waits for Jim anyway; a placement is never paused.
+PAUSABLE = ("signin", "guides", "scan", "judge")
 # Placement from the dashboard is a dry run. The table below cannot produce the flag that
 # asks for anything else; this is the net under it. The flag is put together when the module
 # loads, so it is written nowhere in this package, not in the source and not in the bytecode.
@@ -260,6 +264,7 @@ def run_dict(row) -> dict:
     d["progress"] = _loads(d.pop("progress_json", None), dict)
     d["summary"] = _loads(d.pop("summary_json", None), dict)
     d["cancel_requested"] = bool(d.get("cancel_requested_at"))
+    d["pause_requested"] = bool(d.get("pause_requested_at"))
     return d
 
 
@@ -325,7 +330,7 @@ class _Runs:
     def review_waiting(self) -> dict | None:
         """The current run while it is Bid mode waiting at the review stage (its Finish button may be shown), else None."""
         cur = self.current()
-        if not cur or cur.get("command") != "bid" or cur.get("cancel_requested"):
+        if not cur or cur.get("command") != "bid" or cur.get("cancel_requested") or cur.get("pause_requested"):
             return None
         p = cur.get("progress") or {}
         if p.get("stage") != "review" or p.get("waiting") is False:
@@ -371,7 +376,10 @@ class DisabledJobManager(_Runs):
     def start(self, command: str, options: dict | None = None) -> dict:
         raise Busy("this review was started by bot bid; open dashboard.cmd to run commands")
 
-    def cancel(self, run_id: int) -> None:
+    def cancel(self, run_id: int, delete: bool = False) -> None:
+        raise NotRunning("this review was started by bot bid; it runs no commands")
+
+    def pause(self, run_id: int) -> None:
         raise NotRunning("this review was started by bot bid; it runs no commands")
 
     def finish_review(self, run_id: int) -> None:
@@ -410,7 +418,8 @@ class _Tail:
 
 class _Job:
     def __init__(self, run_id: int, command: str, args: list[str], started_at: str, log_path: Path, cancel_path: Path,
-                 proc: subprocess.Popen | None = None, pid: int | None = None, adopted: bool = False):
+                 proc: subprocess.Popen | None = None, pid: int | None = None, adopted: bool = False,
+                 session_id: int | None = None):
         self.id = run_id
         self.command = command
         self.args = args
@@ -418,6 +427,10 @@ class _Job:
         self.log_path = log_path
         self.cancel_path = cancel_path
         self.finish_path = cancel_path.with_suffix(".finish")  # written by Finish while a Bid run waits at the review
+        self.pause_path = cancel_path.with_suffix(".pause")  # written by Pause while a Bid run scans
+        self.session_id = session_id
+        self.pause_requested = False
+        self.delete_requested = False  # Delete session: the session's waiting lots go once more when the process has ended
         self.proc = proc
         self.pid = pid
         self.adopted = adopted  # found running when the dashboard started: watched, never killed
@@ -472,6 +485,7 @@ class JobManager(_Runs):
         env = dict(os.environ)
         env.update({"PYTHONUTF8": "1", "PYTHONUNBUFFERED": "1", "BIDBARN_RUN_ID": str(run_id), "BIDBARN_PROGRESS": "1",
                     "BIDBARN_COMMAND": command, "BIDBARN_CANCEL_FILE": str(cancel_path),
+                    "BIDBARN_PAUSE_FILE": str(cancel_path.with_suffix(".pause")),
                     "BIDBARN_FINISH_FILE": str(finish_path or cancel_path.with_suffix(".finish"))})
         return env
 
@@ -489,22 +503,24 @@ class JobManager(_Runs):
             runs_dir = self.cfg.runs_dir
             s = self._store()
             try:
-                run_id = s.start_run(command, argv)
+                paused = s.paused_session() if command == "bid" else None  # Resume: a Bid run joins the paused session
+                run_id = s.start_run(command, argv, session_id=paused["session_id"] if paused else None)
                 log_path, cancel_path = runs_dir / f"{run_id}.log", runs_dir / f"{run_id}.cancel"
                 finish_path = runs_dir / f"{run_id}.finish"
                 s.set_run_log(run_id, log_path)
-                cancel_path.unlink(missing_ok=True)
-                finish_path.unlink(missing_ok=True)
+                for stale in (cancel_path, finish_path, cancel_path.with_suffix(".pause")):
+                    stale.unlink(missing_ok=True)
                 try:
                     proc = self._spawn(argv, log_path, self._env(run_id, command, cancel_path, finish_path))
                 except Exception as exc:
                     s.finish_run(run_id, "failed", error=f"could not start: {exc}"[:500])
                     raise RuntimeError(f"could not start {command}: {exc}") from exc
                 s.set_run_pid(run_id, proc.pid)
-                started_at = s.run(run_id)["started_at"]
+                row = s.run(run_id)
             finally:
                 s.close()
-            job = _Job(run_id, command, argv, started_at, log_path, cancel_path, proc=proc, pid=proc.pid)
+            job = _Job(run_id, command, argv, row["started_at"], log_path, cancel_path, proc=proc, pid=proc.pid,
+                       session_id=row["session_id"])
             self._watch(job)
         return self.get(run_id)
 
@@ -526,7 +542,8 @@ class JobManager(_Runs):
             return None
         with self._cond:
             return {"id": job.id, "command": job.command, "args": list(job.args), "started_at": job.started_at,
-                    "progress": job.progress, "cancel_requested": job.cancel_requested}
+                    "progress": job.progress, "cancel_requested": job.cancel_requested,
+                    "pause_requested": job.pause_requested, "session_id": job.session_id}
 
     def _overlay(self, run: dict) -> dict:
         """A running job's progress and summary are newer in memory than in its row."""
@@ -536,6 +553,7 @@ class JobManager(_Runs):
                 run["progress"] = job.progress if job.progress is not None else run["progress"]
                 run["summary"] = job.summary if job.summary is not None else run["summary"]
                 run["cancel_requested"] = run["cancel_requested"] or job.cancel_requested
+                run["pause_requested"] = run["pause_requested"] or job.pause_requested
         return run
 
     def get(self, run_id: int) -> dict | None:
@@ -562,8 +580,10 @@ class JobManager(_Runs):
         return self._lines_from_file(run_id, after, 0.0 if job is not None else wait, limit)
 
     # -- stopping --------------------------------------------------------------
-    def cancel(self, run_id: int) -> None:
-        """Ask the run to stop at its next check point. After `grace` seconds its process is ended."""
+    def cancel(self, run_id: int, delete: bool = False) -> None:
+        """Ask the run to stop at its next check point. After `grace` seconds its process is ended.
+        `delete` (Delete session): the session's waiting lots leave the review now, and once more when the
+        process has ended, for a lot written in between."""
         with self._cond:
             job = self._jobs.get(int(run_id))
             if job is None or job.done:
@@ -571,13 +591,39 @@ class JobManager(_Runs):
         job.cancel_path.parent.mkdir(parents=True, exist_ok=True)
         job.cancel_path.write_text("stop\n", encoding="utf-8")
         with self._cond:
-            if not job.cancel_requested:
-                job.cancel_requested = True
-                job.cancel_at = time.monotonic()
+            if not (job.cancel_requested or job.pause_requested):
+                job.cancel_at = time.monotonic()  # the grace counts from the first click, Pause or Stop
+            job.cancel_requested = True
+            job.delete_requested = job.delete_requested or delete
             self._cond.notify_all()
         s = self._store()
         try:
             s.request_run_cancel(job.id)
+            if delete and job.session_id is not None:
+                s.delete_session(job.session_id)
+        finally:
+            s.close()
+
+    def pause(self, run_id: int) -> None:
+        """Ask a Bid run to end as paused at its next check point (`progress.Paused`). Only while it signs in,
+        fetches the guides, scans or judges (`PAUSABLE`). After `grace` seconds its process is ended, as with Stop."""
+        with self._cond:
+            job = self._jobs.get(int(run_id))
+            if job is None or job.done:
+                raise NotRunning(f"run {run_id} is not running")
+            stage = (job.progress or {}).get("stage")
+            if job.command != "bid" or job.cancel_requested or (stage is not None and stage not in PAUSABLE):
+                raise NotRunning(f"run {run_id} cannot be paused now")
+        job.pause_path.parent.mkdir(parents=True, exist_ok=True)
+        job.pause_path.write_text("pause\n", encoding="utf-8")
+        with self._cond:
+            if not (job.cancel_requested or job.pause_requested):
+                job.cancel_at = time.monotonic()
+            job.pause_requested = True
+            self._cond.notify_all()
+        s = self._store()
+        try:
+            s.request_run_pause(job.id)
         finally:
             s.close()
 
@@ -627,7 +673,8 @@ class JobManager(_Runs):
                 self._take(job, tail.read(final=True))
                 self._finish(job)
                 return
-            if job.cancel_requested and not job.adopted and not job.killed and now - job.cancel_at >= self.grace:
+            if (job.cancel_requested or job.pause_requested) and not job.adopted and not job.killed \
+                    and now - job.cancel_at >= self.grace:
                 job.killed = True
                 self._kill(job)
             self._closing.wait(0.25)
@@ -675,6 +722,8 @@ class JobManager(_Runs):
     def _outcome(self, job: _Job, code: int | None) -> tuple[str, str | None]:
         if job.cancel_requested:
             return "stopped", None
+        if job.pause_requested and code != 0:
+            return "paused", None  # ended at a check point, or after the grace; Resume starts the session again
         if job.adopted:  # no exit code for a process this dashboard did not start: the log tells
             if job.summary is not None:
                 return "ok", None
@@ -696,12 +745,14 @@ class JobManager(_Runs):
                     if job.progress is not None:
                         s.update_run_progress(job.id, job.progress)
                     s.finish_run(job.id, status, exit_code=code, summary=job.summary, error=error)
+                    if job.delete_requested and job.session_id is not None:
+                        s.delete_session(job.session_id)  # a lot written between Delete and the end goes too
                 finally:
                     s.close()
                 break
             except sqlite3.Error:
                 time.sleep(0.5)  # still busy after the timeout: the row stays "running" until the next dashboard start
-        for path in (job.cancel_path, job.finish_path):
+        for path in (job.cancel_path, job.finish_path, job.pause_path):
             try:
                 path.unlink(missing_ok=True)
             except OSError:
@@ -720,19 +771,26 @@ class JobManager(_Runs):
                 if self._still_going(run):
                     going.append(run)
                     continue
-                s.finish_run(run["id"], "stopped", error=CLOSED_MESSAGE)
-                for suffix in (".cancel", ".finish"):
+                if run["pause_requested"] and not run["cancel_requested"]:
+                    s.finish_run(run["id"], "paused")  # Pause was clicked and the process is gone: Resume starts it again
+                else:
+                    s.finish_run(run["id"], "stopped", error=CLOSED_MESSAGE)
+                for suffix in (".cancel", ".finish", ".pause"):
                     try:
                         (self.cfg.runs_dir / f"{run['id']}{suffix}").unlink(missing_ok=True)
                     except OSError:
                         pass
+            s.sweep_deleted_sessions()  # lots a lost run wrote after its session was deleted
         finally:
             s.close()
         for run in going:  # watched to its end; adoption never ends a process
             log_path = Path(run["log_path"]) if run.get("log_path") else self.cfg.runs_dir / f"{run['id']}.log"
             job = _Job(run["id"], run["command"], run["args"], run["started_at"], log_path,
-                       self.cfg.runs_dir / f"{run['id']}.cancel", pid=run["pid"], adopted=True)
+                       self.cfg.runs_dir / f"{run['id']}.cancel", pid=run["pid"], adopted=True,
+                       session_id=run.get("session_id"))
             job.cancel_requested = run["cancel_requested"]
+            job.pause_requested = run["pause_requested"]
+            job.delete_requested = bool(run.get("deleted_at"))
             self._watch(job)
 
     @staticmethod
