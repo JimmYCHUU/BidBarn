@@ -168,9 +168,9 @@ def _text_entries(a: Approval, index: int | None = None) -> list[dict]:
             for kind, text in a.texts()]
 
 
-def _build_text(a: Approval) -> dict:
+def _build_text(a: Approval, index: int | None = None) -> dict:
     start = _mmyyyy(a.build_from_ym) if a.build_from_ym else "the window start"
-    return {"id": "elig:build", "label": "Build month", "text": BUILD_TEXT.format(start=start)}
+    return {"id": "elig:build" + (f":{index}" if index else ""), "label": "Build month", "text": BUILD_TEXT.format(start=start)}
 
 
 def _hash(label: str, verdict: str, checks: list[EligCheck], texts: list[dict], alternatives: list[dict]) -> str:
@@ -217,9 +217,13 @@ def check_lot(rule: ModelRule, variant: Variant | None, facts: VehicleFacts, ocr
         verdicts = [alt["verdict"] for alt in alternatives]
         best = min(verdicts, key=[ELIGIBLE, CONFIRM, CANNOT_IMPORT].index) if verdicts else CONFIRM
         verdict = CONFIRM if best == ELIGIBLE else best
-        texts = [t for i, a in enumerate(others, 1) for t in _text_entries(a, index=i)]
+        texts = []
+        for i, (a, c) in enumerate(zip(others, alt_checks), 1):
+            texts += _text_entries(a, index=i)
+            if window_unclear(c):
+                texts.append(_build_text(a, index=i))
         pair, label = None, "none"
-        build_for = next((a for a, c in zip(others, alt_checks) if window_unclear(c)), None)
+        build_for = None
     if build_for is not None:
         texts.append(_build_text(build_for))
     return Eligibility(verdict=verdict, pair=pair, checks=checks, texts=texts,

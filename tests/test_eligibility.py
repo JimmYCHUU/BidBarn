@@ -93,8 +93,16 @@ def test_gdh206_free_text_codes_and_no_selected_pair():
         a.selected = False
     e2 = check_lot(rule, v, VehicleFacts(ref_no="r", url="u", year=2020, chassis="GDH206V", km=100_000, grade_raw="4"), None, TODAY)
     assert e2.pair is None and e2.verdict == "confirm" and e2.alternatives
-    ids = [t["id"] for t in e2.texts if t["id"] != "elig:build"]
-    assert ids and all(re.fullmatch(r"elig:(sev|mre|mre-conditions):\d+", i) for i in ids) and "elig:sev:1" in ids
+    ids = [t["id"] for t in e2.texts]
+    assert ids and all(re.fullmatch(r"elig:(sev|mre|mre-conditions|build):\d+", i) for i in ids) and "elig:sev:1" in ids
+    assert "elig:build" not in ids
+    alphard = _rule("guide_AYH30W_Alphard_tree.json")
+    e19 = check_lot(alphard, alphard.variants[0], _facts(2019), None, TODAY)
+    assert [t["id"] for t in e19.texts].count("elig:build") == 1
+    for a in alphard.variants[0].approvals:
+        a.selected = False
+    ids19 = [t["id"] for t in check_lot(alphard, alphard.variants[0], _facts(2019), None, TODAY).texts]
+    assert "elig:build" not in ids19 and any(re.fullmatch(r"elig:build:\d+", i) for i in ids19)
     for a in v.approvals:
         a.expiry_date = None
     e3 = check_lot(rule, v, _facts(2020, "GDH206V"), None, TODAY)
