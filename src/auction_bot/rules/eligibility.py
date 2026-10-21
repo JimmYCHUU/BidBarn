@@ -47,7 +47,7 @@ def _mmyyyy(ym: int) -> str:
     return f"{ym % 100:02d}/{ym // 100}"
 
 
-def _window_text(from_ym: int | None, to_ym: int | None) -> str:
+def window_text(from_ym: int | None, to_ym: int | None) -> str:
     if from_ym and to_ym:
         return f"{_mmyyyy(from_ym)} to {_mmyyyy(to_ym)}"
     if from_ym:
@@ -73,7 +73,7 @@ def window_state(year: int | None, from_ym: int | None, to_ym: int | None) -> tu
             return UNCLEAR, f"registered after the window closed {_mmyyyy(to_ym)}; confirm the build month"
         if year == ty and tm < 12:
             return UNCLEAR, f"confirm the build month (window closes {_mmyyyy(to_ym)})"
-    return PASS, f"registered {year}, inside the build window ({_window_text(from_ym, to_ym)})"
+    return PASS, f"registered {year}, inside the build window ({window_text(from_ym, to_ym)})"
 
 
 def split_model_codes(text: str) -> list[str] | None:
@@ -152,7 +152,7 @@ def _pair_dict(a: Approval) -> dict:
         "mre_number": a.mre_number,
         "criterion": a.sev_criterion,
         "category": a.sev_category,
-        "window": _window_text(a.build_from_ym, a.build_to_ym),
+        "window": window_text(a.build_from_ym, a.build_to_ym),
         "expiry": a.expiry_date.isoformat() if isinstance(a.expiry_date, date) else "",
         "scraped": a.last_scraped_at,
     }
@@ -196,7 +196,7 @@ def check_lot(rule: ModelRule, variant: Variant | None, facts: VehicleFacts, ocr
     if selected is None and not others:
         return None
     alt_checks = [_pair_checks(a, facts, ocr, today, stale_days) for a in others]
-    alternatives = [{"label": a.label, "window": _window_text(a.build_from_ym, a.build_to_ym),
+    alternatives = [{"label": a.label, "window": window_text(a.build_from_ym, a.build_to_ym),
                      "verdict": _verdict(c), "checks": [asdict(x) for x in c]}
                     for a, c in zip(others, alt_checks)]
 

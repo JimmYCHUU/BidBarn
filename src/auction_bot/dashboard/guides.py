@@ -19,7 +19,7 @@ from auction_bot.dashboard.jobs import MODEL_CODE
 from auction_bot.insights import propose_skip_lines
 from auction_bot.judge.playbook import code_lines
 from auction_bot.rules.hard import _grade_bonus_threshold  # the one reading of "grade 4" = 4 and above (Jim, 2026-09-14)
-from auction_bot.rules.eligibility import _window_text  # the review card's words for a build window
+from auction_bot.rules.eligibility import window_text  # the review card's words for a build window
 from auction_bot.rules.instructions import InstructionError, is_structured, parse_instruction, split_override_lines
 
 DECISIONS_SHOWN = 15
@@ -112,7 +112,7 @@ _TEXT_KINDS = {"sev": "SEV", "mre": "MRE", "mre-conditions": "MRE conditions"}
 def approval_view(a: Approval) -> dict:
     """One MRE/SEV approval pair in words: its build window, expiry, model codes and restriction texts."""
     return {"label": a.label, "selected": a.selected, "active": a.active,
-            "window": _window_text(a.build_from_ym, a.build_to_ym),
+            "window": window_text(a.build_from_ym, a.build_to_ym),
             "expiry": a.expiry_date.isoformat() if a.expiry_date else "",
             "criterion": a.sev_criterion, "category": a.sev_category or a.mre_category,
             "model_codes": a.sev_model_codes,

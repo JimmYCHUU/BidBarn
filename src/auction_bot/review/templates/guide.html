@@ -13,7 +13,7 @@
 {% if g.active %}<span class="pill pill--ok">{{ icon('circle-check') }} Active</span>{% else %}<span class="pill pill--plain">Off</span>{% endif %}
 {%- endmacro %}
 {% macro approval_item(a) -%}
-<li>{{ icon('circle-check' if a.active else 'circle-alert', 'mark-ok' if a.active else 'mark-unk') }}<span><span class="mono">{{ a.label }}</span>{% if a.selected %} <span class="pill pill--ok">selected</span>{% endif %}
+<li>{{ icon('circle-check' if a.active else 'circle-alert', 'mark-ok' if a.active else 'mark-unk') }}<span><span class="mono">{{ a.label }}</span>{% if a.selected %} <span class="pill pill--ok">selected</span>{% if not a.active %} <span class="muted">inactive on the dashboard</span>{% endif %}{% endif %}
   <span class="faint">build {{ a.window }}{% if a.expiry %} · expires {{ a.expiry }}{% endif %}{% if a.model_codes %} · model codes {{ a.model_codes }}{% endif %}{% if a.scraped %} · read {{ a.scraped }}{% endif %}</span>
   {% for kind, text in a.texts %}<div><span class="faint">{{ kind }}</span> {{ text }}</div>{% endfor %}</span></li>
 {%- endmacro %}
@@ -66,14 +66,15 @@
 
 {% for v in g.variants %}
 {% if v.approvals %}
-{% set live_pairs = v.approvals|selectattr('active')|list %}
-{% set off_pairs = v.approvals|rejectattr('active')|list %}
+{% set first_pairs = v.approvals|selectattr('selected')|list %}
+{% set live_pairs = v.approvals|rejectattr('selected')|selectattr('active')|list %}
+{% set off_pairs = v.approvals|rejectattr('selected')|rejectattr('active')|list %}
 <section class="card">
   <div class="card-head"><h2>Approvals</h2>{% if v.label %}<span class="mono">{{ v.label }}</span>{% endif %}<span class="faint push">MRE/SEV pairs the lot is checked against</span></div>
   <div class="card-body">
     <ul class="checks">
-      {% for a in live_pairs|selectattr('selected') %}{{ approval_item(a) }}{% endfor %}
-      {% for a in live_pairs|rejectattr('selected') %}{{ approval_item(a) }}{% endfor %}
+      {% for a in first_pairs %}{{ approval_item(a) }}{% endfor %}
+      {% for a in live_pairs %}{{ approval_item(a) }}{% endfor %}
     </ul>
     {% if off_pairs %}
     <details><summary>{{ off_pairs|length }} inactive pair{{ 's' if off_pairs|length != 1 }}</summary>

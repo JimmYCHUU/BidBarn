@@ -340,3 +340,25 @@ def test_guide_page_lists_the_approvals(cfg):
     assert r.status_code == 200 and "Approvals" in r.text
     assert "SEV-000813 / MRE-000233" in r.text and "4x4 Campervan only" in r.text and "selected" in r.text
     assert "SEV-000719 / MRE-000829" in r.text   # an alternative pair
+    assert r.text.index("SEV-000813 / MRE-000233") < r.text.index("SEV-000719 / MRE-000829")
+    assert "inactive on the dashboard" not in r.text
+
+    # the selected pair switched off on the dashboard still comes first, with a note
+    path = next(cfg.snapshot_dir.glob("rules_*.json"))
+    snap = json.loads(path.read_text(encoding="utf-8"))
+
+    def off(o):
+        if isinstance(o, dict):
+            if o.get("selected") and o.get("mreNumber"):
+                o["active"] = False
+            for v in o.values():
+                off(v)
+        elif isinstance(o, list):
+            for v in o:
+                off(v)
+
+    off(snap)
+    path.write_text(json.dumps(snap), encoding="utf-8")
+    r = _client(cfg).get("/guides/GDH206")
+    assert "inactive on the dashboard" in r.text
+    assert r.text.index("SEV-000813 / MRE-000233") < r.text.index("SEV-000719 / MRE-000829")
