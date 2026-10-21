@@ -27,6 +27,7 @@ judge:
   enabled: true
   inline: true          # judge during the scan; `bot judge --pending` catches up when false or when a quota ran out
   max_photos: 8
+  max_photos_ladder: 40   # lots with a cruise or Welcab requirement get every photo (the steering wheel, the seat)
   providers:
     - name: gemini
       base_url: https://generativelanguage.googleapis.com/v1beta/openai/
@@ -56,6 +57,15 @@ eligibility:
   enabled: true
   judge_text: true     # the free model reads the pair's restriction text as a pre-fill
   stale_days: 90       # a ROVER copy older than this is flagged on the lot
+
+# The maker's catalogue (Jim, 2026-10-20): the only third-party site the bot reads. It answers "is cruise control standard on
+# this grade" and "which Welcab seat system does this grade carry" from kurumaerabi.com, by model code, cached for cache_days.
+# The bot sends only the catalogue's own page addresses: never a lot, a price or anything from Carbarn.
+catalog:
+  enabled: true
+  base_url: https://www.kurumaerabi.com
+  cache_days: 90
+  pace_seconds: [2.0, 5.0]
 
 # Refuse to propose or place when the rules snapshot is older than this.
 max_rules_age_hours: 12

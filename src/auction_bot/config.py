@@ -20,6 +20,7 @@ class Config:
     max_photos_to_model: int = 12
     judge: dict = field(default_factory=dict)  # providers, max_photos, inline (see config.yaml)
     eligibility: dict = field(default_factory=dict)  # import eligibility: enabled, judge_text, stale_days (see config.yaml)
+    catalog: dict = field(default_factory=dict)  # maker catalogue: enabled, base_url, cache_days, pace_seconds (see config.yaml)
     max_rules_age_hours: float = 12
     cache_hours: float = 12
     max_bids_per_run: int = 25
