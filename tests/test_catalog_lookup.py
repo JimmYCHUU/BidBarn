@@ -111,3 +111,96 @@ def test_lookup_unknown_paths(tmp_path):
     old = lookup(client, _facts(year=2015, ocr={"model_code": "3BA-AGH30W"}), _rule(), {TOPIC_CRUISE})
     assert old.cruise["status"] == "unknown" and old.grades == []
     assert unknown("x").welcab["seat_system"] == "unknown"
+
+
+def test_client_refuses_lookalike_hosts_and_traversal(tmp_path):
+    client, calls = _client(tmp_path)
+    for bad in ("https://www.kurumaerabi.com.evil.example/catalog/", "https://www.kurumaerabi.com@evil.example/catalog/",
+                f"{BASE}/catalog/../kaitori/", f"{BASE}/catalog/%2e%2e/kaitori/", f"{BASE}/catalog/%252e%252e/kaitori/",
+                "http://www.kurumaerabi.com/catalog/", "https://www.kurumaerabi.com:8443/catalog/"):
+        assert not client.allowed(bad) and client.get(bad) is None
+    assert calls == [] and client.allowed(f"{BASE}/catalog/toyota/3491/type/3BA-AGH30W/")
+
+
+def test_client_redirect_is_a_failure_and_a_later_success_clears_it(tmp_path):
+    import urllib.error
+    state = {"fail": True}
+
+    def fetch(url):
+        if state["fail"]:
+            raise urllib.error.HTTPError(url, 302, "Found", {}, None)
+        return "<html>ok</html>"
+    client = CatalogClient(_cfg(tmp_path), PageCache(tmp_path / "cache", 24.0), fetch=fetch, sleep=lambda s: None)
+    url = f"{BASE}/catalog/x/"
+    assert client.get(url) is None and "302" in client.errors[url]
+    state["fail"] = False
+    assert client.get(url) and url not in client.errors
+
+
+def test_default_fetch_never_follows_a_redirect():
+    import urllib.request
+    h = client_mod._NoRedirect()
+    assert h.redirect_request(urllib.request.Request("https://www.kurumaerabi.com/catalog/"), None, 302, "Found", {}, "https://evil.example/") is None
+
+
+def test_lookup_ignores_useless_codes_and_does_not_pool_short_prefixes(tmp_path):
+    client, calls = _client(tmp_path)
+    rule = parse_guide_tree({**_tree(), "modelCode": "-"})
+    u = lookup(client, _facts(chassis="-", ocr={"model_code": "-"}), rule, {TOPIC_CRUISE})
+    assert u.cruise["status"] == "unknown" and "no catalogue page" in u.note and u.urls == []
+    u = lookup(client, _facts(chassis="AGH"), parse_guide_tree({**_tree(), "modelCode": "AGH"}), {TOPIC_CRUISE})
+    assert "no catalogue page" in u.note and not any("/fmc003/" in c for c in calls)
+
+
+def test_lookup_caps_pages(tmp_path):
+    urls = [f"{BASE}/catalog/toyota/{i}/type/3BA-AGH30W/" for i in range(1, 9)]
+    sm = tmp_path / "sm.xml"
+    sm.write_text("<urlset>" + "".join(f"<url><loc>{u}</loc></url>" for u in urls) + "</urlset>", encoding="utf-8")
+    pages = {f"{BASE}/catalog/xml-sitemap/type.xml": sm}
+    client, calls = _client(tmp_path, pages=pages)
+    f = lookup(client, _facts(chassis="AGH30W"), _rule(), {TOPIC_WELCAB})
+    assert "capped at 6 pages" in f.note and len([c for c in calls if "/type/3BA" in c]) == 6
+
+
+def test_welcab_unknown_when_no_grade_survives_the_year(tmp_path):
+    client, _ = _client(tmp_path)
+    old = lookup(client, _facts(year=2015, ocr={"model_code": "3BA-AGH30W"}), _rule(), {TOPIC_CRUISE})
+    assert old.welcab["seat_system"] == "unknown"
+
+
+def test_pooled_bare_code_path_matches_the_prefixed_one(tmp_path):
+    client, _ = _client(tmp_path)
+    f = lookup(client, _facts(chassis="AGH30W"), _rule(), {TOPIC_CRUISE, TOPIC_WELCAB})
+    assert f.urls == [f"{BASE}/catalog/toyota/3491/type/3BA-AGH30W/"]
+    assert f.cruise["status"] == "standard" and f.welcab["seat_system"] == "second_row_lift_up" and len(f.grades) == 5
+    assert "404" in f.note and f.cruise is not f.adaptive
+
+
+def test_lookup_surprise_year_none_empty_topics_and_mixed(tmp_path, monkeypatch):
+    from auction_bot.catalog import lookup as lookup_mod
+    client, calls = _client(tmp_path)
+    f = lookup(client, _facts(year=None, chassis="AGH30W"), _rule(), set())
+    assert len(f.grades) == 5 and "registration year unknown" in f.note and not any("/fmc003/" in c for c in calls)
+    assert f.cruise["status"] == "unknown"
+    monkeypatch.setattr(lookup_mod, "parse_type_page", lambda *a: (_ for _ in ()).throw(ValueError("boom")))
+    u = lookup(client, _facts(chassis="AGH30W"), _rule(), {TOPIC_CRUISE})
+    assert u.cruise["status"] == "unknown" and u.note.startswith("catalogue lookup failed: boom")
+    monkeypatch.undo()
+    pages = dict(PAGES)
+    none_page = tmp_path / "none.html"
+    none_page.write_text(PAGES[f"{BASE}/catalog/toyota/3491/fmc003/62479/"].read_text(encoding="utf-8").replace("標準装備", "なし"), encoding="utf-8")
+    pages[f"{BASE}/catalog/toyota/3491/fmc003/62479/"] = none_page
+    client2, _ = _client(tmp_path / "m", pages=pages)
+    m = lookup(client2, _facts(chassis="AGH30W"), _rule(), {TOPIC_CRUISE})
+    assert m.cruise["status"] == "mixed" and m.cruise["grade"] is None
+
+
+def test_price_mark_reads_as_blank(tmp_path):
+    pages = dict(PAGES)
+    p = tmp_path / "price.html"
+    p.write_text(PAGES[f"{BASE}/catalog/toyota/3491/fmc003/62479/"].read_text(encoding="utf-8").replace("標準装備", "55,000円"), encoding="utf-8")
+    pages[f"{BASE}/catalog/toyota/3491/fmc003/62479/"] = p
+    pages.pop(f"{BASE}/catalog/toyota/3491/fmc003/67465/")
+    client, _ = _client(tmp_path / "p", pages=pages)
+    f = lookup(client, _facts(chassis="AGH30W"), _rule(), {TOPIC_CRUISE})
+    assert "円" not in json.dumps(f.to_dict(), ensure_ascii=False) and f.cruise["status"] == "unknown"

@@ -22,11 +22,12 @@ from datetime import datetime, timezone
 
 from auction_bot.carbarn.models import ModelRule
 from auction_bot.catalog.client import CatalogClient
-from auction_bot.catalog.kurumaerabi import Grade, bare_code, parse_grade_page, parse_type_page, parse_type_sitemap
+from auction_bot.catalog.kurumaerabi import Grade, bare_code, mark_state, parse_grade_page, parse_type_page
 from auction_bot.judge.topics import TOPIC_CRUISE
 from auction_bot.nichibo.facts import VehicleFacts
 
 _NOTE_MAX = 400
+MAX_PAGES = 6
 
 
 def _status(status: str = "unknown", grade: str | None = None, mark: str = "") -> dict:
@@ -66,14 +67,20 @@ def finding_key(codes: list[str], year: int | None, topics: set[str]) -> str:
 
 
 def candidate_codes(facts: VehicleFacts, rule: ModelRule) -> list[str]:
-    ocr = ((facts.sheet_ocr or {}).get("model_code") or "").strip().upper()
-    if "-" in ocr:
+    ocr = str((facts.sheet_ocr or {}).get("model_code") or "").strip().upper()
+    if "-" in ocr and _usable(ocr):
         return [ocr]
     out: list[str] = []
-    for code in ((facts.chassis or "").strip().rstrip("?").strip().upper(), (rule.model_code or "").strip().upper()):
+    for code in (str(facts.chassis or "").strip().rstrip("?").strip().upper(), str(rule.model_code or "").strip().upper()):
         if code and code not in out:
             out.append(code)
     return out
+
+
+def _usable(code: str) -> bool:
+    """A model code worth a catalogue search: its bare part has 4 or more characters and a digit."""
+    bare = bare_code(code)
+    return len(bare) >= 4 and any(ch.isdigit() for ch in bare)
 
 
 def candidate_sections(sections: list[int], year: int | None) -> list[int]:
@@ -88,6 +95,8 @@ def candidate_sections(sections: list[int], year: int | None) -> list[int]:
 
 
 def _urls_for(code: str, sitemap: dict[str, list[str]]) -> list[str]:
+    if not _usable(code):
+        return []
     if "-" in code:
         urls = [u for urls in sitemap.values() for u in urls if u.rstrip("/").rsplit("/", 1)[-1].upper() == code]
         return urls or _urls_for(bare_code(code), sitemap)
@@ -97,7 +106,8 @@ def _urls_for(code: str, sitemap: dict[str, list[str]]) -> list[str]:
 
 
 def _fold(grades: list[Grade], field_name: str, mark_name: str) -> dict:
-    """One status over the grades whose page was read: the shared status, else "mixed"; none read gives "unknown"."""
+    """One status over the grades whose page was read (a blank cell counts as the status "unknown"):
+    the shared status, else "mixed"; no grade read gives "unknown"."""
     read = [g for g in grades if getattr(g, field_name) is not None]
     states = {getattr(g, field_name) for g in read}
     if not states:
@@ -118,19 +128,24 @@ def _welcab(grades: list[Grade], parsed: int) -> dict:
 
 
 def lookup(client: CatalogClient, facts: VehicleFacts, rule: ModelRule, topics: set[str]) -> CatalogFinding:
-    codes = candidate_codes(facts, rule)
-    key = finding_key(codes, facts.year, topics)
+    codes: list[str] = []
+    key = ""
     try:
+        codes = candidate_codes(facts, rule)
+        key = finding_key(codes, facts.year, topics)
         return _lookup(client, facts, codes, key, topics)
     except Exception as e:  # a surprise in a page must not stop the scan
         return unknown(f"catalogue lookup failed: {e}", codes, key)
 
 
+def _price_free(mark: str) -> str:
+    return "" if "円" in (mark or "") else mark
+
+
 def _lookup(client: CatalogClient, facts: VehicleFacts, codes: list[str], key: str, topics: set[str]) -> CatalogFinding:
-    sitemap_text = client.get(client.sitemap_url())
-    if sitemap_text is None:
+    sitemap = client.sitemap()
+    if sitemap is None:
         return unknown("catalogue sitemap unavailable: " + client.errors.get(client.sitemap_url(), "no answer"), codes, key)
-    sitemap = parse_type_sitemap(sitemap_text)
     urls: list[str] = []
     for code in codes:
         for u in _urls_for(code, sitemap):
@@ -138,20 +153,20 @@ def _lookup(client: CatalogClient, facts: VehicleFacts, codes: list[str], key: s
                 urls.append(u)
     if not urls:
         return unknown("no catalogue page for " + ", ".join(codes or ["(no model code)"]), codes, key)
+    capped = len(urls) > MAX_PAGES
+    urls = urls[:MAX_PAGES]
 
     year = facts.year
-    grades: list[Grade] = []
-    parsed = 0
+    page_grades: list[Grade] = []
     used: list[str] = []
     for url in urls:
         html = client.get(url)
         if html is None:
             continue
         used.append(url)
-        page = parse_type_page(html, client.base_url)
-        parsed += len(page)
-        wanted = set(candidate_sections([g.section_ym for g in page if g.section_ym], year))
-        grades += [g for g in page if g.section_ym in wanted]
+        page_grades += parse_type_page(html, client.base_url)
+    wanted = set(candidate_sections([g.section_ym for g in page_grades if g.section_ym], year))
+    grades = [g for g in page_grades if g.section_ym in wanted]
 
     n_failed = 0
     if TOPIC_CRUISE in topics:
@@ -164,7 +179,11 @@ def _lookup(client: CatalogClient, facts: VehicleFacts, codes: list[str], key: s
                 continue
             info = parse_grade_page(html)
             g.cruise, g.adaptive = info["cruise"], info["adaptive"]
-            g.cruise_mark, g.adaptive_mark = info["cruise_mark"], info["adaptive_mark"]
+            g.cruise_mark, g.adaptive_mark = _price_free(info["cruise_mark"]), _price_free(info["adaptive_mark"])
+            if "円" in info["cruise_mark"]:
+                g.cruise = mark_state("")
+            if "円" in info["adaptive_mark"]:
+                g.adaptive = mark_state("")
             g.welfare, g.sale_from_ym, g.sale_to_ym = info["welfare"], info["sale_from_ym"], info["sale_to_ym"]
             if year is not None and g.sale_to_ym is not None and g.sale_to_ym < year * 100 + 1:
                 continue    # off sale before the registration year began
@@ -172,14 +191,22 @@ def _lookup(client: CatalogClient, facts: VehicleFacts, codes: list[str], key: s
         grades = kept
         cruise, adaptive = _fold(grades, "cruise", "cruise_mark"), _fold(grades, "adaptive", "adaptive_mark")
     else:
-        cruise = adaptive = _status()
+        cruise, adaptive = _status(), _status()
 
     note = f"{len(used)} page(s), {len(grades)} grade(s), {n_failed} grade pages failed"
+    if capped:
+        note += f"; capped at {MAX_PAGES} pages"
     if year is None:
         note += "; registration year unknown"
     if TOPIC_CRUISE not in topics:
         note += "; cruise not needed"
-    note += "".join("; " + client.errors[u] for u in urls + [g.url for g in grades] if u in client.errors)
+    errs: list[str] = []
+    for u in urls + [g.url for g in grades]:
+        if u in client.errors:
+            e = f"{u}: {client.errors[u]}"
+            if e not in errs:
+                errs.append(e)
+    note += "".join("; " + e for e in errs)
     return CatalogFinding(
         model_codes=codes, urls=used, grades=[g.to_dict() for g in grades], cruise=cruise, adaptive=adaptive,
-        welcab=_welcab(grades, parsed), note=note[:_NOTE_MAX], fetched_at=_now(), key=key)
+        welcab=_welcab(grades, len(grades)), note=note[:_NOTE_MAX], fetched_at=_now(), key=key)
