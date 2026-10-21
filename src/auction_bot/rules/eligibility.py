@@ -155,13 +155,13 @@ def _pair_dict(a: Approval) -> dict:
     }
 
 
-def _text_entries(a: Approval, prefixed: bool = False) -> list[dict]:
-    """The pair's guide text as reviewer text entries. Without a selected pair the ids and labels
-    carry the pair label so several pairs can sit side by side."""
+def _text_entries(a: Approval, index: int | None = None) -> list[dict]:
+    """The pair's guide text as reviewer text entries. Without a selected pair `index` (1-based,
+    among the active pairs) is appended to the ids and the labels carry the pair numbers."""
     labels = {"sev": f"{a.sev_number} {a.sev_criterion}".strip(), "mre": a.mre_number,
               "mre-conditions": a.mre_number}
-    return [{"id": f"elig:{kind}" + (f":{a.label}" if prefixed else ""),
-             "label": (f"{a.label} " if prefixed else "") + labels[kind], "text": text}
+    return [{"id": f"elig:{kind}" + (f":{index}" if index else ""),
+             "label": (f"{a.label} " if index else "") + labels[kind], "text": text}
             for kind, text in a.texts()]
 
 
@@ -206,7 +206,7 @@ def check_lot(rule: ModelRule, variant: Variant | None, facts: VehicleFacts, ocr
         verdicts = [alt["verdict"] for alt in alternatives]
         best = min(verdicts, key=[ELIGIBLE, CONFIRM, CANNOT_IMPORT].index) if verdicts else CONFIRM
         verdict = CONFIRM if best == ELIGIBLE else best
-        texts = [t for a in others for t in _text_entries(a, prefixed=True)]
+        texts = [t for i, a in enumerate(others, 1) for t in _text_entries(a, index=i)]
         pair, label = None, "none"
         build_for = next((a for a, c in zip(others, alt_checks) if window_unclear(c)), None)
     if build_for is not None:

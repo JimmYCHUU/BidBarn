@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import date
 from pathlib import Path
 
@@ -92,6 +93,8 @@ def test_gdh206_free_text_codes_and_no_selected_pair():
         a.selected = False
     e2 = check_lot(rule, v, VehicleFacts(ref_no="r", url="u", year=2020, chassis="GDH206V", km=100_000, grade_raw="4"), None, TODAY)
     assert e2.pair is None and e2.verdict == "confirm" and e2.alternatives
+    ids = [t["id"] for t in e2.texts if t["id"] != "elig:build"]
+    assert ids and all(re.fullmatch(r"elig:(sev|mre|mre-conditions):\d+", i) for i in ids) and "elig:sev:1" in ids
     for a in v.approvals:
         a.expiry_date = None
     e3 = check_lot(rule, v, _facts(2020, "GDH206V"), None, TODAY)
