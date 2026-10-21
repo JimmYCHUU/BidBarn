@@ -111,8 +111,11 @@ def _model_code_check(a: Approval, facts: VehicleFacts, ocr: dict | None) -> Eli
     if not chassis and not ocr_code:
         return EligCheck("model_code", INFO, "no chassis code on the lot")
     for code in codes:
-        if (chassis and chassis.startswith(code)) or (ocr_code and ocr_code.startswith(code)):
-            return EligCheck("model_code", PASS, f"{chassis or ocr_code} matches {code}")
+        if chassis and chassis.startswith(code):
+            return EligCheck("model_code", PASS, f"chassis {chassis} matches {code}")
+        if ocr_code and ocr_code.startswith(code):
+            note = f" (listing chassis {chassis} differs)" if chassis else ""
+            return EligCheck("model_code", PASS, f"sheet model code {ocr_code} matches {code}{note}")
     return EligCheck("model_code", UNCLEAR, f"confirm: {chassis or ocr_code} is not among {', '.join(codes)}")
 
 
@@ -170,10 +173,13 @@ def _build_text(a: Approval) -> dict:
     return {"id": "elig:build", "label": "Build month", "text": BUILD_TEXT.format(start=start)}
 
 
-def _hash(label: str, checks: list[EligCheck], texts: list[dict]) -> str:
-    parts = [label]
-    # source_age depends on today's date, so it never feeds the hash.
+def _hash(label: str, verdict: str, checks: list[EligCheck], texts: list[dict], alternatives: list[dict]) -> str:
+    parts = [label, f"verdict={verdict}"]
+    # source_age depends on today's date, so it never feeds the hash; neither do details or dates.
     parts += [f"{c.name}={c.state}" for c in checks if c.name != "source_age"]
+    for alt in alternatives:
+        parts.append(f"alt {alt['label']}")
+        parts += [f"{c['name']}={c['state']}" for c in alt["checks"] if c["name"] != "source_age"]
     parts += [f"{t['id']}={t['text']}" for t in texts]
     return hashlib.sha1("\n".join(parts).encode("utf-8")).hexdigest()[:12]
 
@@ -187,6 +193,8 @@ def check_lot(rule: ModelRule, variant: Variant | None, facts: VehicleFacts, ocr
         return None
     selected = next((a for a in approvals if a.selected), None)
     others = [a for a in approvals if a.active and a is not selected]
+    if selected is None and not others:
+        return None
     alt_checks = [_pair_checks(a, facts, ocr, today, stale_days) for a in others]
     alternatives = [{"label": a.label, "window": _window_text(a.build_from_ym, a.build_to_ym),
                      "verdict": _verdict(c), "checks": [asdict(x) for x in c]}
@@ -197,6 +205,9 @@ def check_lot(rule: ModelRule, variant: Variant | None, facts: VehicleFacts, ocr
 
     if selected is not None:
         checks = _pair_checks(selected, facts, ocr, today, stale_days)
+        if not selected.active:
+            checks.append(EligCheck("pair_inactive", INFO,
+                                    "the selected pair is inactive on the dashboard; confirm on ROVER"))
         verdict = _verdict(checks)
         texts = _text_entries(selected)
         pair, label = _pair_dict(selected), selected.label
@@ -212,4 +223,4 @@ def check_lot(rule: ModelRule, variant: Variant | None, facts: VehicleFacts, ocr
     if build_for is not None:
         texts.append(_build_text(build_for))
     return Eligibility(verdict=verdict, pair=pair, checks=checks, texts=texts,
-                       alternatives=alternatives, hash=_hash(label, checks, texts))
+                       alternatives=alternatives, hash=_hash(label, verdict, checks, texts, alternatives))

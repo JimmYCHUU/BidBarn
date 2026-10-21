@@ -101,3 +101,45 @@ def test_gdh206_free_text_codes_and_no_selected_pair():
     assert all(c["state"] == "info" for c in e3.alternatives[0]["checks"] if c["name"] == "expiry")   # alternatives carry plain dicts
     v.approvals = []
     assert check_lot(rule, v, _facts(2020, "GDH206V"), None, TODAY) is None
+
+
+def test_hash_sees_outcome_changes_without_a_selected_pair():
+    rule = _rule("guide_223_tree.json")
+    v = rule.variants[0]
+    for a in v.approvals:
+        a.selected = False
+    f = _facts(2020, "GDH206V")
+    early, late = check_lot(rule, v, f, None, TODAY), check_lot(rule, v, f, None, date(2029, 1, 1))
+    assert early.verdict == "confirm" and late.verdict == "cannot_import" and early.hash != late.hash
+    alphard = _rule("guide_AYH30W_Alphard_tree.json")
+    av = alphard.variants[0]
+    assert check_lot(alphard, av, _facts(2021), None, TODAY).hash == check_lot(alphard, av, _facts(2021), None, date(2027, 3, 1)).hash
+
+
+def test_selected_but_inactive_pair_still_decides():
+    rule = _rule("guide_AYH30W_Alphard_tree.json")
+    v = rule.variants[0]
+    sel = next(a for a in v.approvals if a.selected)
+    sel.active = False
+    e = check_lot(rule, v, _facts(2021), None, TODAY)
+    assert e.pair["label"] == sel.label and e.verdict == "eligible"
+    assert next(c for c in e.checks if c.name == "pair_inactive").state == "info"
+
+
+def test_no_selected_and_no_active_pair_is_none():
+    rule = _rule("guide_223_tree.json")
+    v = rule.variants[0]
+    for a in v.approvals:
+        a.selected = False
+        a.active = False
+    assert check_lot(rule, v, _facts(2020, "GDH206V"), None, TODAY) is None
+
+
+def test_model_code_pass_names_the_matching_value():
+    rule = _rule("guide_AYH30W_Alphard_tree.json")
+    v = rule.variants[0]
+    by_chassis = check_lot(rule, v, _facts(2021), None, TODAY)
+    assert next(c for c in by_chassis.checks if c.name == "model_code").detail == "chassis AYH30W matches AYH30"
+    ocr = check_lot(rule, v, _facts(2021, chassis="ZZZ99"), {"model_code": "DAA-AYH30W"}, TODAY)
+    assert next(c for c in ocr.checks if c.name == "model_code").detail == \
+        "sheet model code AYH30W matches AYH30 (listing chassis ZZZ99 differs)"
