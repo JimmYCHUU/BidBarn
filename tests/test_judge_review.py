@@ -149,3 +149,28 @@ def test_ladder_steps_numbered_photos_and_corrections(cfg, monkeypatch):
     assert r.status_code in (200, 303)
     line = next(ln for ln in code_lines(cfg, "GDH206") if "Model was wrong about" in ln)   # the overall "approved a skip" line follows it
     assert "Model was wrong about 'Cruise control'" in line and "photo 4: no (bare spokes)" in line and "photo 6" in line
+
+
+def test_chip_ladder_shows_steps_badge_and_correction(cfg, monkeypatch):
+    import json
+    from tests.test_judge_pipeline import _ladder_fixture, _ladder_reply
+    cfg.catalog = {"enabled": False}
+    _ladder_fixture(cfg)
+    snap = cfg.snapshot_dir / "rules_test.json"
+    data = json.loads(snap.read_text(encoding="utf-8"))
+    tree = data["guides"][0]["tree"]
+    tree.setdefault("modifiers", []).append({"id": 99, "variantId": None, "conditions": [], "amountJpyK": -100,
+                                             "note": "No cruise control", "active": True})
+    snap.write_text(json.dumps(data), encoding="utf-8")
+    reply = json.loads(_ladder_reply())
+    reply["observations"].append({"id": "chip:no-cruise-control", "sheet": {"state": "not_mentioned"},
+                                  "photo": {"state": "no", "photo_no": 4, "evidence": "bare spokes"}})
+    pid = _judged(cfg, monkeypatch, reply=json.dumps(reply))
+    client = TestClient(create_app(cfg))
+    r = client.get(f"/p/{pid}")
+    assert "chip applies: <b>yes</b>" in r.text and r.text.count('class="steps"') == 2
+    r = client.get("/review")
+    assert "chip  No cruise control -100K: " in r.text   # the row tooltip carries the chip mark
+    client.post(f"/p/{pid}/decide", data={"action": "approve", "amount": "1240", "feedback_req": "chip:no-cruise-control",
+                                          "feedback_note": "it has cruise, photo 6", "via": "detail"})
+    assert any("chip applies yes:" in ln for ln in code_lines(cfg, "GDH206"))

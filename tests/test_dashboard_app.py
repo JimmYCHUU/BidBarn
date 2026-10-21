@@ -644,3 +644,12 @@ def test_the_run_page_of_a_paused_and_of_a_deleted_session(cfg):
     run_page = client.get(f"/runs/{paused}").text
     assert "The session is paused" in run_page and f'data-resume="{paused}"' in run_page
     assert "This session was deleted" in client.get(f"/runs/{deleted}").text
+
+
+def test_run_screenshot_link_still_opens_the_lightbox():
+    from pathlib import Path
+    import auction_bot.review as review
+    base = Path(review.__file__).parent
+    html = (base / "templates" / "run.html").read_text(encoding="utf-8")
+    js = (base / "static" / "review.js").read_text(encoding="utf-8")
+    assert "data-sheet-zoom" in html and '"[data-zoom], [data-sheet-zoom]"' in js

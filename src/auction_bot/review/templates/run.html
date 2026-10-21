@@ -147,7 +147,7 @@
         <td><a class="lot-title" href="/p/{{ p.proposal_id }}">{{ lot_title(p.summary) or p.ref_no }}</a><div class="mono faint">{{ p.model_code }}</div></td>
         <td class="num"><b>{{ '{:,}'.format(p.amount) if p.amount else '' }}</b></td>
         <td class="why">{{ p.message }}</td>
-        <td>{% if p.screenshot %}<a href="{{ p.screenshot }}" target="_blank" data-sheet-zoom>{{ icon('image', 'icon--sm') }} Open</a>{% else %}<span class="muted">none</span>{% endif %}</td>
+        <td>{% if p.screenshot %}<a href="{{ p.screenshot }}" target="_blank" data-zoom data-sheet-zoom>{{ icon('image', 'icon--sm') }} Open</a>{% else %}<span class="muted">none</span>{% endif %}</td>
       </tr>
     {% endfor %}
     </tbody>

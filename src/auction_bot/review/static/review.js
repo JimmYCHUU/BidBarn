@@ -81,7 +81,7 @@
     if (a.hasAttribute("data-sheet-zoom")) showSheet(a.getAttribute("href"), pagePid);
     else showSheet(a.getAttribute("href"), pagePid, "photos_click", a.dataset.photoNo || null);
   }
-  document.querySelectorAll("[data-zoom]").forEach(function (a) {
+  document.querySelectorAll("[data-zoom], [data-sheet-zoom]").forEach(function (a) {
     a.addEventListener("click", function (e) {
       if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
       e.preventDefault();

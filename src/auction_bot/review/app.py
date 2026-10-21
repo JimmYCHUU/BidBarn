@@ -53,11 +53,11 @@ def _load(row) -> dict:
     d["proposed_bid_jpy_k"] = (soft.get("proposed_bid_jpy_k") if d["judge"] else None) or d.get("bid_jpy_k")
     d["badges"] = judge_badges(soft) if d["judge"] else []
     d["eligibility"] = eligibility_view(soft)
-    d["ladders"] = {l["id"]: l for l in (soft.get("ladders") or [])}
+    d["ladders"] = {l["id"]: _safe_ladder(l) for l in (soft.get("ladders") or [])}
     for r in soft.get("requirements") or []:
         if r.get("kind") == "chip" and r["id"] in d["ladders"]:
             d["ladders"][r["id"]] = {**d["ladders"][r["id"]], "applies": _ladder_applies(r, d["ladders"][r["id"]])}
-    d["catalog"] = soft.get("catalog")
+    d["catalog"] = {**soft["catalog"], "urls": [u for u in soft["catalog"].get("urls") or [] if _is_http(u)]} if soft.get("catalog") else None
     lines = check_lines(d.get("hard"), soft)
     d["verdict_counts"] = verdict_counts(d["badges"])
     d["verdict_title"] = verdict_title(d["badges"])
@@ -171,6 +171,16 @@ def _eligibility_reason(view: dict) -> str:
     if t:
         return f"{t['label']}: {t['evidence']}" if t.get("evidence") else t["label"]
     return "no approval pair fits"
+
+
+def _is_http(url) -> bool:
+    return isinstance(url, str) and url.startswith(("http://", "https://"))
+
+
+def _safe_ladder(ladder: dict) -> dict:
+    """The stored ladder with every step url that is not http(s) blanked, so a stored value can never become a javascript: href."""
+    steps = [{**s, "url": s.get("url") if _is_http(s.get("url")) else ""} for s in ladder.get("steps") or []]
+    return {**ladder, "steps": steps}
 
 
 def _ladder_applies(req: dict, ladder: dict) -> str:
