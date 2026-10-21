@@ -13,12 +13,13 @@ from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse
 
 from auction_bot.carbarn.client import latest_snapshot, load_override, load_rules
-from auction_bot.carbarn.models import ModelRule, Modifier, OdoBand, Variant
+from auction_bot.carbarn.models import Approval, ModelRule, Modifier, OdoBand, Variant
 from auction_bot.dashboard import status as st
 from auction_bot.dashboard.jobs import MODEL_CODE
 from auction_bot.insights import propose_skip_lines
 from auction_bot.judge.playbook import code_lines
 from auction_bot.rules.hard import _grade_bonus_threshold  # the one reading of "grade 4" = 4 and above (Jim, 2026-09-14)
+from auction_bot.rules.eligibility import _window_text  # the review card's words for a build window
 from auction_bot.rules.instructions import InstructionError, is_structured, parse_instruction, split_override_lines
 
 DECISIONS_SHOWN = 15
@@ -105,6 +106,20 @@ def modifier_view(m: Modifier) -> dict:
             "year_from": m.year_from, "year_to": m.year_to}
 
 
+_TEXT_KINDS = {"sev": "SEV", "mre": "MRE", "mre-conditions": "MRE conditions"}
+
+
+def approval_view(a: Approval) -> dict:
+    """One MRE/SEV approval pair in words: its build window, expiry, model codes and restriction texts."""
+    return {"label": a.label, "selected": a.selected, "active": a.active,
+            "window": _window_text(a.build_from_ym, a.build_to_ym),
+            "expiry": a.expiry_date.isoformat() if a.expiry_date else "",
+            "criterion": a.sev_criterion, "category": a.sev_category or a.mre_category,
+            "model_codes": a.sev_model_codes,
+            "texts": [(_TEXT_KINDS.get(kind, kind), text) for kind, text in a.texts()],
+            "scraped": (a.last_scraped_at or "")[:10]}
+
+
 def variant_view(v: Variant) -> dict:
     """The grid of one variant: years down, odometer bands across, every cell including the no-bid ones."""
     bands = sorted({(c.band.odo_from, c.band.odo_to) for c in v.cells.values()}) or [(b.odo_from, b.odo_to) for b in v.bands]
@@ -128,6 +143,7 @@ def variant_view(v: Variant) -> dict:
             "chips": [m for m in mods if m["kind"] == "chip"],
             "dials": [m for m in mods if m["kind"] == "dial"],
             "off": [m for m in mods if m["kind"] == "off"],
+            "approvals": [approval_view(a) for a in v.approvals],
             "rows_off": _year_ranges([m["year_from"] for m in mods if m["kind"] == "row_off"])}
 
 

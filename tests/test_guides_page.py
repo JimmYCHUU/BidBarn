@@ -332,3 +332,11 @@ def test_the_guide_module_spells_no_verb_it_may_not_use():
     source = Path(guides.__file__).read_text(encoding="utf-8")
     assert ".decide(" not in source and "append_override" not in source and "record_placement" not in source
     assert "--" + "live" not in source and "live" not in source.lower()
+
+
+def test_guide_page_lists_the_approvals(cfg):
+    client = _client(cfg)
+    r = client.get("/guides/GDH206")
+    assert r.status_code == 200 and "Approvals" in r.text
+    assert "SEV-000813 / MRE-000233" in r.text and "4x4 Campervan only" in r.text and "selected" in r.text
+    assert "SEV-000719 / MRE-000829" in r.text   # an alternative pair
