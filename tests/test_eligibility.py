@@ -3,6 +3,8 @@ from datetime import date
 from pathlib import Path
 
 from auction_bot.carbarn.models import parse_guide_tree
+from auction_bot.nichibo.facts import VehicleFacts
+from auction_bot.rules.eligibility import check_lot, split_model_codes, window_state
 
 FIX = Path(__file__).parent / "fixtures"
 
@@ -36,3 +38,63 @@ def test_parse_gdh206_selected_pair_and_cells_unchanged():
     sel = next(a for a in rule.variants[0].approvals if a.selected)
     assert sel.label == "SEV-000813 / MRE-000233" and sel.sev_model_codes == "200 series" and sel.sev_variant_details == "4x4 Campervan only"
     assert rule.approvals_for(None) == rule.variants[0].approvals
+
+
+TODAY = date(2026, 10, 20)
+
+
+def _facts(year=2021, chassis="AYH30W"):
+    return VehicleFacts(ref_no="r", url="u", year=year, make="Toyota", model="Alphard", chassis=chassis, km=50_000, grade_raw="4")
+
+
+def test_window_states_on_the_selected_alphard_pair():
+    rule = _rule("guide_AYH30W_Alphard_tree.json")
+    v = rule.variants[0]
+    by_year = {y: check_lot(rule, v, _facts(y), None, TODAY) for y in (2018, 2019, 2021, 2023, 2024)}
+    assert by_year[2018].verdict == "cannot_import" and "07/2019" in next(c.detail for c in by_year[2018].checks if c.name == "window")
+    assert by_year[2019].verdict == "confirm" and any(t["id"] == "elig:build" and "07/2019" in t["text"] for t in by_year[2019].texts)
+    assert by_year[2021].verdict == "eligible" and not any(t["id"] == "elig:build" for t in by_year[2021].texts)
+    assert by_year[2023].verdict == "confirm" and by_year[2024].verdict == "confirm"
+    e = by_year[2021]
+    assert e.pair["label"] == "SEV-000743 / MRE-000028" and e.pair["window"] == "07/2019 to 06/2023"
+    assert {c.name: c.state for c in e.checks} == {"window": "pass", "expiry": "pass", "model_code": "pass"}
+    assert len(e.alternatives) == 5 and all(a["label"] != e.pair["label"] for a in e.alternatives)
+
+
+def test_expiry_model_code_and_hash():
+    rule = _rule("guide_AYH30W_Alphard_tree.json")
+    v = rule.variants[0]
+    assert check_lot(rule, v, _facts(2021), None, date(2028, 1, 1)).verdict == "cannot_import"
+    e = check_lot(rule, v, _facts(2021, chassis="AGH30W"), None, TODAY)
+    assert e.verdict == "confirm" and next(c for c in e.checks if c.name == "model_code").state == "unclear"
+    ocr = check_lot(rule, v, _facts(2021, chassis=""), {"model_code": "DAA-AYH30W"}, TODAY)
+    assert next(c for c in ocr.checks if c.name == "model_code").state == "pass"
+    assert check_lot(rule, v, _facts(2021), None, TODAY).hash == check_lot(rule, v, _facts(2021), None, date(2027, 3, 1)).hash
+    assert check_lot(rule, v, _facts(2021), None, TODAY).hash != check_lot(rule, v, _facts(2018), None, TODAY).hash
+    assert check_lot(rule, v, _facts(None), None, TODAY).checks[0].state == "info"
+
+
+def test_model_code_parsing():
+    assert split_model_codes("TRH2XX, KDH2XX, GDH2XX") == ["TRH2", "KDH2", "GDH2"]
+    assert split_model_codes("AYH30/AGH30/AGH35/GGH30/GGH35") == ["AYH30", "AGH30", "AGH35", "GGH30", "GGH35"]
+    assert split_model_codes("MXPH1#") == ["MXPH1"] and split_model_codes("200 series") is None
+    assert window_state(None, 201907, 202306) == ("info", "registration year unknown")
+    assert window_state(2020, None, None)[0] == "pass"
+
+
+def test_gdh206_free_text_codes_and_no_selected_pair():
+    rule = _rule("guide_223_tree.json")
+    v = rule.variants[0]
+    e = check_lot(rule, v, VehicleFacts(ref_no="r", url="u", year=2020, chassis="GDH206V", km=100_000, grade_raw="4"), None, TODAY)
+    assert next(c for c in e.checks if c.name == "model_code").state == "info"
+    assert any(t["id"] == "elig:sev" and "4x4 Campervan only" in t["text"] for t in e.texts)
+    for a in v.approvals:
+        a.selected = False
+    e2 = check_lot(rule, v, VehicleFacts(ref_no="r", url="u", year=2020, chassis="GDH206V", km=100_000, grade_raw="4"), None, TODAY)
+    assert e2.pair is None and e2.verdict == "confirm" and e2.alternatives
+    for a in v.approvals:
+        a.expiry_date = None
+    e3 = check_lot(rule, v, _facts(2020, "GDH206V"), None, TODAY)
+    assert all(c["state"] == "info" for c in e3.alternatives[0]["checks"] if c["name"] == "expiry")   # alternatives carry plain dicts
+    v.approvals = []
+    assert check_lot(rule, v, _facts(2020, "GDH206V"), None, TODAY) is None
