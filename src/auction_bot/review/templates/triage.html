@@ -60,7 +60,7 @@
     <tr class="lot" role="row" id="lot-{{ p.id }}" data-pid="{{ p.id }}" data-url="{{ f.url }}" data-sheet="{{ p.sheet_src }}" data-bid="{{ p.proposed_bid_jpy_k or '' }}" data-start="{{ f.start_price_jpy or 0 }}">
       <td role="cell">
         <span class="pill {{ p.status }}">{{ status_label(p.status) }}</span>
-        {% if p.eligibility and p.eligibility.verdict == 'cannot_import' %}<span class="pill pill--bad">cannot import</span>{% elif p.eligibility and p.eligibility.verdict == 'confirm' %}<span class="pill pill--warn">confirm import</span>{% endif %}
+        {% if p.eligibility and p.eligibility.verdict == 'cannot_import' %}<span class="pill pill--bad">cannot import</span>{% elif p.eligibility and p.eligibility.verdict == 'confirm' %}<span class="pill pill--warn">confirm import</span>{% elif p.eligibility and p.eligibility.label != 'eligible' and p.eligibility.verdict == 'eligible' %}<span class="pill pill--ok">{{ p.eligibility.label }}</span>{% endif %}
         {% if p.soft and p.soft.images_pending %}<div class="faint">images pending</div>{% endif %}
         {% if p.multi_guide %}<span class="pill pill--violet" title="Also proposed under another guide. Approve it once.">×2 guides</span>{% endif %}
       </td>

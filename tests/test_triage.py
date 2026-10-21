@@ -104,3 +104,29 @@ def test_manual_lot_shows_confirm_import(cfg):
     client = TestClient(create_app(cfg))
     r = client.get("/review")
     assert "confirm import" in r.text and "confirm the build month" in r.text
+
+
+def _seed_elig(cfg, elig):
+    store = Store(cfg.db_path)
+    pid = _seed(store, "E", "GDH206", "4", 90_000)
+    store.update_soft(pid, {"mode": "manual", "checklist": ["x"], "hints": [], "eligibility": elig})
+    store.close()
+    return pid
+
+
+def test_eligible_with_model_code_not_checked_shows_the_pill_and_label(cfg):
+    pid = _seed_elig(cfg, {"verdict": "eligible", "pair": {"label": "SEV-1 / MRE-1", "window": "open"},
+                           "checks": [{"name": "model_code", "state": "info", "detail": "no chassis code on the lot"}],
+                           "texts": [], "alternatives": [], "hash": "h"})
+    client = TestClient(create_app(cfg))
+    assert "eligible (model code not checked)" in client.get("/review").text
+    assert "eligible (model code not checked)" in client.get(f"/p/{pid}").text
+
+
+def test_cannot_import_notes_an_eligible_alternative(cfg):
+    pid = _seed_elig(cfg, {"verdict": "cannot_import", "pair": {"label": "SEV-1 / MRE-1", "window": "open"},
+                           "checks": [{"name": "expiry", "state": "fail", "detail": "expired 2026-01-01"}],
+                           "texts": [], "hash": "h",
+                           "alternatives": [{"label": "SEV-2 / MRE-2", "window": "open", "verdict": "eligible", "checks": []}]})
+    client = TestClient(create_app(cfg))
+    assert "another active pair reads eligible: SEV-2 / MRE-2" in client.get(f"/p/{pid}").text

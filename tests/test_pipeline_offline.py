@@ -429,11 +429,20 @@ def test_manual_mode_carries_the_eligibility_result(cfg):
     soft = json.loads(store.list_proposals(decision="pending", status="NEEDS_REVIEW")[0]["soft_json"])
     e = soft["eligibility"]
     assert e["pair"]["label"] == "SEV-000813 / MRE-000233" and e["verdict"] in ("eligible", "confirm", "cannot_import") and e["hash"]
-    assert any(line.startswith("Import approval text:") and "4x4 Campervan only" in line for line in soft["checklist"])
+    assert any(line.startswith("Import approval text (SEV-000813") and "4x4 Campervan only" in line for line in soft["checklist"])
     store.close()
 
 
 def test_eligibility_off_by_default(cfg):
+    store = Store(cfg.db_path)
+    scan(cfg, FakeBrowser(), store, ["GDH206"], no_model=None, limit_per_model=1)
+    soft = json.loads(store.list_proposals(decision="pending", status="NEEDS_REVIEW")[0]["soft_json"])
+    assert soft.get("eligibility") is None
+    store.close()
+
+
+def test_a_missing_eligibility_config_raises_nothing(cfg):
+    cfg.eligibility = None
     store = Store(cfg.db_path)
     scan(cfg, FakeBrowser(), store, ["GDH206"], no_model=None, limit_per_model=1)
     soft = json.loads(store.list_proposals(decision="pending", status="NEEDS_REVIEW")[0]["soft_json"])

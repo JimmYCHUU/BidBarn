@@ -160,6 +160,7 @@ def test_replay_sees_an_eligibility_change(cfg, monkeypatch):
     snap.write_text(json.dumps(data), encoding="utf-8")
     st = reevaluate(cfg, store, ["GDH206"], apply=True)
     assert st.changed == 1 and len(calls) == 1   # no model call for an eligibility text change in manual-text mode
+    assert st.changes[0].endswith("(eligibility changed)")
     store.close()
 
 

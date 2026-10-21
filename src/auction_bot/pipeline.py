@@ -348,8 +348,16 @@ def judge_inline(cfg: Config) -> bool:
     return bool((getattr(cfg, "judge", None) or {}).get("inline", True))
 
 
+def _elig_cfg(cfg: Config) -> dict:
+    return getattr(cfg, "eligibility", None) or {}
+
+
 def eligibility_enabled(cfg: Config) -> bool:
-    return bool((getattr(cfg, "eligibility", None) or {}).get("enabled", False))
+    return bool(_elig_cfg(cfg).get("enabled", False))
+
+
+def judge_text_on(cfg: Config) -> bool:
+    return bool(_elig_cfg(cfg).get("judge_text", True))
 
 
 def eligibility_for(cfg: Config, rule: ModelRule, facts: VehicleFacts, ocr: dict | None) -> Eligibility | None:
@@ -358,7 +366,7 @@ def eligibility_for(cfg: Config, rule: ModelRule, facts: VehicleFacts, ocr: dict
     if not eligibility_enabled(cfg):
         return None
     variant = rule.resolve_variant(facts.chassis, facts.variant_text).variant
-    stale_days = int(cfg.eligibility.get("stale_days", 90))
+    stale_days = int(_elig_cfg(cfg).get("stale_days") or 90)
     return check_lot(rule, variant, facts, ocr, date.today(), stale_days)
 
 
@@ -366,7 +374,11 @@ def _eligibility_lines(elig: Eligibility) -> list[str]:
     label = (elig.pair or {}).get("label") or "no selected pair"
     lines = [f"Import approval ({label}): {c.name} {c.state}: {c.detail}"
              for c in elig.checks if c.state in ("fail", "unclear")]
-    return lines + [f"Import approval text: {t['text']}" for t in elig.texts]
+    if elig.pair is None:
+        for alt in elig.alternatives:
+            lines += [f"Import approval ({alt['label']}): {c['name']} {c['state']}: {c['detail']}"
+                      for c in alt["checks"] if c["state"] in ("fail", "unclear")]
+    return lines + [f"Import approval text ({t['label']}): {t['text']}" for t in elig.texts]
 
 
 def manual_soft(rule: ModelRule, hard, facts: VehicleFacts, ocr, ocr_hints: list[dict], evidence: dict, mode: str = "manual",
@@ -464,7 +476,7 @@ def evaluate_vehicle(cfg: Config, rule: ModelRule, facts: VehicleFacts, no_model
 
     if judge_mode(cfg):
         # The judgement layer: what to look at, whether the photos are needed, whether to ask the model.
-        reqs = requirements_for(rule, hard, elig if cfg.eligibility.get("judge_text", True) else None)
+        reqs = requirements_for(rule, hard, elig if judge_text_on(cfg) else None)
         soft = manual_soft(rule, hard, facts, ocr, ocr_hints, evidence, mode="judge", eligibility=elig)
         flags = odd_flags(rule, hard, facts, ocr_hints, soft["hints"], eligibility=elig)
         if needs_photos(reqs) and not evidence.get("photos") and photo_loader is not None and not evidence.get("images_pending"):
@@ -476,7 +488,7 @@ def evaluate_vehicle(cfg: Config, rule: ModelRule, facts: VehicleFacts, no_model
                 return dict(base, status=status, stage="hard", bid_jpy_k=hard.bid_jpy_k, base_jpy_k=hard.base_jpy_k,
                             facts_json=facts.to_dict(), hard_json=hard.to_dict(), evidence_json=evidence)
             elig = eligibility_for(cfg, rule, facts, ocr.to_dict() if ocr else None)
-            reqs = requirements_for(rule, hard, elig if cfg.eligibility.get("judge_text", True) else None)
+            reqs = requirements_for(rule, hard, elig if judge_text_on(cfg) else None)
             soft = manual_soft(rule, hard, facts, ocr, ocr_hints, evidence, mode="judge", eligibility=elig)
             flags = odd_flags(rule, hard, facts, ocr_hints, soft["hints"], eligibility=elig)
             (out_dir / "facts.json").write_text(json.dumps(facts.to_dict(), indent=1, ensure_ascii=False), encoding="utf-8")
@@ -629,7 +641,15 @@ def reevaluate(cfg: Config, store: Store, model_codes: list[str] | None = None, 
             st.unchanged += 1
             continue
         st.changed += 1
-        st.changes.append(f"{label}: {old[0]} {old[1]} -> {new[0]} {new[1]}")
+        why = ""
+        if old[:2] == new[:2]:
+            parts = []
+            if old[3] != new[3]:
+                parts.append("eligibility changed")
+            if old[2] != new[2]:
+                parts.append("requirements changed")
+            why = f" ({' and '.join(parts)})" if parts else ""
+        st.changes.append(f"{label}: {old[0]} {old[1]} -> {new[0]} {new[1]}{why}")
         if apply:
             store.supersede_pending(row["ref_no"], rule.guide_id)
             store.add_proposal(snapshot=snap_path.name, rule_updated_at=rule.updated_at, run_id=row["run_id"], **proposal)
@@ -697,7 +717,7 @@ def judge_pending(cfg: Config, store: Store, model_codes: list[str] | None = Non
             continue
         evidence = load_saved_evidence(cfg, row["ref_no"]) or {"dir": str(cfg.evidence_dir / _safe(row["ref_no"])), "sheet": None, "photos": []}
         elig = eligibility_for(cfg, rule, facts, facts.sheet_ocr)
-        use_text = elig if cfg.eligibility.get("judge_text", True) else None
+        use_text = elig if judge_text_on(cfg) else None
         reqs = [Requirement(**r) for r in soft.get("requirements", [])] or requirements_for(rule, hard, use_text)
         flags = soft["flags"] if "flags" in soft else odd_flags(rule, hard, facts, [], soft.get("hints") or [], eligibility=elig)
         if needs_photos(reqs) and not evidence.get("photos"):

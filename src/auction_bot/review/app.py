@@ -148,7 +148,13 @@ def eligibility_view(soft: dict | None) -> dict | None:
                 model = "confirm"
     stored = e.get("verdict") or "eligible"
     verdict = next((w for w in ("cannot_import", "confirm") if w in (stored, model)), "eligible")
-    return {**e, "verdict": verdict, "texts": texts, "label": ELIG_WORDS.get(verdict, verdict), "grouped": bool(groups)}
+    label = ELIG_WORDS.get(verdict, verdict)
+    if verdict == "eligible" and any(c.get("name") == "model_code" and c.get("state") == "info" for c in e.get("checks") or []):
+        label = "eligible (model code not checked)"
+    better = None
+    if e.get("pair") and verdict != "eligible":
+        better = next((a["label"] for a in alts if a.get("verdict") == "eligible"), None)
+    return {**e, "verdict": verdict, "texts": texts, "label": label, "grouped": bool(groups), "better_pair": better}
 
 
 def _eligibility_reason(view: dict) -> str:

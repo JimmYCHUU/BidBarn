@@ -1,4 +1,4 @@
-"""Import eligibility of a lot against the MRE/SEV approval pair on its variant. Pure functions,
+﻿"""Import eligibility of a lot against the MRE/SEV approval pair on its variant. Pure functions,
 no I/O. It never skips a lot and never decides a bid: the verdict is information for the reviewer.
 """
 from __future__ import annotations
@@ -20,7 +20,7 @@ ELIGIBLE = "eligible"
 CONFIRM = "confirm"
 CANNOT_IMPORT = "cannot_import"
 
-BUILD_TEXT = "Read 初度登録 (first registration) on the sheet; fail if before {start}; otherwise unclear"
+BUILD_TEXT = "Read åˆåº¦ç™»éŒ² (first registration) on the sheet; fail if before {start}; otherwise unclear"
 
 
 @dataclass
@@ -142,7 +142,10 @@ def _verdict(checks: list[EligCheck]) -> str:
     states = {c.state for c in checks}
     if FAIL in states:
         return CANNOT_IMPORT
-    return CONFIRM if UNCLEAR in states else ELIGIBLE
+    # An unknown registration year cannot clear the build window; an unreadable model code does not change the verdict.
+    if UNCLEAR in states or any(c.name == "window" and c.state == INFO for c in checks):
+        return CONFIRM
+    return ELIGIBLE
 
 
 def _pair_dict(a: Approval) -> dict:
@@ -161,10 +164,10 @@ def _pair_dict(a: Approval) -> dict:
 def _text_entries(a: Approval, index: int | None = None) -> list[dict]:
     """The pair's guide text as reviewer text entries. Without a selected pair `index` (1-based,
     among the active pairs) is appended to the ids and the labels carry the pair numbers."""
-    labels = {"sev": f"{a.sev_number} {a.sev_criterion}".strip(), "mre": a.mre_number,
-              "mre-conditions": a.mre_number}
+    labels = {"sev": f"{a.label} criterion" + (f": {a.sev_criterion}" if a.sev_criterion else ""),
+              "mre": f"{a.mre_number} notes", "mre-conditions": f"{a.mre_number} conditions"}
     return [{"id": f"elig:{kind}" + (f":{index}" if index else ""),
-             "label": (f"{a.label} " if index else "") + labels[kind], "text": text}
+             "label": (f"{a.label} " if index and kind != "sev" else "") + labels[kind], "text": text}
             for kind, text in a.texts()]
 
 
@@ -194,7 +197,10 @@ def check_lot(rule: ModelRule, variant: Variant | None, facts: VehicleFacts, ocr
     selected = next((a for a in approvals if a.selected), None)
     others = [a for a in approvals if a.active and a is not selected]
     if selected is None and not others:
-        return None
+        checks = [EligCheck("no_active_pair", INFO,
+                            "no active approval pair on this guide; the grid is priced from its first block")]
+        return Eligibility(verdict=CONFIRM, pair=None, checks=checks, texts=[], alternatives=[],
+                           hash=_hash("none", CONFIRM, checks, [], []))
     alt_checks = [_pair_checks(a, facts, ocr, today, stale_days) for a in others]
     alternatives = [{"label": a.label, "window": window_text(a.build_from_ym, a.build_to_ym),
                      "verdict": _verdict(c), "checks": [asdict(x) for x in c]}

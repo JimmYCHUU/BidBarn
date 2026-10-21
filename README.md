@@ -118,9 +118,11 @@ search card, so it can be approved in the meantime.
 approval pair behind its guide, from the guide tree only (no ROVER visit). The review page shows
 an "Import eligibility (ROVER)" card with one of three verdicts. **Eligible**: the registration
 year is inside the build window, the approval has not expired and the chassis matches the SEV
-model codes. **Confirm import**: something is unclear, for example a year the window only
-partly covers ("confirm the build month"), a chassis that is not among the model codes, or a
-window that closes before the lot's year. **Cannot import**: the lot was registered before the
+model codes. When the lot has no chassis code to compare, the card reads "eligible (model code
+not checked)". **Confirm import**: something is unclear, for example a year the window only
+partly covers ("confirm the build month"), a registration year the lot does not give (an
+unknown year reads confirm), a chassis that is not among the model codes, or a window that
+closes before the lot's year. **Cannot import**: the lot was registered before the
 window opens, or the approval has expired. The check never skips a lot. A "cannot import" lot
 stays in review with the reason and you reject it yourself. A copy of the approval older than
 `eligibility.stale_days` (90) is flagged. When a guide has no selected pair, its active pairs
@@ -147,7 +149,11 @@ Enforced in code, not by convention. The full list for anyone touching the code 
   re-applied offline with `bot replay --apply`. The data folders are never deleted. The first
   `--apply` after the import-eligibility change supersedes every pending lot whose guide has
   approvals, once, because the eligibility hash is new. The hash never includes the day count
-  or the staleness flag, so replay does not flip from day to day.
+  or the staleness flag, so replay does not flip from day to day. Day-one order: `bot replay`
+  (dry; read the labelled change list), then `bot replay --apply`, then `bot judge --pending`.
+  The first apply also gives every pending judge lot whose pair carries text a new requirements
+  hash, so the pending pass redoes its judgement: one model call per such lot, against the
+  free-tier daily limits.
 - **RULE-6 Learning only tightens.** Telemetry, `skip:` lines, `bot insights` and
   `bot learn` can add skips, ordering and pre-fills. Nothing learned can approve a bid.
 
@@ -554,6 +560,12 @@ look at Insights once decisions exist.
 
 - Interior years of a build window count as inside it (registered 2020, window 07/2019 to
   06/2023): confirm.
+- The selected pair decides the verdict even when another active pair would cover the lot:
+  confirm.
+- With no selected pair the active pairs are alternatives, and the bot may only recommend
+  against a lot when every pair fails it: confirm.
+- A model code that does not match, or cannot be parsed from the SEV text, reads "confirm
+  import", never "cannot import"; an unknown registration year also reads confirm: confirm.
 - Guide 213271 has two selected pairs whose cells overwrite each other; not changed here.
 - Odometer margin (from the teaching session of 2026-09-15): the reviewer skips a lot that is
   already at the last band's cap ("already 80k") and, for a lot exactly on a band boundary

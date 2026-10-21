@@ -103,8 +103,10 @@ hard constraints. Do not weaken them, work around them, or "temporarily" disable
   with "confirm the build month".
 - Source is the guide tree only: no ROVER visit, no bidding-cost-profile call. An old ROVER copy
   is flagged from `lastScrapedAt` (`eligibility.stale_days`).
-- When no pair is selected, the active pairs are alternatives: the bot may only recommend against
-  a lot when every pair fails it.
+- Defaults chosen by the plan, to confirm with Jim: the selected pair decides even when an
+  alternative covers the lot; with no selected pair the active pairs are alternatives (the bot may
+  only recommend against a lot when every pair fails it); an unmatched or unparseable model code
+  reads confirm, never cannot import; an unknown registration year reads confirm.
 
 ## 4. Data handling
 

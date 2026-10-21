@@ -72,7 +72,8 @@ def test_expiry_model_code_and_hash():
     assert next(c for c in ocr.checks if c.name == "model_code").state == "pass"
     assert check_lot(rule, v, _facts(2021), None, TODAY).hash == check_lot(rule, v, _facts(2021), None, date(2027, 3, 1)).hash
     assert check_lot(rule, v, _facts(2021), None, TODAY).hash != check_lot(rule, v, _facts(2018), None, TODAY).hash
-    assert check_lot(rule, v, _facts(None), None, TODAY).checks[0].state == "info"
+    unknown = check_lot(rule, v, _facts(None), None, TODAY)
+    assert unknown.checks[0].state == "info" and unknown.verdict == "confirm"   # an unknown year cannot clear the window
 
 
 def test_model_code_parsing():
@@ -134,13 +135,31 @@ def test_selected_but_inactive_pair_still_decides():
     assert next(c for c in e.checks if c.name == "pair_inactive").state == "info"
 
 
-def test_no_selected_and_no_active_pair_is_none():
+def test_no_selected_and_no_active_pair_reads_confirm_with_an_info_check():
     rule = _rule("guide_223_tree.json")
     v = rule.variants[0]
     for a in v.approvals:
         a.selected = False
         a.active = False
-    assert check_lot(rule, v, _facts(2020, "GDH206V"), None, TODAY) is None
+    e = check_lot(rule, v, _facts(2020, "GDH206V"), None, TODAY)
+    assert e.verdict == "confirm" and e.pair is None and not e.alternatives and not e.texts
+    assert [(c.name, c.state) for c in e.checks] == [("no_active_pair", "info")]
+
+
+def test_text_labels_name_the_pair_and_the_source():
+    rule = _rule("guide_223_tree.json")
+    e = check_lot(rule, rule.variants[0], _facts(2020, "GDH206V"), None, TODAY)
+    labels = {t["id"]: t["label"] for t in e.texts}
+    assert labels["elig:sev"].startswith("SEV-000813 / MRE-000233 criterion")
+    mre = e.pair["mre_number"]
+    assert all(l in (f"{mre} notes", f"{mre} conditions") for i, l in labels.items() if i.startswith("elig:mre"))
+
+
+def test_model_code_info_does_not_change_the_verdict():
+    rule = _rule("guide_223_tree.json")
+    e = check_lot(rule, rule.variants[0], _facts(2021, chassis=""), None, TODAY)
+    assert next(c for c in e.checks if c.name == "model_code").state == "info"
+    assert e.verdict == "eligible"
 
 
 def test_model_code_pass_names_the_matching_value():

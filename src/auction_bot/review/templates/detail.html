@@ -67,6 +67,7 @@
         {% if el.pair %}
         <p class="num"><b>{{ el.pair.label }}</b>{% if el.pair.criterion %} <span class="muted">{{ el.pair.criterion }}</span>{% endif %}{% if el.pair.category %} <span class="muted">{{ el.pair.category }}</span>{% endif %}{% if el.pair.window %}, window {{ el.pair.window }}{% endif %}{% if el.pair.expiry %}, expires {{ el.pair.expiry }}{% endif %}{% if el.pair.scraped %} <span class="faint">ROVER copy {{ el.pair.scraped }}</span>{% endif %}</p>
         {% endif %}
+        {% if el.better_pair %}<p class="muted">another active pair reads eligible: {{ el.better_pair }}</p>{% endif %}
         <ul class="checks">
         {% for c in el.checks or [] %}
           <li>{{ icon('circle-check', 'mark-ok') if c.state == 'pass' else (icon('circle-x', 'mark-bad') if c.state == 'fail' else (icon('circle-alert', 'mark-unk') if c.state == 'unclear' else icon('info', 'mark-ok'))) }}<span><b>{{ c.name }}</b> {{ c.detail }}</span></li>
