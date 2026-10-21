@@ -355,12 +355,15 @@ cases (odometer at the cap, conversions, sheet notes). It works like this:
 2. When the photos are needed the lot's page is opened and up to `judge.max_photos` photos are
    downloaded (only then; the scan stays fast).
 3. The model receives the lot's facts, the OCR fields, Nichibo's translation, the requirements,
-   the flags, the selected pair's SEV/MRE restriction text, **your playbook** (`rules/playbook/general.md` and `rules/playbook/<CODE>.md`, your
-   own words from learn-mode comments and review corrections), the candidate amounts (the grid
-   cell, the cell with a chip, the next odometer band when the odometer is on a boundary or near
-   the cap; never the grid itself), the sheet and the photos. With `eligibility.judge_text: true`
-   every lot whose pair carries restriction text costs one model call, because the model reads
-   that text as a pre-fill. With `judge_text: false` the text goes on your checklist instead.
+   the flags, the selected pair's (or, with none selected, each active pair's) SEV/MRE
+   restriction text, **your playbook** (`rules/playbook/general.md` and
+   `rules/playbook/<CODE>.md`, your own words from learn-mode comments and review corrections),
+   the candidate amounts (the grid cell, the cell with a chip, the next odometer band when the
+   odometer is on a boundary or near the cap; never the grid itself), the sheet and the photos.
+   In judge mode with `eligibility.judge_text` on, a lot whose pair carries restriction text
+   costs one model call, like any lot with a requirement the sheet cannot settle, because the
+   model reads that text as a pre-fill; a cached judgement with an unchanged requirements hash
+   is reused. With `judge_text: false` the text goes on your checklist instead.
 4. It answers with a verdict and evidence per requirement, whether each chip applies, the odd
    cases, one of the candidate amounts or none, and a recommendation: bid, review or skip.
    The bot turns that into a proposal deterministically (`judge/judge.py::decide`).

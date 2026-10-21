@@ -84,10 +84,10 @@ hard constraints. Do not weaken them, work around them, or "temporarily" disable
   the review page approves, and the model never sets a number outside the candidates.
 - Data minimisation: the bid grid is never sent to a provider. A prompt carries the lot's
   facts, the OCR fields, Nichibo's translation, the guide's text requirements and chips, the
-  odd-case flags, the selected MRE/SEV pair's restriction text (SEV variant details and notes, MRE
-  notes and special notes; never holder names or contacts), Jim's playbook (`rules/playbook/`,
-  git-ignored), the candidate amounts, the sheet and up to `judge.max_photos` photos. Keep it
-  that way.
+  odd-case flags, the selected MRE/SEV pair's (or, with none selected, each active pair's)
+  restriction text (SEV variant details and notes, MRE notes and special notes; never holder
+  names or contacts), Jim's playbook (`rules/playbook/`, git-ignored), the candidate amounts, the
+  sheet and up to `judge.max_photos` photos. Keep it that way.
 - The playbook is Jim's words (learn-mode comments, review-page corrections, the seeded
   principles). It is context for the model, not code rules; never turn it into automatic
   approvals. Quotas: respect `rpm`/`rpd` per provider; when every provider is out, lots go
