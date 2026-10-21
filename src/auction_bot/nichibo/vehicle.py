@@ -121,15 +121,21 @@ def download_evidence(browser: Browser, cfg: Config, facts: VehicleFacts, max_ph
     out_dir = cfg.evidence_dir / _safe(facts.ref_no)
     out_dir.mkdir(parents=True, exist_ok=True)
     cache = cache or NoCache()
+    saved = None
     if cache.enabled:
-        saved = load_saved_evidence(cfg, facts.ref_no)
+        found = load_saved_evidence(cfg, facts.ref_no)
         meta = out_dir / "evidence.json"
-        if saved and saved.get("sheet") and meta.exists() and (time.time() - meta.stat().st_mtime) < cache.max_age \
-                and (max_photos == 0 or saved.get("photos") or not facts.photo_urls):
+        if found and found.get("sheet") and meta.exists() and (time.time() - meta.stat().st_mtime) < cache.max_age:
+            saved = found
+    if saved is not None:
+        want = min(max_photos, len(facts.photo_urls))
+        if max_photos == 0 or not facts.photo_urls or len(saved.get("photos", [])) >= want:
             saved["reused"] = True
+            saved.setdefault("photo_total", len(facts.photo_urls))
+            saved.setdefault("extended", 0)
             return saved
-    result: dict = {"dir": str(out_dir), "sheet": None, "photos": [], "failed": [], "placeholders": 0,
-                    "images_pending": False}
+    result: dict = saved if saved is not None else {
+        "dir": str(out_dir), "sheet": None, "photos": [], "failed": [], "placeholders": 0, "images_pending": False}
 
     def grab(url: str, stem: str) -> Path | None:
         try:
@@ -149,17 +155,44 @@ def download_evidence(browser: Browser, cfg: Config, facts: VehicleFacts, max_ph
         path.write_bytes(data)
         return path
 
-    if facts.sheet_url:
-        p = grab(facts.sheet_url, "sheet")
-        result["sheet"] = str(p) if p else None
-    for i, url in enumerate(facts.photo_urls[:max_photos]):
-        p = grab(url, f"photo_{i:02d}")
-        if p:
-            result["photos"].append(str(p))
-    result["images_pending"] = result["sheet"] is None and result["placeholders"] > 0
+    if saved is not None:
+        _extend_bundle(result, out_dir, facts, max_photos, grab)
+        result["reused"] = True
+    else:
+        if facts.sheet_url:
+            p = grab(facts.sheet_url, "sheet")
+            result["sheet"] = str(p) if p else None
+        for i, url in enumerate(facts.photo_urls[:max_photos]):
+            p = grab(url, f"photo_{i:02d}")
+            if p:
+                result["photos"].append(str(p))
+        result["extended"] = 0
+        result["images_pending"] = result["sheet"] is None and result["placeholders"] > 0
+    result["photo_total"] = len(facts.photo_urls)
     (out_dir / "facts.json").write_text(json.dumps(facts.to_dict(), indent=1, ensure_ascii=False), encoding="utf-8")
     (out_dir / "evidence.json").write_text(json.dumps(result, indent=1), encoding="utf-8")
     return result
+
+
+def _extend_bundle(result: dict, out_dir: Path, facts: VehicleFacts, max_photos: int, grab) -> None:
+    """Add the photos a fresh bundle is missing, up to `max_photos`. Files already saved are never fetched or removed."""
+    before = len(result["photos"])
+    for i in range(min(max_photos, len(facts.photo_urls))):
+        if any(out_dir.glob(f"photo_{i:02d}.*")):
+            continue
+        p = grab(facts.photo_urls[i], f"photo_{i:02d}")
+        if p:
+            result["photos"].append(str(p))
+    result["photos"] = sorted(set(result["photos"]), key=lambda x: Path(x).name)
+    result["extended"] = len(result["photos"]) - before
+
+
+def photos_complete(evidence: dict, wanted: int) -> bool:
+    """True when the bundle holds every photo the page offers, up to `wanted`."""
+    total = evidence.get("photo_total")
+    if total is None:
+        return not evidence.get("failed")
+    return len(evidence.get("photos", [])) >= min(wanted, total)
 
 
 def _safe(ref_no: str) -> str:

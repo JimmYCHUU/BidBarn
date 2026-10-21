@@ -178,3 +178,37 @@ def test_judge_mode_sends_the_pair_text_and_never_skips_for_it(cfg, monkeypatch)
     assert row["status"] == "NEEDS_REVIEW" and row["stage"] == "judge" and soft["recommendation"] == "skip"   # a model "skip" is a label, never SKIP
     assert stats.review >= 1 and any(r["id"] == "elig:sev" for r in soft["requirements"]) and soft["eligibility"]["pair"]
     store.close()
+
+
+class CountingBrowser(FakeBrowser):
+    def __init__(self):
+        super().__init__(); self.images = 0
+
+    def get_bytes(self, url, headers=None):
+        self.images += 1
+        return super().get_bytes(url, headers)
+
+
+def test_ladder_lots_get_every_photo_and_a_short_bundle_is_extended(cfg, monkeypatch):
+    from auction_bot.nichibo.vehicle import photos_complete
+    cfg.sheet_check = "judge"
+    cfg.judge = {"max_photos": 3, "max_photos_ladder": 40, "inline": True}
+    cfg.catalog = {"enabled": False}
+    calls = []
+    _stub(monkeypatch, calls)
+    browser = CountingBrowser()
+    store = Store(cfg.db_path)
+    scan(cfg, browser, store, ["GDH206"], limit_per_model=1)           # plain guide: 3 photos
+    ev = json.loads(store.list_proposals(decision="pending", status="NEEDS_REVIEW")[0]["evidence_json"])
+    assert len(ev["photos"]) == 3 and ev["photo_total"] == 10 and not photos_complete(ev, 40) and photos_complete(ev, 3)
+    before = browser.images
+    snap = cfg.snapshot_dir / "rules_test.json"
+    data = json.loads(snap.read_text(encoding="utf-8"))
+    data["guides"][0]["tree"]["notes"] += "|Cruise control"
+    data["guides"][0]["tree"]["updatedAt"] = "2026-10-20T00:00:00"
+    snap.write_text(json.dumps(data), encoding="utf-8")
+    scan(cfg, browser, store, ["GDH206"], limit_per_model=1, rescan=True)   # now a ladder lot: the bundle is extended to all 10
+    ev = json.loads(store.list_proposals(decision="pending", status="NEEDS_REVIEW")[0]["evidence_json"])
+    assert len(ev["photos"]) == 10 and ev["extended"] == 7 and browser.images - before == 7   # only the missing seven were fetched
+    assert photos_complete(ev, 40) and calls[-1]["images"] == 11                                   # sheet + 10 photos went to the model
+    store.close()

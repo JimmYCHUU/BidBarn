@@ -30,7 +30,7 @@ from auction_bot.rules.hard import (NEEDS_REVIEW, PASS, SKIP, Check, allowed_sea
 from auction_bot.rules.eligibility import Eligibility, check_lot
 from auction_bot.rules.hints import keyword_hints
 from auction_bot.rules.instructions import detail_fields_used, instruction_check, split_override_lines
-from auction_bot.judge.requirements import needs_judge, needs_photos, odd_flags, requirements_for, requirements_hash
+from auction_bot.judge.requirements import has_ladder, needs_judge, needs_photos, odd_flags, requirements_for, requirements_hash
 from auction_bot.store import Store
 
 log = logging.getLogger("auction_bot.scan")
@@ -253,7 +253,7 @@ def scan(cfg: Config, browser: Browser, store: Store, model_codes: list[str] | N
             try:
                 # 1. The sheet, straight from the card's own link: no page load. A placeholder
                 #    means Nichibo has not published the images yet, so the lot is parked.
-                photos = 0 if no_model else cfg.max_photos_to_model
+                photos = 0 if no_model or judge_mode(cfg) else cfg.max_photos_to_model  # judge mode fetches photos only for lots that need them
                 evidence = download_evidence(browser, cfg, card, photos, cache)
                 t_sheet = time.time() - t0
                 if evidence.get("images_pending"):
@@ -283,14 +283,14 @@ def scan(cfg: Config, browser: Browser, store: Store, model_codes: list[str] | N
                         return download_evidence(browser, cfg, f, photos, cache)
                     return ev
 
-                def load_photos(f, c=card):
+                def load_photos(f, n, c=card):
                     """Judge mode: a lot whose requirements need the photos gets its page opened now."""
                     full = f if f.source == "detail" else fetch_facts(browser, cfg, c.ref_no, cache)
                     if full is not f:
                         full.ref_no = c.ref_no
                         full.seats, full.sheet_ocr = f.seats, f.sheet_ocr
                         stats.pages += 1
-                    ev = download_evidence(browser, cfg, full, judge_photos(cfg), cache)
+                    ev = download_evidence(browser, cfg, full, n, cache)
                     return full, ev
 
                 proposal = evaluate_vehicle(
@@ -340,8 +340,21 @@ def judge_mode(cfg: Config) -> bool:
     return (cfg.sheet_check or "none").lower() == "judge"
 
 
-def judge_photos(cfg: Config) -> int:
-    return int((getattr(cfg, "judge", None) or {}).get("max_photos") or 8)
+def judge_photos(cfg: Config, reqs: list[Requirement] | None = None) -> int:
+    """How many photos to keep: the ladder cap when an equipment ladder is in play, else the usual cap."""
+    judge = getattr(cfg, "judge", None) or {}
+    if has_ladder(reqs or []):
+        return int(judge.get("max_photos_ladder") or 40)
+    return int(judge.get("max_photos") or 8)
+
+
+def photos_short(cfg: Config, reqs: list[Requirement], evidence: dict) -> bool:
+    """True when the lot needs photos it does not have yet (none at all, or a ladder lot with a short bundle)."""
+    if not needs_photos(reqs):
+        return False
+    if not evidence.get("photos"):
+        return True
+    return has_ladder(reqs) and len(evidence["photos"]) < min(judge_photos(cfg, reqs), evidence.get("photo_total") or 10**9)
 
 
 def judge_inline(cfg: Config) -> bool:
@@ -479,8 +492,8 @@ def evaluate_vehicle(cfg: Config, rule: ModelRule, facts: VehicleFacts, no_model
         reqs = requirements_for(rule, hard, elig if judge_text_on(cfg) else None)
         soft = manual_soft(rule, hard, facts, ocr, ocr_hints, evidence, mode="judge", eligibility=elig)
         flags = odd_flags(rule, hard, facts, ocr_hints, soft["hints"], eligibility=elig)
-        if needs_photos(reqs) and not evidence.get("photos") and photo_loader is not None and not evidence.get("images_pending"):
-            facts, evidence = photo_loader(facts)
+        if photo_loader is not None and not evidence.get("images_pending") and photos_short(cfg, reqs, evidence):
+            facts, evidence = photo_loader(facts, judge_photos(cfg, reqs))
             base["summary"] = summary_line(facts)
             hard = evaluate_hard(facts, rule)  # the page may name a different chassis
             if hard.status != PASS:
@@ -720,7 +733,7 @@ def judge_pending(cfg: Config, store: Store, model_codes: list[str] | None = Non
         use_text = elig if judge_text_on(cfg) else None
         reqs = [Requirement(**r) for r in soft.get("requirements", [])] or requirements_for(rule, hard, use_text)
         flags = soft["flags"] if "flags" in soft else odd_flags(rule, hard, facts, [], soft.get("hints") or [], eligibility=elig)
-        if needs_photos(reqs) and not evidence.get("photos"):
+        if photos_short(cfg, reqs, evidence):
             if browser is None:
                 soft["judge_notes"] = ["judge pending: the photos are needed; run `bot judge --pending` with a browser"]
                 store.update_soft(row["id"], soft)
@@ -729,7 +742,7 @@ def judge_pending(cfg: Config, store: Store, model_codes: list[str] | None = Non
                 full = fetch_facts(browser, cfg, row["ref_no"], cache)
                 full.ref_no = row["ref_no"]
                 full.seats, full.sheet_ocr = facts.seats, facts.sheet_ocr
-                evidence = download_evidence(browser, cfg, full, judge_photos(cfg), cache)
+                evidence = download_evidence(browser, cfg, full, judge_photos(cfg, reqs), cache)
                 facts = full
                 st.pages += 1
             except (NotLoggedIn, Cancelled):
