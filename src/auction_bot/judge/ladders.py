@@ -4,7 +4,10 @@ The order is fixed: the auction sheet first, then the photos, then the maker cat
 The sheet outranks the photos. A steering-wheel photo that is missing from a complete photo
 set means "no". A catalogue entry of "optional" or "none" means "no"; only "standard"
 confirms. A Welcab with no seat statement on the sheet, the photos or the catalogue fails.
-When the model gave no observation at all, the verdict is unclear, never a silent "no".
+The catalogue alone never makes a lot a Welcab: its seat system counts only for a lot the
+sheet or the photos call a Welcab, or for the catalogue grade the model names.
+When the model gave no observation at all, gave no sheet reading, or gave a state outside the
+table, the verdict is unclear, never a silent "no". Only a cruise note is read as negated.
 
 The model only reports what it saw at each step (`Observation`). It never decides a ladder:
 this module is the one place a ladder verdict is computed, from those observations and the
@@ -29,6 +32,7 @@ _NO_CRUISE_PHOTO = "no steering-wheel photo among the photos; some photos could 
 _NO_SEAT_PHOTO = "no seat photo among the photos; some photos could not be downloaded"
 _NO_SEATING = "no seating statement on the sheet, the photos or the catalogue"
 _NO_OBSERVATION = "model gave no observation"
+_NO_SHEET = "model gave no sheet reading"
 
 
 class StepObs(BaseModel):
@@ -121,6 +125,8 @@ def _cruise_block(maker: dict | None, kind: str, catalog_grade: str | None) -> t
     adaptive = ((row.get("adaptive") or "unknown"), row.get("name"), row.get("adaptive_mark") or "", row) if row else one("adaptive")
     if adaptive[0] == "standard":  # adaptive cruise is also cruise control
         return adaptive
+    if adaptive[0] == "mixed" and plain[0] in ("none", "optional"):
+        return adaptive  # some grades carry adaptive cruise and the lot's grade is not named: the catalogue cannot say
     return plain
 
 
@@ -129,30 +135,64 @@ def maker_cruise(maker: dict | None, kind: str, catalog_grade: str | None) -> tu
     return status, row
 
 
-def maker_seat(maker: dict | None, catalog_grade: str | None) -> tuple[str, dict | None]:
-    status, _grade, row = _seat_block(maker, catalog_grade)
+def maker_seat(maker: dict | None, catalog_grade: str | None, known_welcab: bool = False) -> tuple[str, dict | None]:
+    _verdict, status, _grade, row = _seat_block(maker, catalog_grade, known_welcab)
     return status, row
 
 
-def _seat_block(maker: dict | None, catalog_grade: str | None) -> tuple[str, str | None, dict | None]:
+def _welcab_systems(maker: dict) -> list[str]:
+    """The distinct Welcab seat systems the catalogue sells for the lot's model code. A finding stored before
+    `welcab_systems` existed is read from its grade rows (or, with none, from its single seat system)."""
+    block = maker.get("welcab") or {}
+    stored = block.get("welcab_systems")
+    if isinstance(stored, list):
+        return [s for s in stored if isinstance(s, str) and s != "not_welcab"]
+    out: list[str] = []
+    for g in maker.get("grades") or []:
+        s = g.get("seat_system") if isinstance(g, dict) else None
+        if isinstance(s, str) and s != "not_welcab" and s not in out:
+            out.append(s)
+    if not out and not maker.get("grades") and block.get("seat_system") in SEAT_PASS + SEAT_FAIL + ("welcab_unspecified",):
+        out.append(block["seat_system"])
+    return out
+
+
+def _seat_block(maker: dict | None, catalog_grade: str | None, known_welcab: bool
+                ) -> tuple[str | None, str, str | None, dict | None]:
+    """The Welcab maker step: (verdict, status, grade, row). Verdict None means no seating statement.
+
+    The catalogue alone never makes a lot a Welcab. For a lot the sheet or the photos call a Welcab
+    (`known_welcab`), a catalogue that sells one Welcab seat system decides by it. Otherwise (several systems,
+    or nothing says this car is a Welcab) only a catalogue grade the model named that is a Welcab row decides,
+    by its seat system; a named plain grade or no named grade gives no seating statement.
+    """
     if not maker:
-        return "unknown", None, None
+        return None, "unknown", None, None
     block = maker.get("welcab") or {}
     status = block.get("seat_system") or "unknown"
-    if status == "mixed":
-        row = _grade_row(maker, catalog_grade)
-        if row is not None:
-            return row.get("seat_system") or "unknown", row.get("name"), row
-    return status, block.get("grade"), None
+    systems = _welcab_systems(maker)
+    if known_welcab and len(systems) == 1:
+        system = systems[0]
+        row = next((g for g in maker.get("grades") or [] if isinstance(g, dict) and g.get("seat_system") == system), None)
+        grade = (row or {}).get("name") or (block.get("grade") if status == system else None)
+        return _seat_verdict(system), system, grade, row
+    row = _grade_row(maker, catalog_grade)
+    if row is None:
+        return None, status, None, None
+    named = row.get("seat_system") or "unknown"
+    if named in ("not_welcab", "unknown"):
+        return None, named, row.get("name"), row  # a plain grade: the catalogue says nothing about a seat
+    return _seat_verdict(named), named, row.get("name"), row
 
 
 # ---------------------------------------------------------------- one step's reading
 
-def _read_step(obs: dict | None, which: str, allowed: tuple[str, ...], default: str) -> tuple[StepObs, bool]:
-    """The step as the table reads it, and whether the model gave no state at all.
+def _read_step(obs: dict | None, which: str, allowed: tuple[str, ...], default: str) -> tuple[StepObs, str]:
+    """The step as the table reads it, and how it was read: "ok", "missing" (no state at all; it shows as
+    `default`) or "unknown" (a state outside the table; it shows as given, with "unknown state 'x'" as its
+    evidence). A missing or unknown step reads unclear wherever the ladder consults it.
 
-    Side fields are coerced one by one; a bad one never discards the step. An unknown state
-    reads as `default` with "unknown state 'x'" as its evidence.
+    Side fields are coerced one by one; a bad one never discards the step.
     """
     raw = obs.get(which) if isinstance(obs, dict) else None
     raw = raw if isinstance(raw, dict) else {}
@@ -165,10 +205,11 @@ def _read_step(obs: dict | None, which: str, allowed: tuple[str, ...], default: 
     adaptive = raw.get("adaptive")
     adaptive = adaptive if adaptive in ("yes", "no", "unknown") else "unknown"
     if not state:
-        return StepObs(state=default, evidence=_NO_OBSERVATION, photo_no=photo_no), True
+        return StepObs(state=default, evidence=_NO_OBSERVATION, photo_no=photo_no), "missing"
     if state not in allowed:
-        return StepObs(state=default, evidence=f"unknown state '{state}'", photo_no=photo_no), False
-    return StepObs(state=state, evidence=evidence, photo_no=photo_no, adaptive=adaptive), False
+        shown = state[:40]
+        return StepObs(state=shown, evidence=f"unknown state '{shown}'", photo_no=photo_no), "unknown"
+    return StepObs(state=state, evidence=evidence, photo_no=photo_no, adaptive=adaptive), "ok"
 
 
 def _step_line(step: dict) -> str:
@@ -210,16 +251,26 @@ def _fill_maker(step: dict, maker: dict | None, status: str, grade: str | None, 
 
 
 def _short_set(step: dict, text: str) -> None:
-    """The photo step could not be judged because photos are missing; keep any unknown-state note."""
-    old = step["evidence"]
-    step["evidence"] = f"{text}; {old}" if old.startswith("unknown state") else text
+    """The photo step could not be judged because photos are missing."""
+    step["evidence"] = text
 
 
 def _finish(req: Requirement, steps: list[dict], verdict: str, decided: int) -> LadderVerdict:
     steps[decided]["decided"] = True
-    if req.kind == "must" and req.negated:
+    if req.kind == "must" and req.negated and req.topic == TOPIC_CRUISE:  # a Welcab verdict is never inverted
         verdict = {"pass": "fail", "fail": "pass"}.get(verdict, verdict)
     return LadderVerdict(req.id, verdict, "; ".join(_step_line(s) for s in steps), steps)
+
+
+def _unreadable(req: Requirement, steps: list[dict], sheet_how: str, photo_how: str) -> LadderVerdict | None:
+    """Unclear when the sheet step cannot be read: the sheet outranks the photo, so a photo never stands in for it."""
+    if sheet_how == "missing":
+        if photo_how != "missing":
+            steps[0]["evidence"] = _NO_SHEET
+        return _finish(req, steps, "unclear", 0)
+    if sheet_how == "unknown":
+        return _finish(req, steps, "unclear", 0)
+    return None
 
 
 def _catalog_grade(obs: dict | None) -> str | None:
@@ -248,19 +299,22 @@ def _adaptive_reading(step: StepObs, weak: str) -> StepObs:
 def _resolve_cruise(req: Requirement, obs: dict | None, maker: dict | None, photos_complete: bool) -> LadderVerdict:
     adaptive_kind = req.topic_detail == "adaptive"
     kind = "adaptive" if adaptive_kind else "plain"
-    sheet, _sheet_missing = _read_step(obs, "sheet", CRUISE_SHEET, "not_mentioned")
-    photo, photo_missing = _read_step(obs, "photo", CRUISE_PHOTO, "not_visible")
+    sheet, sheet_how = _read_step(obs, "sheet", CRUISE_SHEET, "not_mentioned")
+    photo, photo_how = _read_step(obs, "photo", CRUISE_PHOTO, "not_visible")
     if adaptive_kind:
         sheet = _adaptive_reading(sheet, "not_mentioned")
         photo = _adaptive_reading(photo, "maybe")
     steps = _make_steps(sheet, photo)
 
+    unreadable = _unreadable(req, steps, sheet_how, photo_how)
+    if unreadable is not None:
+        return unreadable
     if sheet.state == "yes":
         return _finish(req, steps, "pass", 0)
     if sheet.state == "no":
         return _finish(req, steps, "fail", 0)
 
-    if photo_missing:
+    if photo_how != "ok":
         return _finish(req, steps, "unclear", 1)
     if photo.state == "yes":
         return _finish(req, steps, "pass", 1)
@@ -292,21 +346,25 @@ def _seat_verdict(state: str) -> str | None:
 
 
 def _resolve_welcab(req: Requirement, obs: dict | None, maker: dict | None, photos_complete: bool) -> LadderVerdict:
-    sheet, _sheet_missing = _read_step(obs, "sheet", WELCAB_SHEET, "not_mentioned")
-    photo, photo_missing = _read_step(obs, "photo", WELCAB_PHOTO, "not_visible")
+    sheet, sheet_how = _read_step(obs, "sheet", WELCAB_SHEET, "not_mentioned")
+    photo, photo_how = _read_step(obs, "photo", WELCAB_PHOTO, "not_visible")
     steps = _make_steps(sheet, photo)
 
+    unreadable = _unreadable(req, steps, sheet_how, photo_how)
+    if unreadable is not None:
+        return unreadable
     verdict = _seat_verdict(sheet.state)
     if verdict:
         return _finish(req, steps, verdict, 0)
-    if photo_missing:
+    if photo_how != "ok":
         return _finish(req, steps, "unclear", 1)
     verdict = _seat_verdict(photo.state)
     if verdict:
         return _finish(req, steps, verdict, 1)
 
-    status, grade, row = _seat_block(maker, _catalog_grade(obs))
-    verdict = _seat_verdict(status)
+    # Only welcab_unspecified / not_mentioned (sheet) and welcab_unspecified / not_visible (photo) reach the catalogue.
+    known_welcab = "welcab_unspecified" in (sheet.state, photo.state)
+    verdict, status, grade, row = _seat_block(maker, _catalog_grade(obs), known_welcab)
     if verdict:
         _fill_maker(steps[2], maker, status, grade, "", row)
         return _finish(req, steps, verdict, 2)

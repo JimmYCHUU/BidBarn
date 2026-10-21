@@ -17,8 +17,11 @@ SEAT_PASS = ("front_swivel", "front_lift_up", "second_row_lift_up")
 SEAT_FAIL = ("slope", "wheelchair_lift")
 
 CRUISE_WORDS = r"cruise(?!r)|クルーズ|クルコン|追従"
-WELCAB_WORDS = (r"welcab|well ?cab|wel+fare|wheel ?chair|swivel|rotating (?:passenger |front )?seat|lift[- ]?up|side lift|slope|ramp|"
-                r"ウェルキャブ|福祉|車いす|車椅子|クルマイス|回転シート|助手席回転|リフトアップ|スロープ")
+# A bare "lift up" / リフトアップ is a lifted 4WD, not a seat: topic detection and the Welcab hint need a seat word.
+# `seat_system` below keeps the bare forms, for catalogue grade names and approval sentences.
+WELCAB_WORDS = (r"welcab|well ?cab|wel+fare|wheel ?chair|swivel|rotating (?:passenger |front )?seat|"
+                r"lift[- ]?up ?(?:seat|シート)|side lift|slope|ramp|"
+                r"ウェルキャブ|福祉|車いす|車椅子|クルマイス|回転シート|助手席回転|助手席リフトアップ|サイドリフトアップ|リフトアップシート|スロープ")
 _CRUISE = re.compile(CRUISE_WORDS, re.I)
 _WELCAB = re.compile(WELCAB_WORDS, re.I)
 _ADAPTIVE = re.compile(r"(?i:radar|adaptive)|\bACC\b|追従")
@@ -41,6 +44,8 @@ def detect_topic(text: str) -> str | None:
 
 
 def is_negated(text: str) -> bool:
+    """Whether a note starts with no/not/without. Only cruise notes are read as negated: a Welcab note never is,
+    because the seat table already says which systems pass and which fail ("No ramp / slope type")."""
     return bool(_NEGATED.match(text or ""))
 
 

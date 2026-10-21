@@ -13,6 +13,13 @@ from tests.test_judge_pipeline import _stub
 from tests.test_pipeline_offline import FakeBrowser, cfg  # noqa: F401  (fixture)
 
 
+def _icon_for(html: str, text: str) -> str:
+    """The icon class of the requirement line whose bold text is `text` on the lot page."""
+    card = html.split("The model's judgement")[1]
+    line = card[:card.index(f"<b>{text}</b>")].rsplit("<li>", 1)[1]
+    return re.search(r'class="icon (mark-\w+)"', line).group(1)
+
+
 def _judged(cfg, monkeypatch, reply=None):
     cfg.sheet_check = "judge"
     cfg.judge = {"max_photos": 2}
@@ -143,6 +150,8 @@ def test_ladder_steps_numbered_photos_and_corrections(cfg, monkeypatch):
     assert 'class="steps"' in r.text and "<b>sheet</b>: not_mentioned" in r.text and 'data-zoom-photo="4"' in r.text and "bare spokes" in r.text
     assert 'id="photo-4"' in r.text and 'class="photo-no">4<' in r.text and 'data-zoom data-photo-no="1"' in r.text
     assert "step--decided" in r.text and "maker: not needed" not in r.text.split('class="steps"')[0]
+    assert _icon_for(r.text, "Cruise control") == "mark-bad"          # the icon follows the ladder's fail, not a missing model verdict
+    assert _icon_for(r.text, "No sticker paint") == "mark-ok"
     r = client.get("/review")
     assert "photo 4: no (bare spokes)" in r.text and "model: skip" in r.text   # the why-line and the pill
     r = client.post(f"/p/{pid}/decide", data={"action": "approve", "amount": "1240", "feedback_req": "r2", "feedback_note": "stalk is behind the wheel, photo 6", "via": "detail"})
@@ -169,8 +178,28 @@ def test_chip_ladder_shows_steps_badge_and_correction(cfg, monkeypatch):
     client = TestClient(create_app(cfg))
     r = client.get(f"/p/{pid}")
     assert "chip applies: <b>yes</b>" in r.text and r.text.count('class="steps"') == 2
+    assert _icon_for(r.text, "No cruise control") == "mark-unk"       # a chip that applies is an alert, as the badge
     r = client.get("/review")
     assert "chip  No cruise control -100K: " in r.text   # the row tooltip carries the chip mark
     client.post(f"/p/{pid}/decide", data={"action": "approve", "amount": "1240", "feedback_req": "chip:no-cruise-control",
                                           "feedback_note": "it has cruise, photo 6", "via": "detail"})
     assert any("chip applies yes:" in ln for ln in code_lines(cfg, "GDH206"))
+
+
+def test_chip_ladder_that_does_not_apply_shows_the_ok_icon(cfg, monkeypatch):
+    from tests.test_judge_pipeline import _ladder_fixture, _ladder_reply
+    cfg.catalog = {"enabled": False}
+    _ladder_fixture(cfg)
+    snap = cfg.snapshot_dir / "rules_test.json"
+    data = json.loads(snap.read_text(encoding="utf-8"))
+    data["guides"][0]["tree"].setdefault("modifiers", []).append({"id": 99, "variantId": None, "conditions": [], "amountJpyK": -100,
+                                                                  "note": "No cruise control", "active": True})
+    snap.write_text(json.dumps(data), encoding="utf-8")
+    reply = json.loads(_ladder_reply(photo_state="yes"))
+    reply["chips"] = [{"id": "chip:no-cruise-control", "applies": "yes", "evidence": "model guess"}]   # the ladder overrides the model
+    reply["observations"].append({"id": "chip:no-cruise-control", "sheet": {"state": "not_mentioned"},
+                                  "photo": {"state": "yes", "photo_no": 4, "evidence": "stalk on the column"}})
+    pid = _judged(cfg, monkeypatch, reply=json.dumps(reply))
+    r = TestClient(create_app(cfg)).get(f"/p/{pid}")
+    assert "chip applies: <b>no</b>" in r.text
+    assert _icon_for(r.text, "No cruise control") == "mark-ok" and _icon_for(r.text, "Cruise control") == "mark-ok"

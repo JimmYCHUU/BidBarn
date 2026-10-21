@@ -369,8 +369,9 @@ cases (odometer at the cap, conversions, sheet notes). It works like this:
 2. When the photos are needed the lot's page is opened and up to `judge.max_photos` photos are
    downloaded (only then; the scan stays fast). A lot with a cruise or Welcab requirement gets
    every photo instead, up to `judge.max_photos_ladder` (40), because the steering wheel or the
-   seat can be anywhere in the set. A cached bundle is extended with the missing photos. Photo
-   downloads are not paced, so such a lot sends up to 40 image requests back to back.
+   seat can be anywhere in the set. A cached bundle is extended with the missing photos, with a
+   quarter of a random `pace_seconds` draw between two image requests; a file on disk that is not
+   an image is left out of the bundle (and on disk), so the set reads short.
 3. The model receives the lot's facts, the OCR fields, Nichibo's translation, the requirements,
    the flags, the selected pair's (or, with none selected, each active pair's) SEV/MRE
    restriction text, the maker catalogue's grade table for the lot's model code (grade names,
@@ -395,12 +396,19 @@ cases (odometer at the cap, conversions, sheet notes). It works like this:
      photo set, is no. A short photo set (some photos could not be downloaded) reads review.
    - **Maker's catalogue.** Standard on that grade is yes. Optional or not fitted is no. No data,
      or grades that differ and the lot's grade cannot be named, reads review. When the model names
-     the lot's catalogue grade, that grade's mark decides; the Welcab seat block works the same way.
+     the lot's catalogue grade, that grade's mark decides.
 
    Adaptive cruise counts as cruise control; a note that says radar or adaptive needs adaptive
    specifically. A Welcab must have a front swivel/rotating, front lift-up or second-row side
    lift-up seat. A slope/ramp or wheelchair-lift Welcab, a plain car, and a Welcab with no seat
-   statement on the sheet, in the photos or in the catalogue are not eligible. A guide named
+   statement on the sheet, in the photos or in the catalogue are not eligible. The catalogue alone
+   never makes a lot a Welcab: when the sheet or the photos call the lot a Welcab without naming
+   the seat, a catalogue that sells one Welcab seat system for the model code decides by it; with
+   several systems, or when nothing on the sheet or in the photos says Welcab, only a catalogue
+   grade the model names that is a Welcab row decides, and a named plain grade or no named grade
+   is no seat statement. A Welcab note is never read as negated ("No ramp / slope type" is a seat
+   note); only a cruise note can be. A bare "lift up" (a lifted 4WD) does not make a note a Welcab
+   note; it needs a seat word. A guide named
    "... Welcab" with no Welcab note gets the seat requirement from its name; its text quotes the
    approval pair's sentences that name a seat system, or says "No approval text names the seat
    system; confirm on ROVER by hand." The model only reports what it sees at each step;
@@ -435,6 +443,8 @@ takes over and the name is a one-line config change. Google may use free-tier co
 improve its products; Groq states it does not train on it. Neither ever receives the bid grid.
 When no provider can answer, the lot still reaches you, marked "model unavailable", and
 `bot.cmd judge --pending` (or **Judge pending lots** on the Runs page) catches up later.
+A lot whose sheet notes hold only a SalesPoint now raises a flag ("sheet notes (SalesPoint)") and so
+costs a model call against these quotas.
 
 ## Standing instructions
 

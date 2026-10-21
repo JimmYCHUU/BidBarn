@@ -106,9 +106,13 @@
         {% for r in p.judge.requirements if r.kind != 'eligibility' %}
           {% set v = (j.requirements or []) | selectattr('id', 'equalto', r.id) | list | first %}
           {% set c = (j.chips or []) | selectattr('id', 'equalto', r.id) | list | first %}
+          {% set lad = p.ladders.get(r.id) %}
+          {% if lad %}{# a ladder decides the line: its verdict (musts) or whether the chip applies, as the triage badges #}
+          <li>{% if r.kind == 'chip' %}{{ icon('circle-check', 'mark-ok') if lad.applies == 'no' else icon('circle-alert', 'mark-unk') }}{% else %}{{ icon('circle-check', 'mark-ok') if lad.verdict == 'pass' else (icon('circle-x', 'mark-bad') if lad.verdict == 'fail' else icon('circle-alert', 'mark-unk')) }}{% endif %}
+          {% else %}
           <li>{{ icon('circle-check', 'mark-ok') if (v and v.verdict == 'pass') or (c and c.applies == 'no') else (icon('circle-x', 'mark-bad') if v and v.verdict == 'fail' else icon('circle-alert', 'mark-unk')) }}
+          {% endif %}
             <span><b>{{ r.text }}</b>{% if r.amount_k %} ({{ '%+d' % r.amount_k }}K chip){% endif %} <span class="muted">[{{ r.source }}]</span>
-            {% set lad = p.ladders.get(r.id) %}
             {% if lad %}<br>{% if r.kind == 'chip' %}chip applies: <b>{{ lad.applies }}</b>{% else %}<b>{{ lad.verdict }}</b>{% endif %}
             <ul class="steps">
               {% for st in lad.steps %}<li{% if st.decided %} class="step--decided"{% endif %}><b>{{ st.step }}</b>: {{ st.state }}{% if st.evidence %} <span class="muted">{{ st.evidence }}</span>{% endif %}{% if st.step == 'photo' and st.photo_no %} <a href="#photo-{{ st.photo_no }}" data-zoom-photo="{{ st.photo_no }}">photo {{ st.photo_no }}</a>{% endif %}{% if st.step == 'maker' and st.url %} <a href="{{ st.url }}" target="_blank" rel="noopener">{{ st.grade or 'catalogue' }}</a>{% if st.mark %} [{{ st.mark }}]{% endif %}{% endif %}</li>{% endfor %}

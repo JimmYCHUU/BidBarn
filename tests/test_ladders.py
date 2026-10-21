@@ -49,8 +49,20 @@ def test_incomplete_photo_set_and_unknown_states():
     v = resolve(CR, obs("r2", "not_mentioned", "not_visible"), STD, photos_complete=False)
     assert v.verdict == "unclear" and "could not be downloaded" in v.evidence
     v = resolve(CR, {"id": "r2", "sheet": {"state": "unsure"}, "photo": {"state": "kinda"}}, STD)
-    assert v.verdict == "fail" and "unknown state" in v.evidence   # unsure -> not_mentioned, kinda -> not_visible, complete set -> no
+    assert v.verdict == "unclear" and "unknown state 'unsure'" in v.evidence and v.steps[0]["decided"]   # never a silent no
+    v = resolve(CR, {"id": "r2", "sheet": {"state": "not_mentioned"}, "photo": {"state": "kinda"}}, STD)
+    assert v.verdict == "unclear" and "unknown state 'kinda'" in v.evidence and v.steps[1]["decided"]
+    v = resolve(WC, {"id": "r3", "sheet": {"state": "not_mentioned"}, "photo": {"state": "swivelish"}}, STD)
+    assert v.verdict == "unclear" and "unknown state 'swivelish'" in v.evidence
+    assert resolve(CR, {"id": "r2", "sheet": {"state": "yes"}, "photo": {"state": "kinda"}}, STD).verdict == "pass"   # the sheet decides first
     assert resolve(CR, None, STD).verdict == "unclear" and "no observation" in resolve(CR, None, STD).evidence
+
+
+@pytest.mark.parametrize("req,photo", [(CR, "yes"), (CR, "no"), (WC, "front_swivel"), (WC, "slope")])
+def test_missing_sheet_step_is_unclear_even_with_a_photo(req, photo):
+    for o in ({"id": req.id, "photo": {"state": photo, "photo_no": 3}}, {"id": req.id, "sheet": {"state": ""}, "photo": {"state": photo}}):
+        v = resolve(req, o, STD)
+        assert v.verdict == "unclear" and "model gave no sheet reading" in v.evidence and v.steps[0]["decided"]   # the sheet outranks the photo
 
 def test_mixed_maker_resolved_by_the_named_grade_and_adaptive_kind():
     assert resolve(CR, obs("r2", "not_mentioned", "maybe", grade="2.5 S Cパッケージ"), MIXED).verdict == "pass"
@@ -61,6 +73,16 @@ def test_mixed_maker_resolved_by_the_named_grade_and_adaptive_kind():
     assert resolve(ACC, obs("r4", "not_mentioned", "maybe"), OPT).verdict == "unclear"          # adaptive unknown in the catalogue
     assert maker_cruise({**NONE, "adaptive": {"status": "standard", "grade": "G", "mark": "◯"}}, "plain", None)[0] == "standard"
 
+
+def test_plain_cruise_not_fitted_but_adaptive_mixed_reads_mixed():
+    for plain in (NONE, OPT):
+        maker = {**plain, "adaptive": {"status": "mixed", "grade": None, "mark": ""}, "grades": MIXED["grades"]}
+        assert maker_cruise(maker, "plain", None) == ("mixed", None)
+        v = resolve(CR, obs("r2", "not_mentioned", "maybe"), maker)
+        assert v.verdict == "unclear" and v.steps[2]["state"] == "mixed"          # some grades carry adaptive: the catalogue cannot say
+        assert resolve(CR, obs("r2", "not_mentioned", "maybe", grade="2.5 S Cパッケージ"), maker).verdict == "pass"   # named: adaptive standard
+        assert resolve(CR, obs("r2", "not_mentioned", "maybe", grade="2.5 X"), maker).verdict == "fail"
+
 @pytest.mark.parametrize("sheet,photo,maker_seat,verdict", [
     ("front_swivel", "not_visible", "unknown", "pass"),
     ("second_row_lift_up", "slope", "unknown", "pass"),          # the sheet wins (Jim: side lift-up passes)
@@ -68,7 +90,9 @@ def test_mixed_maker_resolved_by_the_named_grade_and_adaptive_kind():
     ("not_welcab", "not_visible", "second_row_lift_up", "fail"),
     ("welcab_unspecified", "front_lift_up", "unknown", "pass"),
     ("welcab_unspecified", "wheelchair_lift", "unknown", "fail"),
-    ("not_mentioned", "not_visible", "second_row_lift_up", "pass"),
+    ("not_mentioned", "not_visible", "second_row_lift_up", "fail"),   # the catalogue alone never makes a lot a Welcab
+    ("welcab_unspecified", "not_visible", "second_row_lift_up", "pass"),   # a known Welcab: the one system decides
+    ("not_mentioned", "welcab_unspecified", "front_swivel", "pass"),
     ("welcab_unspecified", "not_visible", "slope", "fail"),
     ("welcab_unspecified", "not_visible", "unknown", "fail"),    # Jim: no seat statement anywhere = not eligible
     ("welcab_unspecified", "not_visible", "mixed", "fail"),
@@ -79,6 +103,47 @@ def test_welcab_ladder_golden_cases(sheet, photo, maker_seat, verdict):
     assert v.verdict == verdict
     if verdict == "fail" and maker_seat in ("unknown", "mixed") and sheet == "welcab_unspecified" and photo == "not_visible":
         assert "no seating statement" in v.evidence
+
+SIDE = "2.5 X サイドリフトアップチルトシート"
+# The 3BA-AGH30W page sells plain grades beside one Welcab system (the catalogue fixture's shape).
+SELLS_BOTH = {**STD, "welcab": {"seat_system": "mixed", "grade": None, "welcab_systems": ["second_row_lift_up"]},
+              "grades": [{"name": "2.5 X", "seat_system": "not_welcab", "url": "u1"}, {"name": SIDE, "seat_system": "second_row_lift_up", "url": "u2"}]}
+SEVERAL = {**STD, "welcab": {"seat_system": "mixed", "grade": None, "welcab_systems": ["front_swivel", "slope"]},
+           "grades": [{"name": "W", "seat_system": "front_swivel", "url": "u1"}, {"name": "S", "seat_system": "slope", "url": "u2"},
+                      {"name": "P", "seat_system": "not_welcab", "url": "u3"}]}
+
+
+def test_catalogue_alone_never_makes_a_welcab():
+    v = resolve(WC, obs("r3", "not_mentioned", "not_visible"), SELLS_BOTH)
+    assert v.verdict == "fail" and "no seating statement on the sheet, the photos or the catalogue" in v.evidence and v.steps[2]["decided"]
+    v = resolve(WC, obs("r3", "not_mentioned", "not_visible", grade=SIDE), SELLS_BOTH)
+    assert v.verdict == "pass" and v.steps[2]["grade"] == SIDE and v.steps[2]["url"] == "u2"
+    v = resolve(WC, obs("r3", "not_mentioned", "not_visible", grade="2.5 X"), SELLS_BOTH)
+    assert v.verdict == "fail" and "no seating statement" in v.evidence
+    # Every grade a Welcab with one system, still nothing on the sheet or the photos and no grade named: fail.
+    only = {**STD, "welcab": {"seat_system": "second_row_lift_up", "grade": SIDE, "welcab_systems": ["second_row_lift_up"]},
+            "grades": [{"name": SIDE, "seat_system": "second_row_lift_up", "url": "u2"}]}
+    assert resolve(WC, obs("r3", "not_mentioned", "not_visible"), only).verdict == "fail"
+    assert resolve(WC, obs("r3", "not_mentioned", "not_visible"), only, photos_complete=False).verdict == "unclear"   # short set: review
+
+
+def test_known_welcab_takes_the_single_system_or_needs_a_named_welcab_grade():
+    for sheet, photo in (("welcab_unspecified", "not_visible"), ("not_mentioned", "welcab_unspecified")):
+        v = resolve(WC, obs("r3", sheet, photo), SELLS_BOTH)
+        assert v.verdict == "pass" and v.steps[2]["state"] == "second_row_lift_up" and v.steps[2]["grade"] == SIDE
+        assert resolve(WC, obs("r3", sheet, photo), SEVERAL).verdict == "fail"                 # several systems, no grade named
+        assert resolve(WC, obs("r3", sheet, photo, grade="W"), SEVERAL).verdict == "pass"
+        assert resolve(WC, obs("r3", sheet, photo, grade="S"), SEVERAL).verdict == "fail"
+        v = resolve(WC, obs("r3", sheet, photo, grade="P"), SEVERAL)
+        assert v.verdict == "fail" and "no seating statement" in v.evidence                     # a plain grade says nothing about a seat
+    assert resolve(WC, obs("r3", "welcab_unspecified", "not_visible"), SEVERAL, photos_complete=False).verdict == "unclear"
+
+
+def test_a_negated_welcab_note_keeps_the_seat_table():
+    neg = Requirement("r5", "No ramp / slope type", "ladder", "must", topic=TOPIC_WELCAB, negated=True)
+    assert resolve(neg, obs("r5", "slope", "not_visible"), STD).verdict == "fail"
+    assert resolve(neg, obs("r5", "front_swivel", "not_visible"), STD).verdict == "pass"
+
 
 def test_negated_chip_mapping():
     assert chip_applies(CHIP, "pass") == "no" and chip_applies(CHIP, "fail") == "yes" and chip_applies(CHIP, "unclear") == "unclear"

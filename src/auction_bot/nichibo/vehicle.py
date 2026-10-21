@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import random
 import time
 from pathlib import Path
 
@@ -178,7 +179,7 @@ def download_evidence(browser: Browser, cfg: Config, facts: VehicleFacts, max_ph
             if p:
                 result["sheet"], result["sheet_url"] = str(p), facts.sheet_url
                 result["sheet_urls"] = list(known) + [facts.sheet_url]
-        _extend_bundle(result, out_dir, facts, max_photos, grab)
+        _extend_bundle(result, out_dir, facts, max_photos, grab, cfg.pace_seconds)
         result["reused"] = True
     else:
         if facts.sheet_url:
@@ -201,21 +202,36 @@ def download_evidence(browser: Browser, cfg: Config, facts: VehicleFacts, max_ph
     return result
 
 
+def _is_image_file(path: Path) -> bool:
+    try:
+        with path.open("rb") as fh:
+            return sniff_image(fh.read(16)) is not None
+    except OSError:
+        return False
+
+
 def _adopt_photos(result: dict, out_dir: Path) -> None:
-    """List every photo_NN file on disk in the bundle, so a stale list never causes a second fetch."""
+    """List every photo_NN image file on disk in the bundle, so a stale list never causes a second fetch.
+    A file that is not an image (a truncated or junk download) is left out of the bundle, and left on disk."""
     known = {Path(p).name for p in result.get("photos", [])}
     for f in sorted(out_dir.glob("photo_*.*")):
-        if f.name not in known:
+        if f.name not in known and _is_image_file(f):
             result.setdefault("photos", []).append(str(f))
     result["photos"] = sorted(result.get("photos", []), key=lambda x: Path(x).name)
 
 
-def _extend_bundle(result: dict, out_dir: Path, facts: VehicleFacts, max_photos: int, grab) -> None:
-    """Fetch the photos (up to `max_photos`) that have no file yet; `extended` counts only those newly fetched."""
+def _extend_bundle(result: dict, out_dir: Path, facts: VehicleFacts, max_photos: int, grab,
+                   pace: tuple[float, float] = (0.0, 0.0)) -> None:
+    """Fetch the photos (up to `max_photos`) that have no file yet; `extended` counts only those newly fetched.
+    Between two image fetches it waits a quarter of a random `pace_seconds` draw (a ladder lot fetches up to 40)."""
     fetched = 0
+    tried = 0
     for i in range(min(max_photos, len(facts.photo_urls))):
         if any(out_dir.glob(f"photo_{i:02d}.*")):
             continue
+        if tried:
+            time.sleep(random.uniform(float(pace[0]), float(pace[-1])) / 4)
+        tried += 1
         p = grab(facts.photo_urls[i], f"photo_{i:02d}")
         if p:
             result["photos"].append(str(p))

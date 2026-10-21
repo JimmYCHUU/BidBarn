@@ -60,10 +60,13 @@ class CatalogClient:
         self.fetched: list[str] = []
 
     def allowed(self, url: str) -> bool:
-        """Same scheme and host as base_url (no userinfo, no other port), a path under /catalog/, no ".." segment."""
+        """Same scheme and host as base_url (no userinfo, no other port), a path under /catalog/, no ".." segment,
+        no query string or fragment (the catalogue's own addresses carry neither, so nothing else can ride along)."""
         try:
             u, b = urlsplit(url), urlsplit(self.base_url)
             if u.scheme != b.scheme or u.netloc != b.netloc or u.username is not None or u.password is not None:
+                return False
+            if u.query or u.fragment or "?" in url or "#" in url:
                 return False
             path = unquote(unquote(u.path))
         except ValueError:

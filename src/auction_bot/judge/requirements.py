@@ -64,8 +64,10 @@ def requirements_for(rule: ModelRule, hard: HardResult | None = None,
     for i, text in enumerate(rule.text_rules, 1):
         topic = detect_topic(text)
         if topic:
+            # Negation applies to cruise notes only: the Welcab seat table already says what passes and fails.
+            negated = is_negated(text) if topic == TOPIC_CRUISE else False
             out.append(Requirement(f"r{i}", text, "ladder", "must", topic=topic,
-                                   topic_detail=cruise_kind(text) if topic == TOPIC_CRUISE else None, negated=is_negated(text)))
+                                   topic_detail=cruise_kind(text) if topic == TOPIC_CRUISE else None, negated=negated))
         else:
             out.append(Requirement(f"r{i}", text, classify(text), "must"))
     if welcab_guide(rule) and not any(r.topic == TOPIC_WELCAB for r in out):
@@ -81,7 +83,7 @@ def requirements_for(rule: ModelRule, hard: HardResult | None = None,
         m = _CHIP.match(t.strip())
         note, amount = (m.group("note").strip(), int(m.group("amount"))) if m else (t.strip(), None)
         topic = detect_topic(note)
-        if topic == TOPIC_CRUISE:  # only cruise chips route to the ladder; seat chips keep the model's answer
+        if topic == TOPIC_CRUISE:  # only cruise chips route to the ladder (and only cruise reads negation); seat chips keep the model's answer
             out.append(Requirement(f"chip:{note.lower().replace(' ', '-')}", note, "ladder", "chip", amount, topic=topic,
                                    topic_detail=cruise_kind(note), negated=is_negated(note)))
         else:

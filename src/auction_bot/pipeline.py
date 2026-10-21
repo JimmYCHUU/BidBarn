@@ -370,13 +370,18 @@ def judge_text_on(cfg: Config) -> bool:
 
 
 def eligibility_for(cfg: Config, rule: ModelRule, facts: VehicleFacts, ocr: dict | None) -> Eligibility | None:
-    """The lot's import eligibility against its variant's approval pair; None when the feature is off
-    or the guide lists no approvals for the variant. Information only, it never skips a lot."""
+    """The lot's import eligibility against its variant's approval pair; None when the feature is off,
+    the guide lists no approvals for the variant, or the check itself fails (logged; the lot still goes
+    to review). Information only, it never skips a lot."""
     if not eligibility_enabled(cfg):
         return None
-    variant = rule.resolve_variant(facts.chassis, facts.variant_text).variant
-    stale_days = int(_elig_cfg(cfg).get("stale_days") or 90)
-    return check_lot(rule, variant, facts, ocr, date.today(), stale_days)
+    try:
+        variant = rule.resolve_variant(facts.chassis, facts.variant_text).variant
+        stale_days = int(_elig_cfg(cfg).get("stale_days") or 90)
+        return check_lot(rule, variant, facts, ocr, date.today(), stale_days)
+    except Exception:  # a surprise in the approval data must not lose the lot
+        log.warning("eligibility check failed for %s (model code %s)", facts.ref_no, rule.model_code, exc_info=True)
+        return None
 
 
 _LOOK_AGAIN = ("catalogue sitemap unavailable", "catalogue lookup failed")  # a failed lookup, not an answer
@@ -642,6 +647,7 @@ class ReplayStats:
     needs_fetch: int = 0
     applied: int = 0
     changes: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)  # rows that raised; each is also a line in `changes`
 
 
 def reevaluate(cfg: Config, store: Store, model_codes: list[str] | None = None, apply: bool = False,
@@ -680,72 +686,85 @@ def reevaluate(cfg: Config, store: Store, model_codes: list[str] | None = None, 
     for row, rule in todo:
         report(quiet=True)  # the totals after the rows before this one
         st.checked += 1
-        facts = VehicleFacts.from_dict(json.loads(row["facts_json"] or "{}"))
-        old = (row["status"], row["bid_jpy_k"])
         label = f"#{row['id']} {row['model_code']} {(row['summary'] or '')[:60]}"
-        if row["stage"] == "card":
-            if card_check(rule, facts, cfg) is not None:
-                st.unchanged += 1
-                continue
-            # Passes the card checks now, but the detail page was never opened.
-            st.needs_fetch += 1
-            st.changes.append(f"{label}: card SKIP -> needs the detail page (next scan opens it)")
-            if apply:
-                store.supersede_pending(row["ref_no"], rule.guide_id)
-                store.add_proposal(ref_no=row["ref_no"], guide_id=rule.guide_id, model_code=rule.model_code,
-                                   snapshot=snap_path.name, rule_updated_at=rule.updated_at, status=NEEDS_REVIEW,
-                                   stage="card", summary=row["summary"], facts_json=facts.to_dict(),
-                                   hard_json={"checks": []}, run_id=row["run_id"],
-                                   soft_json={"mode": "manual", "images_pending": True, "checklist": [], "hints": [],
-                                              "reasons": ["passes the card checks under the current rules; the next scan opens the page"]})
-                st.applied += 1
-            continue
-        saved = load_saved_evidence(cfg, row["ref_no"])
         try:
-            parked = bool(json.loads(row["soft_json"] or "{}").get("images_pending"))
-        except json.JSONDecodeError:
-            parked = False
-        if parked and not (saved and saved.get("sheet")):
-            st.unchanged += 1  # still waiting for Nichibo's images; the next scan re-checks it
-            continue
-        out_dir = cfg.evidence_dir / _safe(row["ref_no"])
-        missing = {"dir": str(out_dir), "sheet": None, "photos": [], "failed": [], "placeholders": 1, "images_pending": True}
-        try:
-            prev_soft = json.loads(row["soft_json"] or "{}")
-        except json.JSONDecodeError:
-            prev_soft = {}
-        proposal = evaluate_vehicle(cfg, rule, facts, no_model, evidence_loader=lambda s=saved, m=missing: s or m,
-                                    previous_soft=prev_soft)
-        # A judge row whose requirements changed needs a fresh judgement: that counts as a change too.
-        # So does a recommendation the stored observations now resolve differently (ladders, catalogue), and a
-        # judgement sent back to the judge because photos arrived after it.
-        old = (*old, prev_soft.get("requirements_hash"), (prev_soft.get("eligibility") or {}).get("hash"),
-               prev_soft.get("recommendation"), prev_soft.get("proposed_bid_jpy_k"), bool(prev_soft.get("judge_pending")))
-        new_soft = proposal.get("soft_json") or {}
-        new = (proposal["status"], proposal["bid_jpy_k"], new_soft.get("requirements_hash"),
-               (new_soft.get("eligibility") or {}).get("hash"), new_soft.get("recommendation"),
-               new_soft.get("proposed_bid_jpy_k"), bool(new_soft.get("judge_pending")))
-        if new == old:
-            st.unchanged += 1
-            continue
-        st.changed += 1
-        why = ""
-        if old[:2] == new[:2]:
-            parts = []
-            if old[3] != new[3]:
-                parts.append("eligibility changed")
-            if old[2] != new[2]:
-                parts.append("requirements changed")
-            if not parts and old[4:] != new[4:]:
-                parts.append("photos arrived after the judgement" if new[6] and not old[6] else "recommendation changed")
-            why = f" ({' and '.join(parts)})" if parts else ""
-        st.changes.append(f"{label}: {old[0]} {old[1]} -> {new[0]} {new[1]}{why}")
-        if apply:
-            store.supersede_pending(row["ref_no"], rule.guide_id)
-            store.add_proposal(snapshot=snap_path.name, rule_updated_at=rule.updated_at, run_id=row["run_id"], **proposal)
-            st.applied += 1
+            _replay_row(cfg, store, st, row, rule, label, snap_path, no_model, apply)
+        except Cancelled:
+            raise
+        except Exception as exc:  # one bad row must not stop the replay of the others (as in `scan`)
+            st.errors.append(f"{label}: {exc}")
+            st.changes.append(f"{label}: {exc}")
+            log.exception("replay failed for %s", row["ref_no"])
     report()
     return st
+
+
+def _replay_row(cfg: Config, store: Store, st: ReplayStats, row, rule: ModelRule, label: str, snap_path: Path,
+                no_model: bool, apply: bool) -> None:
+    """Re-evaluate one stored proposal and count the outcome in `st` (superseding it when `apply`)."""
+    facts = VehicleFacts.from_dict(json.loads(row["facts_json"] or "{}"))
+    old = (row["status"], row["bid_jpy_k"])
+    if row["stage"] == "card":
+        if card_check(rule, facts, cfg) is not None:
+            st.unchanged += 1
+            return
+        # Passes the card checks now, but the detail page was never opened.
+        st.needs_fetch += 1
+        st.changes.append(f"{label}: card SKIP -> needs the detail page (next scan opens it)")
+        if apply:
+            store.supersede_pending(row["ref_no"], rule.guide_id)
+            store.add_proposal(ref_no=row["ref_no"], guide_id=rule.guide_id, model_code=rule.model_code,
+                               snapshot=snap_path.name, rule_updated_at=rule.updated_at, status=NEEDS_REVIEW,
+                               stage="card", summary=row["summary"], facts_json=facts.to_dict(),
+                               hard_json={"checks": []}, run_id=row["run_id"],
+                               soft_json={"mode": "manual", "images_pending": True, "checklist": [], "hints": [],
+                                          "reasons": ["passes the card checks under the current rules; the next scan opens the page"]})
+            st.applied += 1
+        return
+    saved = load_saved_evidence(cfg, row["ref_no"])
+    try:
+        parked = bool(json.loads(row["soft_json"] or "{}").get("images_pending"))
+    except json.JSONDecodeError:
+        parked = False
+    if parked and not (saved and saved.get("sheet")):
+        st.unchanged += 1  # still waiting for Nichibo's images; the next scan re-checks it
+        return
+    out_dir = cfg.evidence_dir / _safe(row["ref_no"])
+    missing = {"dir": str(out_dir), "sheet": None, "photos": [], "failed": [], "placeholders": 1, "images_pending": True}
+    try:
+        prev_soft = json.loads(row["soft_json"] or "{}")
+    except json.JSONDecodeError:
+        prev_soft = {}
+    proposal = evaluate_vehicle(cfg, rule, facts, no_model, evidence_loader=lambda s=saved, m=missing: s or m,
+                                previous_soft=prev_soft)
+    # A judge row whose requirements changed needs a fresh judgement: that counts as a change too.
+    # So does a recommendation the stored observations now resolve differently (ladders, catalogue), and a
+    # judgement sent back to the judge because photos arrived after it.
+    old = (*old, prev_soft.get("requirements_hash"), (prev_soft.get("eligibility") or {}).get("hash"),
+           prev_soft.get("recommendation"), prev_soft.get("proposed_bid_jpy_k"), bool(prev_soft.get("judge_pending")))
+    new_soft = proposal.get("soft_json") or {}
+    new = (proposal["status"], proposal["bid_jpy_k"], new_soft.get("requirements_hash"),
+           (new_soft.get("eligibility") or {}).get("hash"), new_soft.get("recommendation"),
+           new_soft.get("proposed_bid_jpy_k"), bool(new_soft.get("judge_pending")))
+    if new == old:
+        st.unchanged += 1
+        return
+    st.changed += 1
+    why = ""
+    if old[:2] == new[:2]:
+        parts = []
+        if old[3] != new[3]:
+            parts.append("eligibility changed")
+        if old[2] != new[2]:
+            parts.append("requirements changed")
+        if not parts and old[4:] != new[4:]:
+            parts.append("photos arrived after the judgement" if new[6] and not old[6] else "recommendation changed")
+        why = f" ({' and '.join(parts)})" if parts else ""
+    st.changes.append(f"{label}: {old[0]} {old[1]} -> {new[0]} {new[1]}{why}")
+    if apply:
+        store.supersede_pending(row["ref_no"], rule.guide_id)
+        store.add_proposal(snapshot=snap_path.name, rule_updated_at=rule.updated_at, run_id=row["run_id"], **proposal)
+        st.applied += 1
 
 
 @dataclass

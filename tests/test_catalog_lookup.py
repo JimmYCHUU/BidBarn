@@ -88,7 +88,9 @@ def test_lookup_cruise_and_welcab_from_fixture_pages(tmp_path):
     f = lookup(client, _facts(ocr={"model_code": "3BA-AGH30W"}), _rule(), {TOPIC_CRUISE, TOPIC_WELCAB})
     assert isinstance(f, CatalogFinding) and f.model_codes == ["3BA-AGH30W"] and f.urls == [f"{BASE}/catalog/toyota/3491/type/3BA-AGH30W/"]
     assert f.cruise["status"] == "standard" and f.cruise["mark"] == "標準装備" and f.adaptive["status"] == "standard"
-    assert f.welcab["seat_system"] == "second_row_lift_up" and "サイドリフトアップ" in f.welcab["grade"]
+    # The page sells plain grades beside the side lift-up Welcab: mixed, with the one Welcab system kept for the ladder.
+    assert f.welcab == {"seat_system": "mixed", "grade": None, "welcab_systems": ["second_row_lift_up"]}
+    assert any(g["seat_system"] == "not_welcab" for g in f.grades) and any("サイドリフトアップ" in g["name"] for g in f.grades)
     assert len(f.grades) == 5 and any(g["cruise"] == "standard" and g["name"] == "2.5 X" for g in f.grades)
     assert "grade pages failed" in f.note and f.key == finding_key(["3BA-AGH30W"], 2021, {TOPIC_CRUISE, TOPIC_WELCAB})
     d = f.to_dict()
@@ -97,7 +99,8 @@ def test_lookup_cruise_and_welcab_from_fixture_pages(tmp_path):
     # Welcab only: no grade page is fetched.
     client2, calls2 = _client(tmp_path / "b")
     w = lookup(client2, _facts(ocr={"model_code": "3BA-AGH30W"}), _rule(), {TOPIC_WELCAB})
-    assert w.cruise["status"] == "unknown" and w.welcab["seat_system"] == "second_row_lift_up" and not any("/fmc003/" in u for u in calls2)
+    assert w.cruise["status"] == "unknown" and w.welcab["seat_system"] == "mixed" and not any("/fmc003/" in u for u in calls2)
+    assert w.welcab["welcab_systems"] == ["second_row_lift_up"]
 
 
 def test_lookup_unknown_paths(tmp_path):
@@ -110,7 +113,7 @@ def test_lookup_unknown_paths(tmp_path):
     client, _ = _client(tmp_path / "c")
     old = lookup(client, _facts(year=2015, ocr={"model_code": "3BA-AGH30W"}), _rule(), {TOPIC_CRUISE})
     assert old.cruise["status"] == "unknown" and old.grades == []
-    assert unknown("x").welcab["seat_system"] == "unknown"
+    assert unknown("x").welcab == {"seat_system": "unknown", "grade": None, "welcab_systems": []}
 
 
 def test_client_refuses_lookalike_hosts_and_traversal(tmp_path):
@@ -120,6 +123,45 @@ def test_client_refuses_lookalike_hosts_and_traversal(tmp_path):
                 "http://www.kurumaerabi.com/catalog/", "https://www.kurumaerabi.com:8443/catalog/"):
         assert not client.allowed(bad) and client.get(bad) is None
     assert calls == [] and client.allowed(f"{BASE}/catalog/toyota/3491/type/3BA-AGH30W/")
+
+
+def test_client_refuses_a_query_string_or_a_fragment(tmp_path):
+    client, calls = _client(tmp_path)
+    page = f"{BASE}/catalog/toyota/3491/type/3BA-AGH30W/"
+    for bad in (page + "?ref=R123", page + "?", page + "#grades", page + "#"):
+        assert not client.allowed(bad) and client.get(bad) is None and "outside" in client.errors[bad]
+    assert calls == [] and client.allowed(page)
+
+
+def test_the_lots_own_chassis_page_is_used_alone(tmp_path):
+    client, calls = _client(tmp_path)
+    rule = parse_guide_tree({**_tree(), "modelCode": "GDH206"})
+    f = lookup(client, _facts(chassis="GDH206V"), rule, {TOPIC_WELCAB})
+    pages = [c for c in calls if "/type/" in c]
+    assert pages == [f"{BASE}/catalog/toyota/2522/type/3DF-GDH206V/"]                  # not the guide's GDH206K / GDH206M family
+    assert f.model_codes == ["GDH206V", "GDH206"]
+    client2, calls2 = _client(tmp_path / "b")
+    lookup(client2, _facts(chassis="GDH206Z"), rule, {TOPIC_WELCAB})                   # no page for the chassis: the family counts
+    assert sorted(c.rsplit("/type/", 1)[1] for c in calls2 if "/type/" in c) == ["3DF-GDH206K/", "3DF-GDH206M/", "3DF-GDH206V/"]
+
+
+def test_a_stop_between_catalogue_pages_ends_the_lookup_as_unknown(tmp_path, monkeypatch):
+    from auction_bot import progress
+    urls = [f"{BASE}/catalog/toyota/{i}/type/3BA-AGH30W/" for i in range(1, 4)]
+    sm = tmp_path / "sm.xml"
+    sm.write_text("<urlset>" + "".join(f"<url><loc>{u}</loc></url>" for u in urls) + "</urlset>", encoding="utf-8")
+    page = CAT / "type_3BA-AGH30W.html"
+    client, calls = _client(tmp_path, pages={f"{BASE}/catalog/xml-sitemap/type.xml": sm, **{u: page for u in urls}})
+    seen = []
+
+    def check_cancel():
+        seen.append(1)
+        if len(seen) > 1:
+            raise progress.Cancelled("stopped")
+    monkeypatch.setattr(progress, "check_cancel", check_cancel)
+    f = lookup(client, _facts(chassis="AGH30W"), _rule(), {TOPIC_WELCAB})
+    assert f.welcab["seat_system"] == "unknown" and f.note.startswith("catalogue lookup failed: stopped")
+    assert [c for c in calls if "/type/" in c] == [urls[0]]                               # the second page was never read
 
 
 def test_client_redirect_is_a_failure_and_a_later_success_clears_it(tmp_path):
@@ -172,7 +214,8 @@ def test_pooled_bare_code_path_matches_the_prefixed_one(tmp_path):
     client, _ = _client(tmp_path)
     f = lookup(client, _facts(chassis="AGH30W"), _rule(), {TOPIC_CRUISE, TOPIC_WELCAB})
     assert f.urls == [f"{BASE}/catalog/toyota/3491/type/3BA-AGH30W/"]
-    assert f.cruise["status"] == "standard" and f.welcab["seat_system"] == "second_row_lift_up" and len(f.grades) == 5
+    assert f.cruise["status"] == "standard" and f.welcab["seat_system"] == "mixed" and len(f.grades) == 5
+    assert f.welcab["welcab_systems"] == ["second_row_lift_up"]
     assert "404" in f.note and f.cruise is not f.adaptive
 
 

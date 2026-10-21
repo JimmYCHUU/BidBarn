@@ -537,6 +537,63 @@ def test_placeholder_and_failed_photos_are_recorded_once_and_retried(cfg, tmp_pa
     assert len(ev["photos"]) == 4 and ev["failed"] == [] and ev["placeholders"] == 0 and ev["extended"] == 2
 
 
+def test_adoption_skips_a_file_that_is_not_an_image(cfg, tmp_path):
+    from auction_bot.nichibo.vehicle import download_evidence, photos_complete
+    b, cache = _ScriptedBrowser(), _cache(tmp_path)
+    ev = download_evidence(b, cfg, _facts(3), 3, cache)
+    junk = Path(ev["dir"]) / "photo_03.jpg"
+    junk.write_bytes(b"<html>Service Unavailable</html>")   # a truncated download that never went through `grab`
+    ev = download_evidence(b, cfg, _facts(4), 4, cache)
+    assert len(ev["photos"]) == 3 and all(Path(p).name != "photo_03.jpg" for p in ev["photos"])
+    assert junk.exists() and not photos_complete(ev, 4)       # left on disk, and the set reads short (review), not complete
+
+
+def test_extension_paces_image_fetches(cfg, tmp_path, monkeypatch):
+    import auction_bot.nichibo.vehicle as veh
+    slept = []
+    monkeypatch.setattr(veh.time, "sleep", slept.append)
+    cfg.pace_seconds = (2.0, 2.0)
+    b, cache = _ScriptedBrowser(), _cache(tmp_path)
+    veh.download_evidence(b, cfg, _facts(4), 1, cache)
+    assert slept == []
+    ev = veh.download_evidence(b, cfg, _facts(4), 4, cache)
+    assert ev["extended"] == 3 and slept == [0.5, 0.5]       # a quarter of a pace draw between the three fetches
+
+
+def test_a_failing_eligibility_check_never_loses_the_lot(cfg, monkeypatch):
+    import auction_bot.pipeline as pl
+    cfg.eligibility = {"enabled": True, "judge_text": True, "stale_days": 90}
+    monkeypatch.setattr(pl, "check_lot", lambda *a, **k: (_ for _ in ()).throw(ValueError("bad approval data")))
+    store = Store(cfg.db_path)
+    stats = scan(cfg, FakeBrowser(), store, ["GDH206"], no_model=None, limit_per_model=1)
+    rows = store.list_proposals(decision="pending", status="NEEDS_REVIEW")
+    assert stats.errors == [] and len(rows) == 1 and json.loads(rows[0]["soft_json"])["eligibility"] is None
+    store.close()
+
+
+def test_replay_carries_on_past_a_row_that_raises(cfg, monkeypatch):
+    import auction_bot.pipeline as pl
+    store = Store(cfg.db_path)
+    scan(cfg, FakeBrowser(), store, ["GDH206"], limit_per_model=2)
+    snap = cfg.snapshot_dir / "rules_test.json"
+    data = json.loads(snap.read_text(encoding="utf-8"))
+    data["guides"][0]["tree"]["minGrade"] = 4.5     # both stored lots now change
+    snap.write_text(json.dumps(data), encoding="utf-8")
+    real, calls = pl.evaluate_vehicle, []
+
+    def flaky(*a, **k):
+        calls.append(1)
+        if len(calls) == 1:
+            raise RuntimeError("corrupt facts")
+        return real(*a, **k)
+    monkeypatch.setattr(pl, "evaluate_vehicle", flaky)
+    st = pl.reevaluate(cfg, store, ["GDH206"], apply=True)
+    assert len(calls) == 2 and len(st.errors) == 1 and "corrupt facts" in st.errors[0]
+    assert st.changed == 1 and st.applied == 1 and sum("corrupt facts" in c for c in st.changes) == 1
+    assert len(store.list_proposals(decision="pending", status="NEEDS_REVIEW")) == 1   # the failed row is left as it was
+    store.close()
+
+
 def test_photos_complete_cases():
     from auction_bot.nichibo.vehicle import photos_complete
     assert photos_complete({"photos": []}, 8)

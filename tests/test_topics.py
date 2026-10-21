@@ -23,6 +23,21 @@ def test_detect_topic_and_kind():
     assert is_negated("No cruise control") and is_negated("Without Welcab") and not is_negated("Cruise control, no sticker")
 
 
+def test_a_bare_lift_up_is_a_lifted_4wd_not_a_welcab():
+    assert detect_topic("No lift up kit") is None and detect_topic("4WD リフトアップ") is None
+    assert detect_topic("Side lift up seat only") == TOPIC_WELCAB and detect_topic("Lift-up seat") == TOPIC_WELCAB
+    assert detect_topic("助手席リフトアップシート") == TOPIC_WELCAB and detect_topic("サイドリフトアップ車") == TOPIC_WELCAB
+    msgs = [h["message"] for h in keyword_hints(VehicleFacts(ref_no="r", url="u", variant_text="XC LIFT UP 4WD"))]
+    assert "wheelchair / Welcab conversion mentioned" not in msgs
+    assert seat_system("助手席リフトアップシート") == "front_lift_up" and seat_system("LIFT UP") == "front_lift_up"   # grade names keep the bare form
+
+
+def test_a_welcab_note_is_never_negated():
+    reqs = {r.id: r for r in requirements_for(_rule(notes="No ramp / slope type|No cruise control"))}
+    assert reqs["r1"].topic == TOPIC_WELCAB and reqs["r1"].negated is False
+    assert reqs["r2"].topic == TOPIC_CRUISE and reqs["r2"].negated is True
+
+
 def test_seat_system_words():
     assert seat_system("2.5 X サイドリフトアップチルトシート") == "second_row_lift_up"
     assert seat_system("X SIDE LIFT UP SEAT 4WD") == "second_row_lift_up"
