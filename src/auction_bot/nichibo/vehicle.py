@@ -225,7 +225,10 @@ def _extend_bundle(result: dict, out_dir: Path, facts: VehicleFacts, max_photos:
 
 
 def photos_complete(evidence: dict, wanted: int) -> bool:
-    """True when the bundle holds every photo the page offers, up to `wanted`."""
+    """True when the bundle holds every photo the page offers, up to `wanted`. A bundle still waiting for
+    Nichibo's images (or replay's placeholder for a missing bundle) never is."""
+    if evidence.get("images_pending"):
+        return False
     total = evidence.get("photo_total")
     if not total:
         return not evidence.get("failed")

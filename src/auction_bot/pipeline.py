@@ -422,6 +422,12 @@ def _catalog_for(cfg: Config, facts: VehicleFacts, rule: ModelRule, reqs: list[R
     return found, (found if isinstance(found, dict) and found.get("key") == key else None)
 
 
+def _unseen_photos(cfg: Config, reqs: list[Requirement], evidence: dict, prev: dict) -> bool:
+    """The bundle now holds photos (within the photo cap) that the stored judgement never looked at."""
+    seen = max(0, len(prev.get("images_used") or []) - (1 if evidence.get("sheet") else 0))
+    return min(len(evidence.get("photos") or []), judge_photos(cfg, reqs)) > seen
+
+
 def _judge_fields(res) -> dict:
     """The soft_json fields one judge call fills (the scan's inline call and the pending pass)."""
     return dict(judgement=res.judgement, recommendation=res.recommendation, proposed_bid_jpy_k=res.proposed_bid_jpy_k,
@@ -566,17 +572,22 @@ def evaluate_vehicle(cfg: Config, rule: ModelRule, facts: VehicleFacts, no_model
                     catalog=catalog, ladders=[], photos_complete=complete)
         wanted = needs_judge(reqs, flags)
         prev = previous_soft or {}
+        stored = bool(prev.get("judgement")) and prev.get("requirements_hash") == rhash
+        new_photos = stored and _unseen_photos(cfg, reqs, evidence, prev)  # new evidence deserves a fresh look
         if not wanted:
             soft.update(recommendation="bid", judge_notes=["routine: nothing to look at beyond the grid; confirm"])
-        elif prev.get("judgement") and prev.get("requirements_hash") == rhash:
-            # The stored judgement still answers these requirements: re-resolve the ladders and decide, no call.
+        elif stored and not new_photos:
+            # The stored judgement still answers these requirements: re-resolve the ladders and decide, no call,
+            # with the photo set's completeness as the model saw it (not the bundle's today).
             from auction_bot.judge.candidates import candidates_for
             from auction_bot.judge.judge import redecide
-            for k in ("judgement", "candidates", "provider", "usage", "images_used"):
+            seen_complete = bool(prev.get("photos_complete", True))
+            cands = candidates_for(rule, facts, hard)
+            for k in ("judgement", "provider", "usage", "images_used"):
                 soft[k] = prev.get(k, soft.get(k))
-            rec, amount, notes, ladders = redecide(prev["judgement"], reqs, candidates_for(rule, facts, hard), hard,
-                                                   maker, complete)
-            soft.update(recommendation=rec, proposed_bid_jpy_k=amount, judge_notes=notes, ladders=ladders)
+            rec, amount, notes, ladders = redecide(prev["judgement"], reqs, cands, hard, maker, seen_complete)
+            soft.update(recommendation=rec, proposed_bid_jpy_k=amount, judge_notes=notes, ladders=ladders,
+                        candidates=[c.to_dict() for c in cands], photos_complete=seen_complete)
         elif judge_client is not None and judge_inline(cfg):
             from auction_bot.judge.judge import judge_lot
             res = judge_lot(judge_client, cfg, store, facts, rule, hard, evidence, ocr.to_dict() if ocr else None,
@@ -587,6 +598,8 @@ def evaluate_vehicle(cfg: Config, rule: ModelRule, facts: VehicleFacts, no_model
             (out_dir / "judge.json").write_text(json.dumps(res.to_dict(), indent=1, ensure_ascii=False), encoding="utf-8")
             log.info("   judge %s -> %s, proposed %s (%s)", res.provider or "unavailable", res.recommendation,
                      res.proposed_bid_jpy_k, "; ".join(res.notes)[:120])
+        elif new_photos:
+            soft.update(judge_pending=True, judge_notes=["photos arrived after the judgement; run `bot judge --pending`"])
         else:
             soft.update(judge_pending=True, judge_notes=["judge pending: run `bot judge --pending`"])
         (out_dir / "hard.json").write_text(json.dumps(hard.to_dict(), indent=1), encoding="utf-8")
@@ -704,13 +717,14 @@ def reevaluate(cfg: Config, store: Store, model_codes: list[str] | None = None, 
         proposal = evaluate_vehicle(cfg, rule, facts, no_model, evidence_loader=lambda s=saved, m=missing: s or m,
                                     previous_soft=prev_soft)
         # A judge row whose requirements changed needs a fresh judgement: that counts as a change too.
-        # So does a recommendation the stored observations now resolve differently (ladders, catalogue).
+        # So does a recommendation the stored observations now resolve differently (ladders, catalogue), and a
+        # judgement sent back to the judge because photos arrived after it.
         old = (*old, prev_soft.get("requirements_hash"), (prev_soft.get("eligibility") or {}).get("hash"),
-               prev_soft.get("recommendation"), prev_soft.get("proposed_bid_jpy_k"))
+               prev_soft.get("recommendation"), prev_soft.get("proposed_bid_jpy_k"), bool(prev_soft.get("judge_pending")))
         new_soft = proposal.get("soft_json") or {}
         new = (proposal["status"], proposal["bid_jpy_k"], new_soft.get("requirements_hash"),
                (new_soft.get("eligibility") or {}).get("hash"), new_soft.get("recommendation"),
-               new_soft.get("proposed_bid_jpy_k"))
+               new_soft.get("proposed_bid_jpy_k"), bool(new_soft.get("judge_pending")))
         if new == old:
             st.unchanged += 1
             continue
@@ -723,7 +737,7 @@ def reevaluate(cfg: Config, store: Store, model_codes: list[str] | None = None, 
             if old[2] != new[2]:
                 parts.append("requirements changed")
             if not parts and old[4:] != new[4:]:
-                parts.append("recommendation changed")
+                parts.append("photos arrived after the judgement" if new[6] and not old[6] else "recommendation changed")
             why = f" ({' and '.join(parts)})" if parts else ""
         st.changes.append(f"{label}: {old[0]} {old[1]} -> {new[0]} {new[1]}{why}")
         if apply:

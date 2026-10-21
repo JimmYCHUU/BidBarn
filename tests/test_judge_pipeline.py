@@ -4,6 +4,11 @@ from pathlib import Path
 
 import auction_bot.catalog.client as cat_client
 import auction_bot.judge.client as client_mod
+from auction_bot.config import cache_dir
+from auction_bot.nichibo.cache import PageCache
+from auction_bot.nichibo.facts import VehicleFacts
+from auction_bot.nichibo.parsers import parse_detail_page
+from auction_bot.nichibo.vehicle import download_evidence, photos_complete
 from auction_bot.pipeline import judge_pending, reevaluate, scan
 from auction_bot.store import Store
 from tests.test_catalog_lookup import PAGES
@@ -351,3 +356,94 @@ def test_catalog_finding_reuses_only_a_real_result(cfg, monkeypatch):
                   prev("catalogue lookup failed: boom"), {"catalog": off}, {}):
         assert pl.catalog_finding(cfg, facts, rule, reqs, again, client)["note"] == "fresh"
     assert looked == [client] * 5
+
+
+class ShortBrowser(FakeBrowser):
+    """Serves only the first three of the lot's ten photos; the others time out."""
+
+    def __init__(self):
+        super().__init__()
+        self.missing = set(parse_detail_page(self.detail_html, "https://x/lot").photo_urls[3:])
+
+    def get_bytes(self, url, headers=None):
+        if url in self.missing:
+            raise RuntimeError("timeout")
+        return super().get_bytes(url, headers)
+
+
+def _pending_row(store):
+    row = store.list_proposals(decision="pending", status="NEEDS_REVIEW")[0]
+    return row, json.loads(row["soft_json"])
+
+
+def _short_scan(cfg, monkeypatch):
+    """A cruise-ladder lot judged on 3 of its 10 photos, none of them showing the steering wheel."""
+    cfg.sheet_check = "judge"
+    cfg.catalog = {"enabled": False}
+    _ladder_fixture(cfg)
+    calls = []
+    _stub(monkeypatch, calls, reply=_ladder_reply(photo_state="not_visible", photo_no=None))
+    store = Store(cfg.db_path)
+    scan(cfg, ShortBrowser(), store, ["GDH206"], limit_per_model=1)
+    row, soft = _pending_row(store)
+    assert len(calls) == 1 and len(json.loads(row["evidence_json"])["photos"]) == 3
+    assert soft["photos_complete"] is False and soft["recommendation"] == "review" and soft["ladders"][0]["verdict"] == "unclear"
+    return store, calls
+
+
+def _fill_bundle(cfg, store, wanted=40):
+    """The bundle on disk gets every photo the page offers (a later download)."""
+    row, _ = _pending_row(store)
+    facts = VehicleFacts.from_dict(json.loads(row["facts_json"]))
+    return download_evidence(FakeBrowser(), cfg, facts, wanted, PageCache(cache_dir(cfg), cfg.cache_hours))
+
+
+def test_replay_keeps_the_completeness_the_model_saw(cfg, monkeypatch):
+    store, calls = _short_scan(cfg, monkeypatch)
+    assert reevaluate(cfg, store, ["GDH206"], apply=True).changed == 0 and len(calls) == 1
+    _, soft = _pending_row(store)
+    assert soft["recommendation"] == "review" and soft["ladders"][0]["verdict"] == "unclear"
+    store.close()
+
+
+def test_photos_that_arrive_after_the_judgement_send_the_lot_back_to_the_judge(cfg, monkeypatch):
+    store, calls = _short_scan(cfg, monkeypatch)
+    assert len(_fill_bundle(cfg, store)["photos"]) == 10
+    st = reevaluate(cfg, store, ["GDH206"], apply=True)
+    assert st.changed == 1 and st.applied == 1 and len(calls) == 1
+    assert st.changes[0].endswith("(photos arrived after the judgement)")
+    _, soft = _pending_row(store)
+    assert soft["judge_pending"] and soft["judgement"] is None and soft["recommendation"] == "review"
+    assert "photos arrived" in soft["judge_notes"][0] and soft["ladders"] == []
+    st = judge_pending(cfg, store, browser=FakeBrowser())
+    assert st.judged == 1 and st.pages == 0 and len(calls) == 2
+    _, soft = _pending_row(store)
+    assert soft["photos_complete"] is True and soft["recommendation"] == "skip"   # every photo, no steering wheel: no cruise
+    store.close()
+
+
+def test_replay_with_the_bundle_gone_keeps_the_stored_reading(cfg, monkeypatch):
+    store, calls = _short_scan(cfg, monkeypatch)
+    row, _ = _pending_row(store)
+    (Path(json.loads(row["evidence_json"])["dir"]) / "evidence.json").unlink()   # replay falls back to the placeholder bundle
+    assert reevaluate(cfg, store, ["GDH206"], apply=True).changed == 0 and len(calls) == 1
+    _, soft = _pending_row(store)
+    assert soft["photos_complete"] is False and soft["recommendation"] == "review"
+    store.close()
+
+
+def test_photos_beyond_the_cap_never_send_a_judged_lot_back(cfg, monkeypatch):
+    cfg.sheet_check = "judge"
+    cfg.judge = {"max_photos": 3, "inline": True}
+    calls = []
+    _stub(monkeypatch, calls)
+    store = Store(cfg.db_path)
+    scan(cfg, FakeBrowser(), store, ["GDH206"], limit_per_model=1)     # plain guide: the model saw the sheet and 3 photos
+    assert len(_fill_bundle(cfg, store)["photos"]) == 10               # say an earlier ladder rule filled the bundle
+    assert reevaluate(cfg, store, ["GDH206"], apply=True).changed == 0 and len(calls) == 1
+    store.close()
+
+
+def test_a_bundle_waiting_for_images_is_never_complete():
+    assert photos_complete({"images_pending": True, "photos": [], "failed": []}, 40) is False
+    assert photos_complete({"photos": [], "failed": []}, 40) is True
