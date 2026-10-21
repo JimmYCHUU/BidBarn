@@ -22,7 +22,7 @@ from auction_bot.judge.candidates import Candidate, candidates_for
 from auction_bot.judge.client import CallResult, JudgeClient, image_part, text_part
 from auction_bot.judge.ladders import LadderVerdict, Observation, chip_applies, resolve
 from auction_bot.judge.playbook import playbook_for
-from auction_bot.judge.requirements import Requirement, has_ladder, odd_flags, requirements_for, requirements_hash
+from auction_bot.judge.requirements import Requirement, judge_photos, odd_flags, requirements_for, requirements_hash
 from auction_bot.nichibo.facts import VehicleFacts
 from auction_bot.rules.hard import NEEDS_REVIEW, HardResult
 
@@ -381,7 +381,7 @@ def judge_lot(client: JudgeClient, cfg: Config, store, facts: VehicleFacts, rule
     result = JudgeResult(requirements=[r.to_dict() for r in reqs], flags=flags, candidates=[c.to_dict() for c in cands],
                          requirements_hash=requirements_hash(reqs, flags), proposed_bid_jpy_k=hard.bid_jpy_k, maker=maker)
     judge_cfg = getattr(cfg, "judge", None) or {}
-    max_photos = int(judge_cfg.get("max_photos_ladder") or 40) if has_ladder(reqs) else int(judge_cfg.get("max_photos") or 8)
+    max_photos = judge_photos(cfg, reqs)
     playbook = playbook_for(store, cfg, rule, facts).to_text()
     sheet = Path(evidence["sheet"]) if evidence.get("sheet") else None
     photos = [Path(p) for p in evidence.get("photos", [])]

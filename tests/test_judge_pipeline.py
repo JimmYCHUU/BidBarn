@@ -47,7 +47,7 @@ def test_judge_mode_opens_the_page_for_photos_and_stores_the_judgement(cfg, monk
     assert soft["checklist"] and soft["ocr"] is not None  # the reviewer's checklist is still there
     ev = json.loads(rows[0]["evidence_json"])
     assert len(ev["photos"]) >= 3 and (Path(ev["dir"]) / "judge.json").exists()
-    assert soft["images_used"][0] == "sheet.jpg" and len(soft["images_used"]) == 4  # sheet + 3 photos
+    assert soft["images_used"][0] == "sheet_2.jpg" and len(soft["images_used"]) == 4  # sheet + 3 photos
     assert calls[0]["images"] == 4 and "No sticker paint" in calls[0]["text"] and "Skip ambulance conversions" in calls[0]["text"]
     assert store.model_calls_today("gemini") == 2
     store.close()

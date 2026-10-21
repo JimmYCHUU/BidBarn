@@ -135,7 +135,7 @@ def test_scan_route1_end_to_end(cfg):
     r = client.get(f"/p/{p['id']}")
     assert r.status_code == 200
     assert "Your checklist" in r.text and "No sticker paint" in r.text and "Skip ambulance conversions" in r.text
-    assert "sheet.jpg" in r.text and "1,240" in r.text and "Open on Nichibo" in r.text  # one link to Nichibo, in the head
+    assert "sheet_2.jpg" in r.text and "1,240" in r.text and "Open on Nichibo" in r.text  # one link to Nichibo, in the head
     assert 'href="/guides/GDH206"' in r.text  # the lot links to its guide
     store.close()
 
@@ -201,7 +201,7 @@ def test_sheet_ocr_seats_skip(cfg, monkeypatch):
     assert any("model code reads GDH206K" in h["message"] for h in soft["hints"])  # listing says GDH206V
     client = TestClient(create_app(cfg))
     r = client.get(f"/p/{sheet_rows[0]['id']}")
-    assert r.status_code == 200 and "Skipped from the auction sheet" in r.text and "sheet.jpg" in r.text
+    assert r.status_code == 200 and "Skipped from the auction sheet" in r.text and "sheet_2.jpg" in r.text
     store.close()
 
 
@@ -448,3 +448,120 @@ def test_a_missing_eligibility_config_raises_nothing(cfg):
     soft = json.loads(store.list_proposals(decision="pending", status="NEEDS_REVIEW")[0]["soft_json"])
     assert soft.get("eligibility") is None
     store.close()
+
+
+# ---- download_evidence: extension, adoption, changed sheet, completeness ----
+
+class _ScriptedBrowser(FakeBrowser):
+    """Counts fetches per URL; `bad` maps a URL to bytes served instead of the JPEG, `boom` raises."""
+    def __init__(self):
+        super().__init__()
+        self.fetched: list[str] = []
+        self.bad: dict[str, bytes] = {}
+        self.boom: set[str] = set()
+
+    def get_bytes(self, url, headers=None):
+        self.fetched.append(url)
+        if url in self.boom:
+            raise RuntimeError("down")
+        if url in self.bad:
+            return self.bad[url], "image/gif"
+        return FAKE_JPEG, "image/jpeg"
+
+
+def _facts(n, sheet="https://x/sheet-a"):
+    return VehicleFacts(url="https://x/lot", ref_no="R1", sheet_url=sheet, photo_urls=[f"https://x/p{i}" for i in range(n)])
+
+
+def _cache(tmp_path):
+    from auction_bot.nichibo.cache import PageCache
+    return PageCache(tmp_path / "pc", 12.0)
+
+
+def test_extension_adopts_files_on_disk_and_fetches_only_missing(cfg, tmp_path):
+    from auction_bot.nichibo.vehicle import download_evidence
+    b, cache = _ScriptedBrowser(), _cache(tmp_path)
+    ev = download_evidence(b, cfg, _facts(6), 3, cache)
+    assert len(ev["photos"]) == 3 and ev["extended"] == 0 and ev["photo_total"] == 6
+    meta = Path(ev["dir"]) / "evidence.json"
+    stale = json.loads(meta.read_text(encoding="utf-8"))
+    stale["photos"] = []  # a card-stage download that never listed them
+    meta.write_text(json.dumps(stale), encoding="utf-8")
+    b.fetched.clear()
+    ev = download_evidence(b, cfg, _facts(6), 40, cache)
+    assert len(ev["photos"]) == 6 and ev["extended"] == 3 and ev["reused"]
+    assert b.fetched == ["https://x/p3", "https://x/p4", "https://x/p5"]
+    assert all(Path(p).exists() for p in ev["photos"]) and ev["photos"] == sorted(ev["photos"], key=lambda x: Path(x).name)
+    assert json.loads(meta.read_text(encoding="utf-8"))["photo_total"] == 6
+    b.fetched.clear()
+    again = download_evidence(b, cfg, _facts(6), 40, cache)
+    assert b.fetched == [] and again["extended"] == 0 and len(again["photos"]) == 6
+
+
+def test_changed_sheet_is_fetched_beside_the_old_one(cfg, tmp_path):
+    from auction_bot.nichibo.vehicle import download_evidence
+    b, cache = _ScriptedBrowser(), _cache(tmp_path)
+    first = download_evidence(b, cfg, _facts(0, "https://x/sheet-a"), 0, cache)
+    old = Path(first["sheet"])
+    ev = download_evidence(b, cfg, _facts(4, "https://x/sheet-b"), 3, cache)
+    assert Path(ev["sheet"]).name.startswith("sheet_2") and ev["sheet_url"] == "https://x/sheet-b"
+    assert old.exists() and Path(ev["sheet"]).exists() and len(ev["photos"]) == 3
+    n = len(b.fetched)
+    download_evidence(b, cfg, _facts(0, "https://x/sheet-a"), 0, cache)  # a sheet seen before is not fetched again
+    assert len(b.fetched) == n
+    ev = download_evidence(b, cfg, _facts(4, "https://x/sheet-c"), 3, cache)
+    assert Path(ev["sheet"]).name.startswith("sheet_3") and old.exists()
+
+
+def test_photo_total_is_kept_by_a_card_stage_download(cfg, tmp_path):
+    from auction_bot.nichibo.vehicle import download_evidence
+    b, cache = _ScriptedBrowser(), _cache(tmp_path)
+    download_evidence(b, cfg, _facts(5), 2, cache)
+    ev = download_evidence(b, cfg, _facts(0), 0, cache)
+    assert ev["photo_total"] == 5
+
+
+def test_placeholder_and_failed_photos_are_recorded_once_and_retried(cfg, tmp_path):
+    from auction_bot.nichibo.vehicle import download_evidence
+    b, cache = _ScriptedBrowser(), _cache(tmp_path)
+    download_evidence(b, cfg, _facts(2), 2, cache)
+    b.bad["https://x/p2"] = PLACEHOLDER_GIF
+    b.boom.add("https://x/p3")
+    ev = download_evidence(b, cfg, _facts(4), 4, cache)
+    assert len(ev["photos"]) == 2 and ev["placeholders"] == 1 and len(ev["failed"]) == 2
+    assert not list(Path(ev["dir"]).glob("photo_02.*"))
+    ev = download_evidence(b, cfg, _facts(4), 4, cache)  # retried, entries replaced not appended
+    assert len(ev["failed"]) == 2 and ev["extended"] == 0
+    b.bad.clear(); b.boom.clear()
+    ev = download_evidence(b, cfg, _facts(4), 4, cache)
+    assert len(ev["photos"]) == 4 and ev["failed"] == [] and ev["placeholders"] == 0 and ev["extended"] == 2
+
+
+def test_photos_complete_cases():
+    from auction_bot.nichibo.vehicle import photos_complete
+    assert photos_complete({"photos": []}, 8)
+    assert not photos_complete({"photos": [], "failed": [{"url": "u"}]}, 8)
+    assert photos_complete({"photo_total": 0, "photos": []}, 8)
+    assert not photos_complete({"photo_total": 0, "photos": [], "failed": [{"url": "u"}]}, 8)
+    assert not photos_complete({"photo_total": 10, "photos": list("abcdefgh")}, 40)
+    assert photos_complete({"photo_total": 10, "photos": list("abcdefgh")}, 8)
+
+
+def test_openai_route_still_downloads_max_photos_to_model_at_card_stage(cfg, monkeypatch):
+    import auction_bot.pipeline as pl
+    cfg.sheet_check = "openai"
+    cfg.max_photos_to_model = 4
+    seen = []
+    real = pl.download_evidence
+
+    def spy(browser, c, facts, n, cache=None):
+        seen.append(n)
+        return real(browser, c, facts, n, cache)
+    monkeypatch.setattr(pl, "download_evidence", spy)
+    store = Store(cfg.db_path)
+    try:
+        scan(cfg, FakeBrowser(), store, ["GDH206"], limit_per_model=1)
+    except Exception:
+        pass
+    store.close()
+    assert seen and seen[0] == 4

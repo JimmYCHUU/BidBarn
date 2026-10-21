@@ -116,28 +116,43 @@ def download_evidence(browser: Browser, cfg: Config, facts: VehicleFacts, max_ph
                       cache: PageCache | None = None) -> dict:
     """Save sheet + photos under evidence_dir/<ref_no>/. Returns paths and status.
 
-    A bundle downloaded within `cache_hours` that still has a real sheet is reused.
+    A bundle downloaded within `cache_hours` that still has a real sheet is reused. When it holds fewer
+    photos than wanted (and the page offers more) only the missing ones are fetched, and when the page
+    names a different sheet than the saved one the new sheet is fetched beside the old one. Nothing
+    already on disk is ever overwritten or removed.
     """
     out_dir = cfg.evidence_dir / _safe(facts.ref_no)
     out_dir.mkdir(parents=True, exist_ok=True)
     cache = cache or NoCache()
+    meta = out_dir / "evidence.json"
     saved = None
     if cache.enabled:
         found = load_saved_evidence(cfg, facts.ref_no)
-        meta = out_dir / "evidence.json"
         if found and found.get("sheet") and meta.exists() and (time.time() - meta.stat().st_mtime) < cache.max_age:
             saved = found
     if saved is not None:
-        want = min(max_photos, len(facts.photo_urls))
-        if max_photos == 0 or not facts.photo_urls or len(saved.get("photos", [])) >= want:
+        _adopt_photos(saved, out_dir)
+        known = set(saved.get("sheet_urls") or ([saved["sheet_url"]] if saved.get("sheet_url") else []))
+        sheet_changed = bool(facts.sheet_url and known and facts.sheet_url not in known)  # a sheet seen before is not new
+        if not sheet_changed and (max_photos == 0 or not facts.photo_urls
+                                  or len(saved["photos"]) >= min(max_photos, len(facts.photo_urls))):
+            before = dict(saved)
             saved["reused"] = True
-            saved.setdefault("photo_total", len(facts.photo_urls))
-            saved.setdefault("extended", 0)
+            saved["extended"] = 0
+            if facts.photo_urls:
+                saved["photo_total"] = len(facts.photo_urls)
+            if facts.sheet_url and not saved.get("sheet_url"):
+                saved["sheet_url"] = facts.sheet_url
+                saved["sheet_urls"] = [facts.sheet_url]
+            if {k: v for k, v in saved.items() if k != "reused"} != {k: v for k, v in before.items() if k != "reused"}:
+                meta.write_text(json.dumps(saved, indent=1), encoding="utf-8")
             return saved
     result: dict = saved if saved is not None else {
-        "dir": str(out_dir), "sheet": None, "photos": [], "failed": [], "placeholders": 0, "images_pending": False}
+        "dir": str(out_dir), "sheet": None, "sheet_url": "", "photos": [], "failed": [], "placeholders": 0,
+        "images_pending": False}
 
     def grab(url: str, stem: str) -> Path | None:
+        result["failed"] = [f for f in result["failed"] if f.get("url") != url]  # this pass replaces older entries
         try:
             data, ctype = browser.get_bytes(url)
         except Exception as exc:
@@ -148,7 +163,6 @@ def download_evidence(browser: Browser, cfg: Config, facts: VehicleFacts, max_ph
             result["failed"].append({"url": url, "error": f"not an image ({len(data)} bytes, {ctype})"})
             return None
         if is_placeholder(data):
-            result["placeholders"] += 1
             result["failed"].append({"url": url, "error": f"placeholder image ({len(data)} bytes); not published yet"})
             return None
         path = out_dir / f"{stem}{kind[1]}"
@@ -156,41 +170,64 @@ def download_evidence(browser: Browser, cfg: Config, facts: VehicleFacts, max_ph
         return path
 
     if saved is not None:
+        if sheet_changed:
+            n = 2
+            while any(out_dir.glob(f"sheet_{n}.*")):
+                n += 1
+            p = grab(facts.sheet_url, f"sheet_{n}")
+            if p:
+                result["sheet"], result["sheet_url"] = str(p), facts.sheet_url
+                result["sheet_urls"] = list(known) + [facts.sheet_url]
         _extend_bundle(result, out_dir, facts, max_photos, grab)
         result["reused"] = True
     else:
         if facts.sheet_url:
             p = grab(facts.sheet_url, "sheet")
             result["sheet"] = str(p) if p else None
+            result["sheet_url"] = facts.sheet_url
+            result["sheet_urls"] = [facts.sheet_url]
         for i, url in enumerate(facts.photo_urls[:max_photos]):
             p = grab(url, f"photo_{i:02d}")
             if p:
                 result["photos"].append(str(p))
         result["extended"] = 0
+    result["placeholders"] = sum(1 for f in result["failed"] if str(f.get("error", "")).startswith("placeholder image"))
+    if saved is None:
         result["images_pending"] = result["sheet"] is None and result["placeholders"] > 0
-    result["photo_total"] = len(facts.photo_urls)
+    if facts.photo_urls:
+        result["photo_total"] = len(facts.photo_urls)
     (out_dir / "facts.json").write_text(json.dumps(facts.to_dict(), indent=1, ensure_ascii=False), encoding="utf-8")
-    (out_dir / "evidence.json").write_text(json.dumps(result, indent=1), encoding="utf-8")
+    meta.write_text(json.dumps(result, indent=1), encoding="utf-8")
     return result
 
 
+def _adopt_photos(result: dict, out_dir: Path) -> None:
+    """List every photo_NN file on disk in the bundle, so a stale list never causes a second fetch."""
+    known = {Path(p).name for p in result.get("photos", [])}
+    for f in sorted(out_dir.glob("photo_*.*")):
+        if f.name not in known:
+            result.setdefault("photos", []).append(str(f))
+    result["photos"] = sorted(result.get("photos", []), key=lambda x: Path(x).name)
+
+
 def _extend_bundle(result: dict, out_dir: Path, facts: VehicleFacts, max_photos: int, grab) -> None:
-    """Add the photos a fresh bundle is missing, up to `max_photos`. Files already saved are never fetched or removed."""
-    before = len(result["photos"])
+    """Fetch the photos (up to `max_photos`) that have no file yet; `extended` counts only those newly fetched."""
+    fetched = 0
     for i in range(min(max_photos, len(facts.photo_urls))):
         if any(out_dir.glob(f"photo_{i:02d}.*")):
             continue
         p = grab(facts.photo_urls[i], f"photo_{i:02d}")
         if p:
             result["photos"].append(str(p))
+            fetched += 1
     result["photos"] = sorted(set(result["photos"]), key=lambda x: Path(x).name)
-    result["extended"] = len(result["photos"]) - before
+    result["extended"] = fetched
 
 
 def photos_complete(evidence: dict, wanted: int) -> bool:
     """True when the bundle holds every photo the page offers, up to `wanted`."""
     total = evidence.get("photo_total")
-    if total is None:
+    if not total:
         return not evidence.get("failed")
     return len(evidence.get("photos", [])) >= min(wanted, total)
 

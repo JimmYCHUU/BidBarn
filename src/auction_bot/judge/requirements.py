@@ -102,6 +102,14 @@ def has_ladder(reqs: list[Requirement]) -> bool:
     return any(r.source == "ladder" for r in reqs)
 
 
+def judge_photos(cfg, reqs: list[Requirement] | None = None) -> int:
+    """How many photos to keep and send: the ladder cap when an equipment ladder is in play, else the usual cap."""
+    judge = getattr(cfg, "judge", None) or {}
+    if has_ladder(reqs or []):
+        return int(judge.get("max_photos_ladder") or 40)
+    return int(judge.get("max_photos") or 8)
+
+
 def ladder_topics(reqs: list[Requirement]) -> set[str]:
     return {r.topic for r in reqs if r.source == "ladder" and r.topic}
 

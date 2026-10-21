@@ -30,7 +30,7 @@ from auction_bot.rules.hard import (NEEDS_REVIEW, PASS, SKIP, Check, allowed_sea
 from auction_bot.rules.eligibility import Eligibility, check_lot
 from auction_bot.rules.hints import keyword_hints
 from auction_bot.rules.instructions import detail_fields_used, instruction_check, split_override_lines
-from auction_bot.judge.requirements import has_ladder, needs_judge, needs_photos, odd_flags, requirements_for, requirements_hash
+from auction_bot.judge.requirements import has_ladder, judge_photos, needs_judge, needs_photos, odd_flags, requirements_for, requirements_hash
 from auction_bot.store import Store
 
 log = logging.getLogger("auction_bot.scan")
@@ -338,14 +338,6 @@ def _ocr_hints(ocr, facts: VehicleFacts) -> list[dict]:
 
 def judge_mode(cfg: Config) -> bool:
     return (cfg.sheet_check or "none").lower() == "judge"
-
-
-def judge_photos(cfg: Config, reqs: list[Requirement] | None = None) -> int:
-    """How many photos to keep: the ladder cap when an equipment ladder is in play, else the usual cap."""
-    judge = getattr(cfg, "judge", None) or {}
-    if has_ladder(reqs or []):
-        return int(judge.get("max_photos_ladder") or 40)
-    return int(judge.get("max_photos") or 8)
 
 
 def photos_short(cfg: Config, reqs: list[Requirement], evidence: dict) -> bool:
