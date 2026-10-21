@@ -420,3 +420,22 @@ def test_judge_pending_stops_when_signed_out_or_asked(cfg, monkeypatch, tmp_path
     assert events[-1]["done"] is True and events[-1]["checked"] == 2 and events[-1]["judged"] == 0
     assert all(json.loads(r["soft_json"])["judge_pending"] for r in store.list_proposals(decision="pending", status="NEEDS_REVIEW"))
     store.close()
+
+
+def test_manual_mode_carries_the_eligibility_result(cfg):
+    cfg.eligibility = {"enabled": True, "judge_text": True, "stale_days": 90}
+    store = Store(cfg.db_path)
+    scan(cfg, FakeBrowser(), store, ["GDH206"], no_model=None, limit_per_model=1)
+    soft = json.loads(store.list_proposals(decision="pending", status="NEEDS_REVIEW")[0]["soft_json"])
+    e = soft["eligibility"]
+    assert e["pair"]["label"] == "SEV-000813 / MRE-000233" and e["verdict"] in ("eligible", "confirm", "cannot_import") and e["hash"]
+    assert any(line.startswith("Import approval text:") and "4x4 Campervan only" in line for line in soft["checklist"])
+    store.close()
+
+
+def test_eligibility_off_by_default(cfg):
+    store = Store(cfg.db_path)
+    scan(cfg, FakeBrowser(), store, ["GDH206"], no_model=None, limit_per_model=1)
+    soft = json.loads(store.list_proposals(decision="pending", status="NEEDS_REVIEW")[0]["soft_json"])
+    assert soft.get("eligibility") is None
+    store.close()

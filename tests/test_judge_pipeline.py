@@ -142,3 +142,22 @@ def test_replay_keeps_or_refreshes_the_judgement(cfg, monkeypatch):
     st = judge_pending(cfg, store, browser=FakeBrowser())
     assert st.judged == 1 and st.pages == 0 and len(calls) == 2
     store.close()
+
+
+def test_replay_sees_an_eligibility_change(cfg, monkeypatch):
+    cfg.sheet_check = "judge"
+    cfg.eligibility = {"enabled": True, "judge_text": False}
+    calls = []
+    _stub(monkeypatch, calls)
+    store = Store(cfg.db_path)
+    scan(cfg, FakeBrowser(), store, ["GDH206"], limit_per_model=1)
+    assert reevaluate(cfg, store, ["GDH206"], apply=True).changed == 0
+    snap = cfg.snapshot_dir / "rules_test.json"
+    data = json.loads(snap.read_text(encoding="utf-8"))
+    for b in data["guides"][0]["tree"]["variants"][0]["blocks"]:
+        if b["selected"]:
+            b["sevVariantDetails"] = "4x4 Campervan only, 2 seats"
+    snap.write_text(json.dumps(data), encoding="utf-8")
+    st = reevaluate(cfg, store, ["GDH206"], apply=True)
+    assert st.changed == 1 and len(calls) == 1   # no model call for an eligibility text change in manual-text mode
+    store.close()

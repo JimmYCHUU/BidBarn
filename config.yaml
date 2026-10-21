@@ -50,6 +50,13 @@ judge:
       rpd: 800
       vision: false
 
+# Import eligibility (Jim, 2026-09-30): every lot is checked against the MRE/SEV pair behind its guide.
+# It never skips a lot; a failing lot stays in review with "cannot import" and the reason.
+eligibility:
+  enabled: true
+  judge_text: true     # the free model reads the pair's restriction text as a pre-fill
+  stale_days: 90       # a ROVER copy older than this is flagged on the lot
+
 # Refuse to propose or place when the rules snapshot is older than this.
 max_rules_age_hours: 12
 

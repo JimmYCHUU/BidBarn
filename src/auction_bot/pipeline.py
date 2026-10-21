@@ -9,6 +9,7 @@ import json
 import logging
 import re
 import time
+from datetime import date
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Callable
@@ -26,6 +27,7 @@ from auction_bot.nichibo.sheet_ocr import read_sheet
 from auction_bot.nichibo.vehicle import _safe, download_evidence, fetch_facts, load_saved_evidence
 from auction_bot.rules.hard import (NEEDS_REVIEW, PASS, SKIP, Check, allowed_seats, card_grid_check, card_prefilter,
                                     evaluate_hard)
+from auction_bot.rules.eligibility import Eligibility, check_lot
 from auction_bot.rules.hints import keyword_hints
 from auction_bot.rules.instructions import detail_fields_used, instruction_check, split_override_lines
 from auction_bot.judge.requirements import needs_judge, needs_photos, odd_flags, requirements_for, requirements_hash
@@ -115,18 +117,21 @@ def card_facts(card: VehicleFacts, rule: ModelRule) -> VehicleFacts:
                    photo_urls=list(card.photo_urls))
 
 
-def pending_images_proposal(rule: ModelRule, card: VehicleFacts, evidence: dict) -> dict:
+def pending_images_proposal(rule: ModelRule, card: VehicleFacts, evidence: dict, cfg: Config | None = None) -> dict:
     """Nichibo still serves placeholder images: park the lot until the next scan, no page opened.
 
     The card already carries year, odometer and grade, so the grid amount is worked out and stored
     with the parked lot (Jim, 2026-09-30: such a lot must be approvable at its grid value); the
     sheet and photos, when they arrive, can only move it to SKIP or change the modifiers."""
-    hard = evaluate_hard(card_facts(card, rule), rule)
+    facts = card_facts(card, rule)
+    hard = evaluate_hard(facts, rule)
+    elig = eligibility_for(cfg, rule, facts, None) if cfg is not None else None
     return dict(ref_no=card.ref_no, guide_id=rule.guide_id, model_code=rule.model_code, summary=summary_line(card),
                 status=NEEDS_REVIEW, stage="manual", facts_json=card.to_dict(), hard_json=hard.to_dict(),
                 bid_jpy_k=hard.bid_jpy_k, base_jpy_k=hard.base_jpy_k,
                 evidence_json=evidence,
                 soft_json={"mode": "manual", "images_pending": True, "checklist": [], "hints": [],
+                           "eligibility": elig.to_dict() if elig else None,
                            "reasons": ["Nichibo has not published the sheet and photos yet (placeholder images); "
                                        "the next scan re-checks this vehicle automatically"]})
 
@@ -255,7 +260,7 @@ def scan(cfg: Config, browser: Browser, store: Store, model_codes: list[str] | N
                     stats.pending += 1
                     store.supersede_pending(card.ref_no, rule.guide_id)
                     store.add_proposal(snapshot=snap_path.name, rule_updated_at=rule.updated_at, run_id=run,
-                                       **pending_images_proposal(rule, card, evidence))
+                                       **pending_images_proposal(rule, card, evidence, cfg))
                     stats.review += 1
                     log.info("   %s -> images not published yet | sheet %.1fs, no page opened", summary_line(card), t_sheet)
                     report()
@@ -343,7 +348,29 @@ def judge_inline(cfg: Config) -> bool:
     return bool((getattr(cfg, "judge", None) or {}).get("inline", True))
 
 
-def manual_soft(rule: ModelRule, hard, facts: VehicleFacts, ocr, ocr_hints: list[dict], evidence: dict, mode: str = "manual") -> dict:
+def eligibility_enabled(cfg: Config) -> bool:
+    return bool((getattr(cfg, "eligibility", None) or {}).get("enabled", False))
+
+
+def eligibility_for(cfg: Config, rule: ModelRule, facts: VehicleFacts, ocr: dict | None) -> Eligibility | None:
+    """The lot's import eligibility against its variant's approval pair; None when the feature is off
+    or the guide lists no approvals for the variant. Information only, it never skips a lot."""
+    if not eligibility_enabled(cfg):
+        return None
+    variant = rule.resolve_variant(facts.chassis, facts.variant_text).variant
+    stale_days = int(cfg.eligibility.get("stale_days", 90))
+    return check_lot(rule, variant, facts, ocr, date.today(), stale_days)
+
+
+def _eligibility_lines(elig: Eligibility) -> list[str]:
+    label = (elig.pair or {}).get("label") or "no selected pair"
+    lines = [f"Import approval ({label}): {c.name} {c.state}: {c.detail}"
+             for c in elig.checks if c.state in ("fail", "unclear")]
+    return lines + [f"Import approval text: {t['text']}" for t in elig.texts]
+
+
+def manual_soft(rule: ModelRule, hard, facts: VehicleFacts, ocr, ocr_hints: list[dict], evidence: dict, mode: str = "manual",
+                eligibility: Eligibility | None = None) -> dict:
     """The reviewer's checklist and hints for one lot (route 1, and the base of the judge's row)."""
     free_lines, instructions, bad_lines = split_override_lines(rule)
     checklist = list(rule.text_rules) + free_lines
@@ -364,6 +391,8 @@ def manual_soft(rule: ModelRule, hard, facts: VehicleFacts, ocr, ocr_hints: list
         checklist.insert(0, f"Judged from the search card and the sheet, without the listing page: the guide's "
                             f"{hard.variant_name or 'default'} variant covers every {rule.model_code} chassis. "
                             f"Check the model code on the sheet if in doubt; placement re-reads the page anyway.")
+    if eligibility is not None:
+        checklist += _eligibility_lines(eligibility)
     for t in hard.toggles:
         checklist.append(f"Dashboard chip, apply by changing the amount if it fits: {t}")
     reasons = ["sheet and photos to be judged by the reviewer (sheet_check: none)"] if mode == "manual" else []
@@ -376,7 +405,8 @@ def manual_soft(rule: ModelRule, hard, facts: VehicleFacts, ocr, ocr_hints: list
     elif not evidence.get("sheet"):
         reasons.append("auction sheet image could not be downloaded; open it on Nichibo")
     return {"status": NEEDS_REVIEW, "reasons": reasons, "checklist": checklist, "hints": hints, "mode": mode,
-            "images_pending": images_pending, "ocr": ocr.to_dict() if ocr else None}
+            "images_pending": images_pending, "ocr": ocr.to_dict() if ocr else None,
+            "eligibility": eligibility.to_dict() if eligibility else None}
 
 
 def evaluate_vehicle(cfg: Config, rule: ModelRule, facts: VehicleFacts, no_model: bool,
@@ -423,9 +453,11 @@ def evaluate_vehicle(cfg: Config, rule: ModelRule, facts: VehicleFacts, no_model
                             soft_json={"mode": "manual", "ocr": ocr.to_dict(), "hints": ocr_hints,
                                        "reasons": ["skipped from the auction sheet: " + "; ".join(hard.reasons)]})
 
+    elig = eligibility_for(cfg, rule, facts, ocr.to_dict() if ocr else None)
+
     if no_model:
         # Route 1: the reviewer judges the sheet. Give them the checklist and keyword hints.
-        soft = manual_soft(rule, hard, facts, ocr, ocr_hints, evidence)
+        soft = manual_soft(rule, hard, facts, ocr, ocr_hints, evidence, eligibility=elig)
         (out_dir / "hard.json").write_text(json.dumps(hard.to_dict(), indent=1), encoding="utf-8")
         return dict(base, status=NEEDS_REVIEW, stage="manual", bid_jpy_k=hard.bid_jpy_k, base_jpy_k=hard.base_jpy_k,
                     facts_json=facts.to_dict(), hard_json=hard.to_dict(), evidence_json=evidence, soft_json=soft)
@@ -433,7 +465,7 @@ def evaluate_vehicle(cfg: Config, rule: ModelRule, facts: VehicleFacts, no_model
     if judge_mode(cfg):
         # The judgement layer: what to look at, whether the photos are needed, whether to ask the model.
         reqs = requirements_for(rule, hard)
-        soft = manual_soft(rule, hard, facts, ocr, ocr_hints, evidence, mode="judge")
+        soft = manual_soft(rule, hard, facts, ocr, ocr_hints, evidence, mode="judge", eligibility=elig)
         flags = odd_flags(rule, hard, facts, ocr_hints, soft["hints"])
         if needs_photos(reqs) and not evidence.get("photos") and photo_loader is not None and not evidence.get("images_pending"):
             facts, evidence = photo_loader(facts)
@@ -443,8 +475,9 @@ def evaluate_vehicle(cfg: Config, rule: ModelRule, facts: VehicleFacts, no_model
                 status = NEEDS_REVIEW if hard.status == NEEDS_REVIEW else SKIP
                 return dict(base, status=status, stage="hard", bid_jpy_k=hard.bid_jpy_k, base_jpy_k=hard.base_jpy_k,
                             facts_json=facts.to_dict(), hard_json=hard.to_dict(), evidence_json=evidence)
+            elig = eligibility_for(cfg, rule, facts, ocr.to_dict() if ocr else None)
             reqs = requirements_for(rule, hard)
-            soft = manual_soft(rule, hard, facts, ocr, ocr_hints, evidence, mode="judge")
+            soft = manual_soft(rule, hard, facts, ocr, ocr_hints, evidence, mode="judge", eligibility=elig)
             flags = odd_flags(rule, hard, facts, ocr_hints, soft["hints"])
             (out_dir / "facts.json").write_text(json.dumps(facts.to_dict(), indent=1, ensure_ascii=False), encoding="utf-8")
         rhash = requirements_hash(reqs, flags)
@@ -588,8 +621,10 @@ def reevaluate(cfg: Config, store: Store, model_codes: list[str] | None = None, 
         proposal = evaluate_vehicle(cfg, rule, facts, no_model, evidence_loader=lambda s=saved, m=missing: s or m,
                                     previous_soft=prev_soft)
         # A judge row whose requirements changed needs a fresh judgement: that counts as a change too.
-        old = (*old, prev_soft.get("requirements_hash"))
-        new = (proposal["status"], proposal["bid_jpy_k"], (proposal.get("soft_json") or {}).get("requirements_hash"))
+        old = (*old, prev_soft.get("requirements_hash"), (prev_soft.get("eligibility") or {}).get("hash"))
+        new_soft = proposal.get("soft_json") or {}
+        new = (proposal["status"], proposal["bid_jpy_k"], new_soft.get("requirements_hash"),
+               (new_soft.get("eligibility") or {}).get("hash"))
         if new == old:
             st.unchanged += 1
             continue
