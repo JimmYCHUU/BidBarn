@@ -155,10 +155,10 @@ Enforced in code, not by convention. The full list for anyone touching the code 
   hash, so the pending pass redoes its judgement: one model call per such lot, against the
   free-tier daily limits. The equipment ladders add new requirement fields, so the first apply
   after that change supersedes every stored judge lot once more and `bot judge --pending`
-  re-judges them (one model call each). Replay never contacts the maker catalogue. A lot whose
-  photo bundle grew after its judgement goes back to the pending pass (the change line says
-  "photos arrived after the judgement") instead of re-reading the old observations. Day-one
-  order: `bot replay` (dry), `bot replay --apply`, `bot judge --pending`.
+  re-judges them (one model call each). Replay never contacts the maker catalogue. In replay and
+  in runs without an inline judge, a lot whose photo bundle grew after its judgement goes back to
+  the pending pass (the change line says "photos arrived after the judgement") instead of
+  re-reading the old observations; a scan with an inline judge re-judges such a lot at once.
 - **RULE-6 Learning only tightens.** Telemetry, `skip:` lines, `bot insights` and
   `bot learn` can add skips, ordering and pre-fills. Nothing learned can approve a bid.
 
@@ -351,7 +351,7 @@ Recorded here so the code and the team agree. Change the code only when this lis
 | Year | Nichibo's "Year of Registration" |
 | Detail page | Opened only when the guide's variants differ by chassis suffix (GDH206V / GDH206K), a modifier depends on the colour, a skip line needs a page-only fact, or the search card lacks a fact. Otherwise the lot is judged from the card and the sheet; placement re-opens the page and re-verifies it anyway |
 | Card-stage ceiling | A lot whose start price is above the highest bid any variant could reach (cell plus every positive modifier) is skipped before anything is downloaded |
-| Cruise control | Judged by a ladder, in this order (Jim, 2026-10-20): the sheet (yes is yes; a bare "CC" is not cruise control), then the steering-wheel photo (none visible, or no wheel photo on a complete set, is no), then the maker's catalogue (standard on that grade is yes; optional or not fitted is no; no data or differing grades is review). Adaptive cruise counts; a note that says radar or adaptive needs adaptive |
+| Cruise control | Judged by a ladder, in this order (Jim, 2026-10-20): the sheet (yes is yes; a bare "CC" is not cruise control), then the steering-wheel photo (none visible, or no wheel photo on a complete set, is no), then the maker's catalogue (standard on that grade is yes; optional or not fitted is no; no data, or differing grades when the lot's grade cannot be named, is review). Adaptive cruise counts; a note that says radar or adaptive needs adaptive |
 | Welcab seats | A Welcab must have a front swivel/rotating, front lift-up or second-row side lift-up seat. A slope/ramp or wheelchair-lift Welcab, a plain car, or a Welcab with no seat statement on the sheet, in the photos or in the catalogue is not eligible. Same ladder order (Jim, 2026-10-20) |
 | Images not published yet | The lot is parked until the next scan, without opening its page. It keeps its grid amount from the card, so it can be approved; the sheet and photos, when they arrive, can only skip it or change the modifiers (Jim, 2026-09-30) |
 
@@ -359,7 +359,8 @@ Recorded here so the code and the team agree. Change the code only when this lis
 
 With `sheet_check: judge` in `config.yaml`, a free hosted vision model reads each lot's photos
 and sheet against the guide's own requirements and decides what a rule cannot: dark seats or
-not, leather or cloth, the Pro Pilot button on the steering wheel, an Autech badge, and the odd
+not, leather or cloth, the Pro Pilot button on the steering wheel, cruise control, the Welcab
+front seat, an Autech badge, and the odd
 cases (odometer at the cap, conversions, sheet notes). It works like this:
 
 1. The guide's text rules, chips and standing instructions become **requirements**, each with
@@ -393,7 +394,8 @@ cases (odometer at the cap, conversions, sheet notes). It works like this:
    - **Steering-wheel photo.** No cruise control visible, or no wheel photo at all on a complete
      photo set, is no. A short photo set (some photos could not be downloaded) reads review.
    - **Maker's catalogue.** Standard on that grade is yes. Optional or not fitted is no. No data,
-     or grades that differ, reads review.
+     or grades that differ and the lot's grade cannot be named, reads review. When the model names
+     the lot's catalogue grade, that grade's mark decides; the Welcab seat block works the same way.
 
    Adaptive cruise counts as cruise control; a note that says radar or adaptive needs adaptive
    specifically. A Welcab must have a front swivel/rotating, front lift-up or second-row side

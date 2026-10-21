@@ -95,6 +95,7 @@ for `catalog.cache_days` (90).
 | なし, ー, -, × | none |
 | blank, anything else | unknown (the catalogue says nothing; never "none") |
 
+  A mark containing 円 (a price) is read as unknown and never reaches the prompt.
   For `福祉車両`, ◯ marks a Welcab grade; its seat system comes from the grade's name.
 - At most 6 model-code pages are read per lookup. Model codes whose bare part is shorter than 4
   characters or has no digit are ignored.

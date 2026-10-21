@@ -72,10 +72,14 @@ hard constraints. Do not weaken them, work around them, or "temporarily" disable
   glossary reads CC as car stereo). 2) The steering-wheel photo: no cruise control visible, or no wheel
   photo at all on a complete photo set = no; a short photo set (some photos could not be downloaded)
   reads review. 3) The maker's catalogue: standard on that grade = yes; optional or not fitted = no; no
-  data, or grades that differ = review. Adaptive cruise counts as cruise control; a note that says
+  data, or grades that differ and the lot's grade cannot be named = review (when the model names the
+  lot's catalogue grade, that grade's mark decides, and the Welcab seat block works the same way).
+  Adaptive cruise counts as cruise control; a note that says
   radar/adaptive needs adaptive specifically. A Welcab must have a front swivel/rotating, front lift-up
   or second-row side lift-up seat; a slope/ramp or wheelchair-lift Welcab, a plain car, or a Welcab with
-  no seat statement on the sheet, in the photos or in the catalogue is not eligible. A guide named
+  no seat statement on the sheet, in the photos or in the catalogue is not eligible (a Welcab with no
+  seat statement anywhere fails on a complete photo set; on a short photo set it reads review, like
+  cruise control). A guide named
   "... Welcab" with no Welcab note gets the seat requirement from its name. The model only reports what
   it sees per step (`judge/ladders.py` decides); a missing or malformed observation reads review, never a
   yes. Do not move a step or change a verdict without asking Jim.
@@ -130,7 +134,7 @@ hard constraints. Do not weaken them, work around them, or "temporarily" disable
   model providers: its model-code sitemap, model-code pages and grade pages. Requests are allow-listed to
   `/catalog/` paths on that host, redirects are refused, pages are paced by `catalog.pace_seconds` and cached
   under `data/cache/catalog` for `catalog.cache_days` (`bot scan --fresh` does not bypass this cache). A lookup
-  reads at most 6 model-code pages, and model codes shorter than 4 characters are ignored. It sends only the
+  reads at most 6 model-code pages, and model codes shorter than 4 characters or with no digit are ignored. It sends only the
   catalogue's own addresses: never a lot, a price or anything from Carbarn.
 - A catalogue answer is the third step of a ladder and nothing more: it never sets an amount, never approves,
   and a failed fetch is "unknown", never an error that stops a scan. `bot replay` never contacts the catalogue.
