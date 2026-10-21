@@ -20,6 +20,7 @@ from auction_bot.carbarn.models import ModelRule
 from auction_bot.config import Config
 from auction_bot.judge.candidates import Candidate, candidates_for
 from auction_bot.judge.client import CallResult, JudgeClient, image_part, text_part
+from auction_bot.judge.ladders import LadderVerdict, Observation, chip_applies, resolve
 from auction_bot.judge.playbook import playbook_for
 from auction_bot.judge.requirements import Requirement, odd_flags, requirements_for, requirements_hash
 from auction_bot.nichibo.facts import VehicleFacts
@@ -51,6 +52,7 @@ class OddCase(BaseModel):
 class Judgement(BaseModel):
     requirements: list[ReqVerdict] = Field(default_factory=list)
     chips: list[ChipVerdict] = Field(default_factory=list)
+    observations: list[Observation] = Field(default_factory=list)
     odd_cases: list[OddCase] = Field(default_factory=list)
     amount_k: int | None = Field(default=None, description="One of the candidate amounts, in thousands of yen, or null for the grid amount")
     amount_reason: str = ""
@@ -72,6 +74,21 @@ buyer's own playbook. Money is at stake, so:
 - Import approval conditions: judge only properties of this vehicle (body, drive, seats, engine, odometer, registration date). An obligation on the workshop after import (conversion to a campervan, ADR evidence) passes with evidence "workshop obligation".
 - Chips are the buyer's own adjustments; say whether each one applies (yes / no / unclear). When unclear, the buyer
   uses the base amount.
+- Ladder requirements (cruise control, Welcab seat): report what you see at each step in `observations` and let the buyer's
+  rules decide; do not fill `requirements` for those ids. Sheet step for cruise control: クルーズコントロール, クルコン, レーダークルーズ,
+  追従 or "cruise" written or ticked on the sheet, in Nichibo's translation or in the Equipment field = yes; a bare "CC" is not cruise
+  control (say not_mentioned and name the CC in the evidence); otherwise not_mentioned. Photo step: find the steering wheel; a stalk
+  below the right spoke (Toyota, Lexus) or buttons on the right spoke marked CRUISE, RES+, SET-, CANCEL, or a car-with-lines icon
+  (adaptive) = yes with the photo number; bare spokes and no stalk = no; something that might be a stalk or a button you cannot
+  confirm = maybe; no photo of the steering wheel = not_visible. Set adaptive to yes when the sheet or the buttons show radar or
+  adaptive cruise.
+- Welcab seat states: front_swivel (助手席回転シート: the front passenger seat turns to the door), front_lift_up (助手席リフトアップシート:
+  it turns and lowers), second_row_lift_up (サイドリフトアップシート or サイドリフトアップチルトシート: a second-row seat swings out and
+  lowers), wheelchair_lift (a rear lift for a wheelchair), slope (a rear ramp or slope, wheelchair tie-downs, 車いす仕様),
+  welcab_unspecified (a Welcab with no seat system named), not_welcab (an ordinary car). Sheet: not_mentioned when it says nothing;
+  photo: not_visible when no photo shows the seat or the rear.
+- The sheet outranks the photos; the photos outrank the catalogue. In catalog_grade name the catalogue grade that matches the
+  listing's variant text, or null.
 - Odd cases: name anything unusual the buyer should know (odometer at the cap, conversions, repairs, notes).
 - The amount: pick one of the candidate amounts by its exact number, or null for the grid amount. Never invent a
   number. Follow the playbook when it speaks to the situation and say so in amount_reason.
@@ -98,6 +115,8 @@ class JudgeResult:
     unavailable: str | None = None
     images_used: list[str] = field(default_factory=list)
     prompt_chars: int = 0
+    ladders: list[dict] = field(default_factory=list)
+    maker: dict | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -126,12 +145,36 @@ def _facts_block(facts: VehicleFacts, ocr: dict | None) -> str:
     return "\n".join(lines)
 
 
+def _req_line(r: Requirement) -> str:
+    chip = f" (chip {r.amount_k:+d}K)" if r.amount_k else ""
+    if r.topic:
+        detail = f"/{r.topic_detail}" if r.topic_detail else ""
+        return (f"- {r.id} [{r.kind}, ladder {r.topic}{detail}]: {r.text} "
+                f"(report sheet, photo with its number, catalogue grade; do not decide)" + chip)
+    return f"- {r.id} [{r.kind}, look at: {r.source}]: {r.text}" + chip
+
+
+def _maker_block(maker: dict | None, year) -> list[str]:
+    """The maker catalogue for the prompt: grades with their marks, never prices."""
+    if not maker:
+        return []
+    grades = maker.get("grades") or []
+    if not grades:
+        return [f"# Maker catalogue: no data ({maker.get('note') or 'no catalogue page'})"]
+    lines = [f"# Maker catalogue (kurumaerabi.com) for 型式 {', '.join(maker.get('model_codes') or [])}, grades on sale around {year}"]
+    for g in grades:
+        seats = g.get("seats") if g.get("seats") is not None else "?"
+        lines.append(f"- {g.get('name')} ({seats} seats): cruise {g.get('cruise_mark') or '?'}; adaptive {g.get('adaptive_mark') or '?'}; "
+                     f"welfare {'yes' if g.get('welfare') is True else 'no'}; seat system {g.get('seat_system')}")
+    lines.append("Name the catalogue grade that matches the listing's variant text in catalog_grade, or null.")
+    return lines
+
+
 def build_messages(facts: VehicleFacts, rule: ModelRule, hard: HardResult, reqs: list[Requirement], flags: list[str],
                    candidates: list[Candidate], playbook_text: str, sheet_path: Path | None, photo_paths: list[Path],
-                   ocr: dict | None, max_photos: int = 8) -> tuple[list[dict], list[str]]:
+                   ocr: dict | None, max_photos: int = 8, maker: dict | None = None) -> tuple[list[dict], list[str]]:
     """The chat messages (text plus images) and the names of the images that were attached."""
-    req_lines = [f"- {r.id} [{r.kind}, look at: {r.source}]: {r.text}" + (f" (chip {r.amount_k:+d}K)" if r.amount_k else "")
-                 for r in reqs if r.kind != "eligibility"]
+    req_lines = [_req_line(r) for r in reqs if r.kind != "eligibility"]
     elig_lines = [f"- {r.id} [eligibility, look at: {r.source}]: {r.text}" for r in reqs if r.kind == "eligibility"]
     cand_lines = [f"- {c.amount_k:,}K: {c.label}, {c.why}" for c in candidates]
     header = "\n".join([
@@ -151,6 +194,7 @@ def build_messages(facts: VehicleFacts, rule: ModelRule, hard: HardResult, reqs:
         "# Candidate amounts (thousands of yen); choose one by its number, or null for the grid amount",
         *(cand_lines or ["- none: the grid gives no amount for this lot"]),
         "",
+        *(_maker_block(maker, facts.year) + [""] if maker else []),
         playbook_text,
     ])
     content: list[dict] = [text_part(header)]
@@ -196,10 +240,27 @@ def _alternatives(groups: dict[str, list[Requirement]], verdicts: dict) -> tuple
     return "no approval pair fits: " + "; ".join(lines), False
 
 
-def decide(judgement: dict, reqs: list[Requirement], candidates: list[Candidate], hard: HardResult) -> tuple[str, int | None, list[str]]:
+def resolve_ladders(judgement: dict, reqs: list[Requirement], maker: dict | None, photos_complete: bool) -> list[LadderVerdict]:
+    """One verdict per requirement with a topic, from the model's observations; the model never decides these."""
+    obs = {o.get("id"): o for o in judgement.get("observations") or [] if isinstance(o, dict)}
+    return [resolve(r, obs.get(r.id), maker, photos_complete) for r in reqs if r.topic]
+
+
+def decide(judgement: dict, reqs: list[Requirement], candidates: list[Candidate], hard: HardResult,
+           ladders: list[LadderVerdict] | None = None) -> tuple[str, int | None, list[str]]:
     """(recommendation, proposed amount, notes). Deterministic, so the reviewer can see why."""
     notes: list[str] = []
     verdicts = {v.get("id"): v for v in judgement.get("requirements", [])}
+    chip_says = {c.get("id"): c for c in judgement.get("chips", [])}
+    by_id = {r.id: r for r in reqs}
+    for lv in ladders or []:
+        req = by_id.get(lv.id)
+        if req is None:
+            continue
+        if req.kind == "chip":
+            chip_says[lv.id] = {"id": lv.id, "applies": chip_applies(req, lv.verdict), "evidence": lv.evidence}
+        else:
+            verdicts[lv.id] = {"id": lv.id, "verdict": lv.verdict, "evidence": lv.evidence, "confidence": "high"}
     groups: dict[str, list[Requirement]] = {}
     for r in reqs:
         m = _ALT_ID.match(r.id) if r.kind == "eligibility" else None
@@ -214,7 +275,6 @@ def decide(judgement: dict, reqs: list[Requirement], candidates: list[Candidate]
     missing = [r.id for r in musts if r.id not in verdicts]
     if missing:
         notes.append("model gave no verdict for: " + ", ".join(missing))
-    chip_says = {c.get("id"): c for c in judgement.get("chips", [])}
     if fails or alt_fail:
         rec = "skip"
         parts = [f"{r.text} ({verdicts[r.id].get('evidence', '')})" for r in fails]
@@ -253,20 +313,29 @@ def decide(judgement: dict, reqs: list[Requirement], candidates: list[Candidate]
     return rec, proposed, notes
 
 
+def redecide(judgement: dict, reqs: list[Requirement], candidates: list[Candidate], hard: HardResult, maker: dict | None,
+             photos_complete: bool) -> tuple[str, int | None, list[str], list[dict]]:
+    """Resolve the ladders, then decide. Also used for stored judgements."""
+    ladders = resolve_ladders(judgement, reqs, maker, photos_complete)
+    rec, amount, notes = decide(judgement, reqs, candidates, hard, ladders)
+    return rec, amount, notes, [lv.to_dict() for lv in ladders]
+
+
 def judge_lot(client: JudgeClient, cfg: Config, store, facts: VehicleFacts, rule: ModelRule, hard: HardResult,
               evidence: dict, ocr: dict | None = None, ocr_hints: list[dict] | None = None, hints: list[dict] | None = None,
-              reqs: list[Requirement] | None = None, flags: list[str] | None = None) -> JudgeResult:
+              reqs: list[Requirement] | None = None, flags: list[str] | None = None,
+              maker: dict | None = None, photos_complete: bool = True) -> JudgeResult:
     reqs = reqs if reqs is not None else requirements_for(rule, hard)
     flags = flags if flags is not None else odd_flags(rule, hard, facts, ocr_hints, hints)
     cands = candidates_for(rule, facts, hard)
     result = JudgeResult(requirements=[r.to_dict() for r in reqs], flags=flags, candidates=[c.to_dict() for c in cands],
-                         requirements_hash=requirements_hash(reqs, flags), proposed_bid_jpy_k=hard.bid_jpy_k)
+                         requirements_hash=requirements_hash(reqs, flags), proposed_bid_jpy_k=hard.bid_jpy_k, maker=maker)
     judge_cfg = getattr(cfg, "judge", None) or {}
     max_photos = int(judge_cfg.get("max_photos") or 8)
     playbook = playbook_for(store, cfg, rule, facts).to_text()
     sheet = Path(evidence["sheet"]) if evidence.get("sheet") else None
     photos = [Path(p) for p in evidence.get("photos", [])]
-    messages, images = build_messages(facts, rule, hard, reqs, flags, cands, playbook, sheet, photos, ocr, max_photos)
+    messages, images = build_messages(facts, rule, hard, reqs, flags, cands, playbook, sheet, photos, ocr, max_photos, maker=maker)
     result.images_used = images
     result.prompt_chars = sum(len(part.get("text", "")) for m in messages for part in (m["content"] if isinstance(m["content"], list) else [{"text": m["content"]}]))
     call: CallResult = client.complete(messages, Judgement)
@@ -276,5 +345,6 @@ def judge_lot(client: JudgeClient, cfg: Config, store, facts: VehicleFacts, rule
         result.notes = [f"model unavailable: {call.unavailable}"]
         return result
     result.judgement = call.parsed
-    result.recommendation, result.proposed_bid_jpy_k, result.notes = decide(call.parsed, reqs, cands, hard)
+    result.recommendation, result.proposed_bid_jpy_k, result.notes, result.ladders = redecide(
+        call.parsed, reqs, cands, hard, maker, photos_complete)
     return result

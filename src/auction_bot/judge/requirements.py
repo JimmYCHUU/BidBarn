@@ -80,8 +80,13 @@ def requirements_for(rule: ModelRule, hard: HardResult | None = None,
     for t in (hard.toggles if hard else []):
         m = _CHIP.match(t.strip())
         note, amount = (m.group("note").strip(), int(m.group("amount"))) if m else (t.strip(), None)
-        out.append(Requirement(f"chip:{note.lower().replace(' ', '-')}", note, classify(note) if classify(note) != "any" else "photos",
-                               "chip", amount))
+        topic = detect_topic(note)
+        if topic:
+            out.append(Requirement(f"chip:{note.lower().replace(' ', '-')}", note, "ladder", "chip", amount, topic=topic,
+                                   topic_detail=cruise_kind(note) if topic == TOPIC_CRUISE else None, negated=is_negated(note)))
+        else:
+            out.append(Requirement(f"chip:{note.lower().replace(' ', '-')}", note, classify(note) if classify(note) != "any" else "photos",
+                                   "chip", amount))
     for t in (eligibility.texts if eligibility else []):
         out.append(Requirement(t["id"], f'{t["label"]}: {t["text"]}', "sheet", "eligibility"))
     for i, text in enumerate(free_text_lines(rule), 1):

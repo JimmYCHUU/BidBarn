@@ -215,3 +215,78 @@ def test_bare_approval_fail_still_skips_and_alternatives_line_is_conditional():
         messages, _ = build_messages(f, rule, hard, rs, [], candidates_for(rule, f, hard), "", None, [], None)
         text = "\n".join(p["text"] for p in messages[1]["content"] if p["type"] == "text")
         assert (line in text) is expected
+
+
+def _ladder_rule():
+    rule = _gdh206()
+    rule.text_rules = ["No sticker paint", "Cruise control"]
+    rule.variants[0].modifiers.append(Modifier(id=98, variant_id=None, year_from=None, year_to=None, odo_from=None, odo_to=None,
+                                               conditions=[], amount_jpy_k=-100, percent=None, no_bid=False, strict=False,
+                                               note="No cruise control", active=True, stale=False))
+    return rule
+
+
+MAKER = {"model_codes": ["3DF-GDH206V"], "urls": ["https://www.kurumaerabi.com/catalog/toyota/2522/type/3DF-GDH206V/"],
+         "grades": [{"name": "2.8 DX ロング 4WD", "seats": 6, "cruise_mark": "◯", "adaptive_mark": "", "cruise": "standard", "adaptive": "unknown", "welfare": False, "seat_system": "not_welcab", "url": "u"}],
+         "cruise": {"status": "standard", "grade": "2.8 DX ロング 4WD", "mark": "◯"}, "adaptive": {"status": "unknown", "grade": None, "mark": ""},
+         "welcab": {"seat_system": "none", "grade": None}, "note": "1 page, 1 grade", "fetched_at": "2026-10-20T00:00:00", "source": "kurumaerabi.com", "key": "k"}
+
+
+def test_prompt_lists_ladders_and_the_catalogue_without_prices(tmp_path):
+    rule = _ladder_rule()
+    f = _facts()
+    hard = evaluate_hard(f, rule)
+    reqs = requirements_for(rule, hard)
+    messages, _ = build_messages(f, rule, hard, reqs, [], candidates_for(rule, f, hard), "", None, [], None, maker=MAKER)
+    text = "\n".join(p["text"] for p in messages[1]["content"] if p["type"] == "text")
+    assert "- r2 [must, ladder cruise_control/plain]: Cruise control (report sheet, photo with its number, catalogue grade; do not decide)" in text
+    assert "chip:no-cruise-control [chip, ladder cruise_control/plain]: No cruise control" in text and "(chip -100K)" in text
+    assert "# Maker catalogue (kurumaerabi.com) for 型式 3DF-GDH206V" in text and "2.8 DX ロング 4WD (6 seats): cruise ◯; adaptive ?; welfare no; seat system not_welcab" in text
+    assert "万円" not in text and "Ladder requirements" in messages[0]["content"] and "second_row_lift_up" in messages[0]["content"]
+    messages, _ = build_messages(f, rule, hard, reqs, [], candidates_for(rule, f, hard), "", None, [], None, maker={**MAKER, "grades": [], "note": "no catalogue page"})
+    assert "# Maker catalogue: no data (no catalogue page)" in "\n".join(p["text"] for p in messages[1]["content"] if p["type"] == "text")
+
+
+def test_decide_uses_the_ladder_not_the_model_for_topic_ids():
+    from auction_bot.judge.judge import redecide
+    rule = _ladder_rule()
+    f = _facts()
+    hard = evaluate_hard(f, rule)
+    reqs = requirements_for(rule, hard)
+    cands = candidates_for(rule, f, hard)
+    grid = hard.bid_jpy_k
+    base = _judgement(requirements=[{"id": "r1", "verdict": "pass"}, {"id": "r2", "verdict": "pass", "evidence": "model guessed"}],
+                      chips=[{"id": "chip:no-cruise-control", "applies": "no"}])
+    # The model says pass, the observations say sheet silent + wheel without a stalk: the ladder fails it and the chip applies.
+    j = Judgement.model_validate({**base, "observations": [
+        {"id": "r2", "sheet": {"state": "not_mentioned"}, "photo": {"state": "no", "photo_no": 4, "evidence": "bare spokes"}},
+        {"id": "chip:no-cruise-control", "sheet": {"state": "not_mentioned"}, "photo": {"state": "no", "photo_no": 4}}]}).model_dump()
+    rec, amount, notes, ladders = redecide(j, reqs, cands, hard, MAKER, True)
+    assert rec == "skip" and any("fails: Cruise control (sheet: not_mentioned; photo 4: no (bare spokes)" in n for n in notes)
+    assert amount == grid - 100 and {l["id"]: l["verdict"] for l in ladders} == {"r2": "fail", "chip:no-cruise-control": "fail"}
+    # Sheet yes: pass, chip does not apply, grid amount.
+    j2 = Judgement.model_validate({**base, "observations": [
+        {"id": "r2", "sheet": {"state": "yes", "evidence": "クルコン in the equipment box"}, "photo": {"state": "not_visible"}},
+        {"id": "chip:no-cruise-control", "sheet": {"state": "yes"}, "photo": {"state": "not_visible"}}]}).model_dump()
+    rec, amount, notes, ladders = redecide(j2, reqs, cands, hard, MAKER, True)
+    assert rec == "bid" and amount == grid
+    # No observation at all: the ladder reads unclear (model gave no observation), never a silent fail.
+    assert redecide(base, reqs, cands, hard, MAKER, True)[0] == "review" and redecide(base, reqs, cands, hard, MAKER, False)[0] == "review"
+
+
+def test_judge_lot_stores_ladders_and_the_maker(tmp_path, monkeypatch):
+    cfg = _cfg(tmp_path)
+    store = Store(cfg.db_path)
+    rule = _ladder_rule()
+    f = _facts()
+    hard = evaluate_hard(f, rule)
+    sheet, photos = _images(tmp_path)
+    monkeypatch.setenv("GEMINI_API_KEY", "k")
+    def transport(p, messages, response_format, max_tokens):
+        return json.dumps({**_judgement(requirements=[{"id": "r1", "verdict": "pass"}]), "observations": [
+            {"id": "r2", "sheet": {"state": "not_mentioned"}, "photo": {"state": "maybe", "photo_no": 2}, "catalog_grade": "2.8 DX ロング 4WD"}]}), {"input": 1, "output": 1}
+    client = JudgeClient([Provider("gemini", "http://x", "m", "GEMINI_API_KEY")], ledger=StoreLedger(store), transport=transport, sleep=lambda s: None)
+    res = judge_lot(client, cfg, store, f, rule, hard, {"sheet": str(sheet), "photos": [str(p) for p in photos]}, maker=MAKER, photos_complete=True)
+    assert res.ladders and res.ladders[0]["id"] == "r2" and res.ladders[0]["verdict"] == "pass" and "maker: standard on 2.8 DX ロング 4WD [◯]" in res.ladders[0]["evidence"]
+    assert res.maker == MAKER and res.recommendation in ("bid", "review")   # the chip has no observation -> unclear -> review is fine
+    store.close()
