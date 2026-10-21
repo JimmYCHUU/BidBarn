@@ -406,9 +406,12 @@ cases (odometer at the cap, conversions, sheet notes). It works like this:
    the sheet or the photos call the lot a Welcab without naming the seat, a catalogue that sells
    one Welcab seat system for the model code decides by it; with several systems, or when nothing
    on the sheet or in the photos says Welcab, only a catalogue grade the model names that is a
-   Welcab row decides, and a named plain grade or no named grade is no seat statement. A Welcab
-   note is never read as negated ("No ramp / slope type" is a seat note); only a cruise note can
-   be. A bare "lift up" (a lifted 4WD) does not make a note a Welcab note; it needs a seat word.
+   Welcab row decides, and a named plain grade or no named grade is no seat statement (for a lot
+   the sheet or the photos call a Welcab, a named plain grade conflicts and reads review). Only a
+   cruise note is read as negated: a negated Welcab note that names a failing seat system ("No
+   ramp / slope type") is the seat requirement itself; any other ("No welcab", "No swivel seat")
+   is a plain text requirement the model judges, as before the ladders. A bare "lift up" (a lifted
+   4WD) does not make a note a Welcab note; it needs a seat word.
    A guide named
    "... Welcab" with no Welcab note gets the seat requirement from its name; its text quotes the
    approval pair's sentences that name a seat system, or says "No approval text names the seat
@@ -630,6 +633,16 @@ look at Insights once decisions exist.
   "cannot import"; an unknown registration year reads confirm: confirm.
 - Chips with Welcab or seat words (for example "Slope type -180K") are still judged by the
   model, not by the ladder. How should they read?
+- Two Welcab refinements made during the build on 2026-10-21, to confirm: (1) the maker's
+  catalogue alone never makes a lot a Welcab. Its single seat system decides only for a lot the
+  sheet or the photos call a Welcab; otherwise only a catalogue grade the model names that is a
+  Welcab row decides, and with nothing named the lot fails for want of a seat statement (review
+  on a short photo set). (2) A negated Welcab note that names a failing seat system ("No ramp /
+  slope type", "No wheelchair lift") is read as the seat requirement itself, so a plain car fails
+  it; any other negated Welcab note ("No welcab", "No swivel seat") stays a plain text requirement
+  the model judges. "Wheelchair spec" (車いす仕様) is read as the slope type, so "Without
+  wheelchair spec" is the seat requirement too and a plain car fails it. Confirm both, and whether
+  "Without wheelchair spec" should instead mean "no conversion".
 - Guide 213271 has two selected pairs whose cells overwrite each other; not changed here.
 - Odometer margin (from the teaching session of 2026-09-15): the reviewer skips a lot that is
   already at the last band's cap ("already 80k") and, for a lot exactly on a band boundary

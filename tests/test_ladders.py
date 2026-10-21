@@ -139,6 +139,15 @@ def test_known_welcab_takes_the_single_system_or_needs_a_named_welcab_grade():
     assert resolve(WC, obs("r3", "welcab_unspecified", "not_visible"), SEVERAL, photos_complete=False).verdict == "unclear"
 
 
+def test_known_welcab_with_a_named_plain_grade_is_conflicting_evidence():
+    for sheet, photo in (("welcab_unspecified", "not_visible"), ("not_mentioned", "welcab_unspecified")):
+        v = resolve(WC, obs("r3", sheet, photo, grade="2.5 X"), SELLS_BOTH)
+        assert v.verdict == "unclear" and "named grade is not a Welcab grade; conflicting evidence" in v.evidence
+        assert v.steps[2]["decided"] and v.steps[2]["state"] == "not_welcab" and v.steps[2]["grade"] == "2.5 X"
+        assert resolve(WC, obs("r3", sheet, photo, grade=SIDE), SELLS_BOTH).verdict == "pass"      # the Welcab row agrees
+        assert resolve(WC, obs("r3", sheet, photo, grade="not in the table"), SELLS_BOTH).verdict == "pass"   # unknown name: the one system
+
+
 def test_a_negated_welcab_note_keeps_the_seat_table():
     neg = Requirement("r5", "No ramp / slope type", "ladder", "must", topic=TOPIC_WELCAB, negated=True)
     assert resolve(neg, obs("r5", "slope", "not_visible"), STD).verdict == "fail"

@@ -44,8 +44,8 @@ def detect_topic(text: str) -> str | None:
 
 
 def is_negated(text: str) -> bool:
-    """Whether a note starts with no/not/without. Only cruise notes are read as negated: a Welcab note never is,
-    because the seat table already says which systems pass and which fail ("No ramp / slope type")."""
+    """Whether a note starts with no/not/without. Only cruise notes are read as negated; a negated Welcab note is
+    either the seat requirement itself or no ladder topic at all (`judge.requirements.ladder_topic`)."""
     return bool(_NEGATED.match(text or ""))
 
 

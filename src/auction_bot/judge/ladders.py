@@ -33,6 +33,7 @@ _NO_SEAT_PHOTO = "no seat photo among the photos; some photos could not be downl
 _NO_SEATING = "no seating statement on the sheet, the photos or the catalogue"
 _NO_OBSERVATION = "model gave no observation"
 _NO_SHEET = "model gave no sheet reading"
+_CONFLICT = "named grade is not a Welcab grade; conflicting evidence"
 
 
 class StepObs(BaseModel):
@@ -136,7 +137,7 @@ def maker_cruise(maker: dict | None, kind: str, catalog_grade: str | None) -> tu
 
 
 def maker_seat(maker: dict | None, catalog_grade: str | None, known_welcab: bool = False) -> tuple[str, dict | None]:
-    _verdict, status, _grade, row = _seat_block(maker, catalog_grade, known_welcab)
+    _verdict, status, _grade, row, _note = _seat_block(maker, catalog_grade, known_welcab)
     return status, row
 
 
@@ -158,31 +159,34 @@ def _welcab_systems(maker: dict) -> list[str]:
 
 
 def _seat_block(maker: dict | None, catalog_grade: str | None, known_welcab: bool
-                ) -> tuple[str | None, str, str | None, dict | None]:
-    """The Welcab maker step: (verdict, status, grade, row). Verdict None means no seating statement.
+                ) -> tuple[str | None, str, str | None, dict | None, str]:
+    """The Welcab maker step: (verdict, status, grade, row, note). Verdict None means no seating statement.
 
     The catalogue alone never makes a lot a Welcab. For a lot the sheet or the photos call a Welcab
-    (`known_welcab`), a catalogue that sells one Welcab seat system decides by it. Otherwise (several systems,
+    (`known_welcab`), a catalogue that sells one Welcab seat system decides by it, unless the model named a
+    plain grade: that conflicts with the sheet or the photos and reads unclear. Otherwise (several systems,
     or nothing says this car is a Welcab) only a catalogue grade the model named that is a Welcab row decides,
     by its seat system; a named plain grade or no named grade gives no seating statement.
     """
     if not maker:
-        return None, "unknown", None, None
+        return None, "unknown", None, None, ""
     block = maker.get("welcab") or {}
     status = block.get("seat_system") or "unknown"
     systems = _welcab_systems(maker)
+    named_row = _grade_row(maker, catalog_grade)
+    named = (named_row.get("seat_system") or "unknown") if named_row is not None else None
     if known_welcab and len(systems) == 1:
+        if named == "not_welcab":
+            return "unclear", named, named_row.get("name"), named_row, _CONFLICT
         system = systems[0]
         row = next((g for g in maker.get("grades") or [] if isinstance(g, dict) and g.get("seat_system") == system), None)
         grade = (row or {}).get("name") or (block.get("grade") if status == system else None)
-        return _seat_verdict(system), system, grade, row
-    row = _grade_row(maker, catalog_grade)
-    if row is None:
-        return None, status, None, None
-    named = row.get("seat_system") or "unknown"
+        return _seat_verdict(system), system, grade, row, ""
+    if named_row is None:
+        return None, status, None, None, ""
     if named in ("not_welcab", "unknown"):
-        return None, named, row.get("name"), row  # a plain grade: the catalogue says nothing about a seat
-    return _seat_verdict(named), named, row.get("name"), row
+        return None, named, named_row.get("name"), named_row, ""  # a plain grade: the catalogue says nothing about a seat
+    return _seat_verdict(named), named, named_row.get("name"), named_row, ""
 
 
 # ---------------------------------------------------------------- one step's reading
@@ -364,9 +368,9 @@ def _resolve_welcab(req: Requirement, obs: dict | None, maker: dict | None, phot
 
     # Only welcab_unspecified / not_mentioned (sheet) and welcab_unspecified / not_visible (photo) reach the catalogue.
     known_welcab = "welcab_unspecified" in (sheet.state, photo.state)
-    verdict, status, grade, row = _seat_block(maker, _catalog_grade(obs), known_welcab)
+    verdict, status, grade, row, note = _seat_block(maker, _catalog_grade(obs), known_welcab)
     if verdict:
-        _fill_maker(steps[2], maker, status, grade, "", row)
+        _fill_maker(steps[2], maker, status, grade, "", row, note=note)
         return _finish(req, steps, verdict, 2)
     if photo.state in ("not_visible", "welcab_unspecified") and not photos_complete:
         _fill_maker(steps[2], maker, status, grade, "", row)

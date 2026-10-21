@@ -87,9 +87,11 @@ hard constraints. Do not weaken them, work around them, or "temporarily" disable
     Welcab: for a lot the sheet or the photos call a Welcab, a catalogue that sells one Welcab seat system
     decides by that system; otherwise (several systems, or nothing on the sheet or in the photos says
     Welcab) only a catalogue grade the model names that is a Welcab row decides, by its seat system, and a
-    named plain grade or no named grade is no seat statement. A Welcab note is never read as negated ("No
-    ramp / slope type" is a seat note), because the seat table already says what passes and fails; only a
-    cruise note can be negated.
+    named plain grade or no named grade is no seat statement (for a lot the sheet or the photos call a
+    Welcab, a named plain grade conflicts and reads review). Only a cruise note is read as negated. A
+    negated Welcab note that names a failing seat system ("No ramp / slope type", "No wheelchair lift") is
+    the Welcab seat requirement itself, not negated; any other negated Welcab note ("No welcab", "No swivel
+    seat") gets no ladder topic and stays a plain text requirement the model judges, as before the ladders.
 - Anything not covered by a stored rule goes to the reviewer as NEEDS_REVIEW. Uncertainty is
   never resolved in favour of bidding.
 - Do not change how variants, modifiers or model matching are interpreted without asking Jim.

@@ -14,8 +14,8 @@ import re
 from dataclasses import asdict, dataclass
 
 from auction_bot.carbarn.models import ModelRule
-from auction_bot.judge.topics import (TOPIC_CRUISE, TOPIC_WELCAB, WELCAB_GUIDE_TEXT, approval_seat_sentences, cruise_kind,
-                                      detect_topic, is_negated, welcab_guide)
+from auction_bot.judge.topics import (SEAT_FAIL, TOPIC_CRUISE, TOPIC_WELCAB, WELCAB_GUIDE_TEXT, approval_seat_sentences,
+                                      cruise_kind, detect_topic, is_negated, seat_system, welcab_guide)
 from auction_bot.nichibo.facts import VehicleFacts
 from auction_bot.rules.eligibility import Eligibility
 from auction_bot.rules.hard import HardResult
@@ -58,14 +58,28 @@ def classify(text: str) -> str:
     return "any"
 
 
+def ladder_topic(text: str) -> tuple[str | None, bool]:
+    """(topic, negated) for a guide note or chip; topic None keeps it a plain text requirement the model judges.
+
+    Only a cruise note is read as negated. A negated Welcab note that names a failing seat system ("No ramp /
+    slope type", "No wheelchair lift") is the Welcab seat requirement itself, not negated: the seat table
+    already fails those systems. Any other negated Welcab note ("No welcab", "No swivel seat") gets no topic,
+    so the ladder never reads it as the plain Welcab requirement.
+    """
+    topic = detect_topic(text)
+    if topic == TOPIC_CRUISE:
+        return topic, is_negated(text)
+    if topic == TOPIC_WELCAB and is_negated(text):
+        return (topic, False) if seat_system(text) in SEAT_FAIL else (None, False)
+    return topic, False
+
+
 def requirements_for(rule: ModelRule, hard: HardResult | None = None,
                      eligibility: Eligibility | None = None) -> list[Requirement]:
     out: list[Requirement] = []
     for i, text in enumerate(rule.text_rules, 1):
-        topic = detect_topic(text)
+        topic, negated = ladder_topic(text)
         if topic:
-            # Negation applies to cruise notes only: the Welcab seat table already says what passes and fails.
-            negated = is_negated(text) if topic == TOPIC_CRUISE else False
             out.append(Requirement(f"r{i}", text, "ladder", "must", topic=topic,
                                    topic_detail=cruise_kind(text) if topic == TOPIC_CRUISE else None, negated=negated))
         else:
@@ -82,10 +96,10 @@ def requirements_for(rule: ModelRule, hard: HardResult | None = None,
     for t in (hard.toggles if hard else []):
         m = _CHIP.match(t.strip())
         note, amount = (m.group("note").strip(), int(m.group("amount"))) if m else (t.strip(), None)
-        topic = detect_topic(note)
-        if topic == TOPIC_CRUISE:  # only cruise chips route to the ladder (and only cruise reads negation); seat chips keep the model's answer
+        topic, negated = ladder_topic(note)
+        if topic == TOPIC_CRUISE:  # only cruise chips route to the ladder; seat chips keep the model's answer
             out.append(Requirement(f"chip:{note.lower().replace(' ', '-')}", note, "ladder", "chip", amount, topic=topic,
-                                   topic_detail=cruise_kind(note), negated=is_negated(note)))
+                                   topic_detail=cruise_kind(note), negated=negated))
         else:
             out.append(Requirement(f"chip:{note.lower().replace(' ', '-')}", note, classify(note) if classify(note) != "any" else "photos",
                                    "chip", amount))

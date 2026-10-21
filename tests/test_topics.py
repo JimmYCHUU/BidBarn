@@ -33,9 +33,19 @@ def test_a_bare_lift_up_is_a_lifted_4wd_not_a_welcab():
 
 
 def test_a_welcab_note_is_never_negated():
-    reqs = {r.id: r for r in requirements_for(_rule(notes="No ramp / slope type|No cruise control"))}
-    assert reqs["r1"].topic == TOPIC_WELCAB and reqs["r1"].negated is False
+    from auction_bot.judge.requirements import classify, ladder_topic
+    reqs = {r.id: r for r in requirements_for(_rule(notes="No ramp / slope type|No cruise control|No wheelchair lift"))}
+    assert reqs["r1"].topic == TOPIC_WELCAB and reqs["r1"].negated is False and reqs["r1"].source == "ladder"
     assert reqs["r2"].topic == TOPIC_CRUISE and reqs["r2"].negated is True
+    assert reqs["r3"].topic == TOPIC_WELCAB and reqs["r3"].negated is False   # negates a failing system: the seat requirement itself
+    # Any other negated Welcab note stays a plain text must the model judges, as before the ladders.
+    notes = ["No welcab", "No swivel seat", "Without Welcab"]
+    reqs = requirements_for(_rule(notes="|".join(notes)))
+    for r, text in zip(reqs, notes):
+        assert r.text == text and r.topic is None and r.topic_detail is None and r.negated is False
+        assert r.kind == "must" and r.source == classify(text) and ladder_topic(text) == (None, False)
+    assert not has_ladder(reqs)
+    assert ladder_topic("No ramp / slope type") == (TOPIC_WELCAB, False) and ladder_topic("No cruise control") == (TOPIC_CRUISE, True)
 
 
 def test_seat_system_words():
