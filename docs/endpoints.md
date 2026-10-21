@@ -17,6 +17,11 @@ Guide (list item): `id, make, model, modelCode, minGrade, notes` (pipe-separated
 
 Tree: `variants[] { name, active, bandTemplate[{odoFrom,odoTo}], blocks[] }`.
 Each block is one MRE/SEV approval pair; the one with `selected: true` is the live grid.
+`Approval` (`carbarn/models.py`) reads these block keys: `sevNumber, mreNumber, selected, active,
+sevBuildFromYm/ToYm, mreBuildFromYm/ToYm, expiryDate, sevModelCodes, sevVariant,
+sevVariantDetails, sevNotes, sevCriterion, sevVehicleCategory, mreModel, mreNotes,
+mreSpecialNotes, mreModificationCategory, mreComplianceLevel, lastScrapedAt, years[]`. Holder,
+contact, phone, website and id keys are ignored.
 `block.years[] { year, eligible, rowNoBid, lines[], missingOdoBands[] }`.
 `line { year, odoFrom, odoTo, biddingJpyK, effectiveBiddingJpyK, effectiveNoBid, effectiveReason, active, grade, seats }`.
 `modifiers[] { variantId, yearFrom, yearTo, resolvedYearFrom, resolvedYearTo, odoFrom, odoTo,

@@ -114,6 +114,20 @@ cost the extra page load, and only lots with something to look at cost a model c
 whose sheet is not published yet waits for the next scan, but it keeps its grid amount from the
 search card, so it can be approved in the meantime.
 
+**Import eligibility (ROVER).** Next to the grid, every lot is checked against the MRE/SEV
+approval pair behind its guide, from the guide tree only (no ROVER visit). The review page shows
+an "Import eligibility (ROVER)" card with one of three verdicts. **Eligible**: the registration
+year is inside the build window, the approval has not expired and the chassis matches the SEV
+model codes. **Confirm import**: something is unclear, for example a year the window only
+partly covers ("confirm the build month"), a chassis that is not among the model codes, or a
+window that closes before the lot's year. **Cannot import**: the lot was registered before the
+window opens, or the approval has expired. The check never skips a lot. A "cannot import" lot
+stays in review with the reason and you reject it yourself. A copy of the approval older than
+`eligibility.stale_days` (90) is flagged. When a guide has no selected pair, its active pairs
+are alternatives: the lot only has to fit any one of them, so the bot's recommendation can
+only say skip when every pair fails it, and the verdict is never better than "confirm import".
+Holder names, contacts, phones and websites in the blocks are never read.
+
 ## Non-negotiable rules
 
 Enforced in code, not by convention. The full list for anyone touching the code is in
@@ -130,7 +144,10 @@ Enforced in code, not by convention. The full list for anyone touching the code 
 - **RULE-3 Never guess.** Anything the rules cannot decide goes to the reviewer as NEEDS REVIEW.
 - **RULE-4 One bid per vehicle, ever.** Enforced by the `bids` table primary key.
 - **RULE-5 Never re-scrape.** Pages, translator replies and images are cached; rule changes are
-  re-applied offline with `bot replay --apply`. The data folders are never deleted.
+  re-applied offline with `bot replay --apply`. The data folders are never deleted. The first
+  `--apply` after the import-eligibility change supersedes every pending lot whose guide has
+  approvals, once, because the eligibility hash is new. The hash never includes the day count
+  or the staleness flag, so replay does not flip from day to day.
 - **RULE-6 Learning only tightens.** Telemetry, `skip:` lines, `bot insights` and
   `bot learn` can add skips, ordering and pre-fills. Nothing learned can approve a bid.
 
@@ -338,10 +355,12 @@ cases (odometer at the cap, conversions, sheet notes). It works like this:
 2. When the photos are needed the lot's page is opened and up to `judge.max_photos` photos are
    downloaded (only then; the scan stays fast).
 3. The model receives the lot's facts, the OCR fields, Nichibo's translation, the requirements,
-   the flags, **your playbook** (`rules/playbook/general.md` and `rules/playbook/<CODE>.md`, your
+   the flags, the selected pair's SEV/MRE restriction text, **your playbook** (`rules/playbook/general.md` and `rules/playbook/<CODE>.md`, your
    own words from learn-mode comments and review corrections), the candidate amounts (the grid
    cell, the cell with a chip, the next odometer band when the odometer is on a boundary or near
-   the cap; never the grid itself), the sheet and the photos.
+   the cap; never the grid itself), the sheet and the photos. With `eligibility.judge_text: true`
+   every lot whose pair carries restriction text costs one model call, because the model reads
+   that text as a pre-fill. With `judge_text: false` the text goes on your checklist instead.
 4. It answers with a verdict and evidence per requirement, whether each chip applies, the odd
    cases, one of the candidate amounts or none, and a recommendation: bid, review or skip.
    The bot turns that into a proposal deterministically (`judge/judge.py::decide`).
@@ -530,6 +549,9 @@ look at Insights once decisions exist.
 
 ### Open questions for Carbarn
 
+- Interior years of a build window count as inside it (registered 2020, window 07/2019 to
+  06/2023): confirm.
+- Guide 213271 has two selected pairs whose cells overwrite each other; not changed here.
 - Odometer margin (from the teaching session of 2026-09-15): the reviewer skips a lot that is
   already at the last band's cap ("already 80k") and, for a lot exactly on a band boundary
   ("50k on the mark"), uses the next band's value, because the odometer rises between the

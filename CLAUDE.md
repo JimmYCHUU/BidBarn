@@ -84,12 +84,27 @@ hard constraints. Do not weaken them, work around them, or "temporarily" disable
   the review page approves, and the model never sets a number outside the candidates.
 - Data minimisation: the bid grid is never sent to a provider. A prompt carries the lot's
   facts, the OCR fields, Nichibo's translation, the guide's text requirements and chips, the
-  odd-case flags, Jim's playbook (`rules/playbook/`, git-ignored), the candidate amounts, the
-  sheet and up to `judge.max_photos` photos. Keep it that way.
+  odd-case flags, the selected MRE/SEV pair's restriction text (SEV variant details and notes, MRE
+  notes and special notes; never holder names or contacts), Jim's playbook (`rules/playbook/`,
+  git-ignored), the candidate amounts, the sheet and up to `judge.max_photos` photos. Keep it
+  that way.
 - The playbook is Jim's words (learn-mode comments, review-page corrections, the seeded
   principles). It is context for the model, not code rules; never turn it into automatic
   approvals. Quotas: respect `rpm`/`rpd` per provider; when every provider is out, lots go
   to review unjudged (`judge_pending`), the scan never fails because of the model.
+
+## 3b. Import eligibility is a review note, never a skip (Jim, 2026-09-30)
+
+- Every lot is checked against the MRE/SEV pair behind its guide (`rules/eligibility.py`): build
+  window, expiry, model codes, and the pair's restriction text read by the free judge model as a
+  pre-fill. A failing lot stays NEEDS_REVIEW with the verdict "cannot import" and the reason; Jim
+  rejects it himself. Never map an eligibility result to SKIP.
+- Registered before the window opens = out. Any other lot in a partly covered year goes to review
+  with "confirm the build month".
+- Source is the guide tree only: no ROVER visit, no bidding-cost-profile call. An old ROVER copy
+  is flagged from `lastScrapedAt` (`eligibility.stale_days`).
+- When no pair is selected, the active pairs are alternatives: the bot may only recommend against
+  a lot when every pair fails it.
 
 ## 4. Data handling
 
