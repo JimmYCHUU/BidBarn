@@ -125,7 +125,7 @@ def odd_flags(rule: ModelRule, hard: HardResult, facts: VehicleFacts, ocr_hints:
             flags.append(f"sheet notes ({key}): {str(tr[key])[:120]}")
             break
     for c in (eligibility.checks if eligibility else []):
-        if c.state != "pass" and c.name != "source_age":
+        if c.state in ("fail", "unclear") and c.name != "source_age":
             flags.append(f"import approval {c.name} {c.state}: {c.detail}"[:200])
     return flags
 

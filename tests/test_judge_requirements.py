@@ -173,4 +173,10 @@ def test_eligibility_texts_become_requirements_and_flags():
     assert [r.id for r in reqs].index("elig:sev") < [r.id for r in reqs].index("note:1") if any(r.id == "note:1" for r in reqs) else True
     assert needs_judge(reqs, [])
     flags = odd_flags(rule, hard, f, eligibility=elig)
-    assert any(x.startswith("import approval model_code info") for x in flags)
+    assert not any(x.startswith("import approval") for x in flags)   # GDH206: codes unparseable = info, no flag
+    alphard = parse_guide_tree(json.loads((FIX / "guide_AYH30W_Alphard_tree.json").read_text(encoding="utf-8")),
+                               json.loads((FIX / "guide_AYH30W_Alphard_item.json").read_text(encoding="utf-8")))
+    fa = _facts(year=2021, make="Toyota", model="Alphard", chassis="AGH30W", variant_text="2.5 X")
+    ea = check_lot(alphard, alphard.variants[0], fa, None, date(2026, 10, 20))
+    assert any(x.startswith("import approval model_code unclear")
+               for x in odd_flags(alphard, evaluate_hard(fa, alphard), fa, eligibility=ea))
