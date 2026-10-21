@@ -73,21 +73,23 @@ hard constraints. Do not weaken them, work around them, or "temporarily" disable
   photo at all on a complete photo set = no; a short photo set (some photos could not be downloaded)
   reads review. 3) The maker's catalogue: standard on that grade = yes; optional or not fitted = no; no
   data, or grades that differ and the lot's grade cannot be named = review (when the model names the
-  lot's catalogue grade, that grade's mark decides).
+  lot's catalogue grade, that grade's mark decides, and the Welcab seat block works the same way).
   Adaptive cruise counts as cruise control; a note that says
   radar/adaptive needs adaptive specifically. A Welcab must have a front swivel/rotating, front lift-up
   or second-row side lift-up seat; a slope/ramp or wheelchair-lift Welcab, a plain car, or a Welcab with
   no seat statement on the sheet, in the photos or in the catalogue is not eligible (a Welcab with no
   seat statement anywhere fails on a complete photo set; on a short photo set it reads review, like
-  cruise control). The catalogue alone never makes a lot a Welcab: for a lot the sheet or the photos call
-  a Welcab, a catalogue that sells one Welcab seat system decides by that system; otherwise (several
-  systems, or nothing on the sheet or in the photos says Welcab) only a catalogue grade the model names
-  that is a Welcab row decides, by its seat system, and a named plain grade or no named grade is no seat
-  statement. A Welcab note is never read as negated ("No ramp / slope type" is a seat note), because the
-  seat table already says what passes and fails; only a cruise note can be negated. A guide named
+  cruise control). A guide named
   "... Welcab" with no Welcab note gets the seat requirement from its name. The model only reports what
   it sees per step (`judge/ladders.py` decides); a missing or malformed observation reads review, never a
   yes. Do not move a step or change a verdict without asking Jim.
+  - Refined during the build on 2026-10-21, to confirm with Jim: the catalogue alone never makes a lot a
+    Welcab: for a lot the sheet or the photos call a Welcab, a catalogue that sells one Welcab seat system
+    decides by that system; otherwise (several systems, or nothing on the sheet or in the photos says
+    Welcab) only a catalogue grade the model names that is a Welcab row decides, by its seat system, and a
+    named plain grade or no named grade is no seat statement. A Welcab note is never read as negated ("No
+    ramp / slope type" is a seat note), because the seat table already says what passes and fails; only a
+    cruise note can be negated.
 - Anything not covered by a stored rule goes to the reviewer as NEEDS_REVIEW. Uncertainty is
   never resolved in favour of bidding.
 - Do not change how variants, modifiers or model matching are interpreted without asking Jim.

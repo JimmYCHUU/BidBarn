@@ -396,19 +396,20 @@ cases (odometer at the cap, conversions, sheet notes). It works like this:
      photo set, is no. A short photo set (some photos could not be downloaded) reads review.
    - **Maker's catalogue.** Standard on that grade is yes. Optional or not fitted is no. No data,
      or grades that differ and the lot's grade cannot be named, reads review. When the model names
-     the lot's catalogue grade, that grade's mark decides.
+     the lot's catalogue grade, that grade's mark decides; the Welcab seat block works the same way.
 
    Adaptive cruise counts as cruise control; a note that says radar or adaptive needs adaptive
    specifically. A Welcab must have a front swivel/rotating, front lift-up or second-row side
    lift-up seat. A slope/ramp or wheelchair-lift Welcab, a plain car, and a Welcab with no seat
-   statement on the sheet, in the photos or in the catalogue are not eligible. The catalogue alone
-   never makes a lot a Welcab: when the sheet or the photos call the lot a Welcab without naming
-   the seat, a catalogue that sells one Welcab seat system for the model code decides by it; with
-   several systems, or when nothing on the sheet or in the photos says Welcab, only a catalogue
-   grade the model names that is a Welcab row decides, and a named plain grade or no named grade
-   is no seat statement. A Welcab note is never read as negated ("No ramp / slope type" is a seat
-   note); only a cruise note can be. A bare "lift up" (a lifted 4WD) does not make a note a Welcab
-   note; it needs a seat word. A guide named
+   statement on the sheet, in the photos or in the catalogue are not eligible. Refined during the
+   build on 2026-10-21, to confirm with Jim: the catalogue alone never makes a lot a Welcab: when
+   the sheet or the photos call the lot a Welcab without naming the seat, a catalogue that sells
+   one Welcab seat system for the model code decides by it; with several systems, or when nothing
+   on the sheet or in the photos says Welcab, only a catalogue grade the model names that is a
+   Welcab row decides, and a named plain grade or no named grade is no seat statement. A Welcab
+   note is never read as negated ("No ramp / slope type" is a seat note); only a cruise note can
+   be. A bare "lift up" (a lifted 4WD) does not make a note a Welcab note; it needs a seat word.
+   A guide named
    "... Welcab" with no Welcab note gets the seat requirement from its name; its text quotes the
    approval pair's sentences that name a seat system, or says "No approval text names the seat
    system; confirm on ROVER by hand." The model only reports what it sees at each step;
