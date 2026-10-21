@@ -11,9 +11,13 @@ import re
 
 from auction_bot.nichibo.facts import VehicleFacts
 
-_PATTERNS: list[tuple[str, str, str]] = [
-    # (regex, level, message)
-    (r"\bwelcab\b|wheel ?chair|車いす|車椅子|福祉", "warn", "wheelchair / Welcab conversion mentioned"),
+_PATTERNS: list[tuple] = [
+    # (regex, level, message[, source prefixes the pattern applies to; default all])
+    (r"welcab|well ?cab|wel+fare|wheel ?chair|swivel|rotat|lift[- ]?up|side lift|slope|ramp|ウェルキャブ|福祉|車いす|車椅子|クルマイス|"
+     r"回転シート|リフトアップ|スロープ", "warn", "wheelchair / Welcab conversion mentioned"),
+    (r"cruise|クルーズ|クルコン|追従", "info", "cruise control mentioned"),
+    (r"\bcc\b", "info", "the text says CC, which may be cruise control or a car stereo; the steering-wheel photo decides",
+     ("equipment", "translation:")),
     (r"\b(7|8|9|10|11|12|13|14)\s*(seat|seater|人|名)", "warn", "a seat count of 7 or more is mentioned"),
     (r"\b(2|3|5|6)\s*(seat|seater|人|名)", "info", "a seat count of 2/3/5/6 is mentioned"),
     (r"\b4\s*wd\b|4x4|awd|四駆", "info", "4WD mentioned"),
@@ -43,7 +47,9 @@ def keyword_hints(facts: VehicleFacts, rule_texts: list[str] | None = None) -> l
     seen: set[tuple[str, str]] = set()
     for where, text in sources:
         low = text.lower()
-        for pattern, level, message in _PATTERNS:
+        for pattern, level, message, *only in _PATTERNS:
+            if only and not where.startswith(only[0]):
+                continue
             if re.search(pattern, low, re.I) and (message, where) not in seen:
                 seen.add((message, where))
                 hints.append({"level": level, "message": message, "where": where})

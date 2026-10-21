@@ -14,6 +14,8 @@ import re
 from dataclasses import asdict, dataclass
 
 from auction_bot.carbarn.models import ModelRule
+from auction_bot.judge.topics import (TOPIC_CRUISE, TOPIC_WELCAB, WELCAB_GUIDE_TEXT, approval_seat_sentences, cruise_kind,
+                                      detect_topic, is_negated, welcab_guide)
 from auction_bot.nichibo.facts import VehicleFacts
 from auction_bot.rules.eligibility import Eligibility
 from auction_bot.rules.hard import HardResult
@@ -32,9 +34,12 @@ _CHIP = re.compile(r"^(?P<note>.*?)\s*(?P<amount>[+-]\d+)K$")
 class Requirement:
     id: str
     text: str
-    source: str  # card | sheet | photos | any
+    source: str  # card | sheet | photos | any | ladder
     kind: str  # must | chip | instruction | eligibility
     amount_k: int | None = None  # chips: the dashboard's adjustment
+    topic: str | None = None  # cruise_control | welcab_seat
+    topic_detail: str | None = None  # cruise: plain | adaptive
+    negated: bool = False
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -57,7 +62,21 @@ def requirements_for(rule: ModelRule, hard: HardResult | None = None,
                      eligibility: Eligibility | None = None) -> list[Requirement]:
     out: list[Requirement] = []
     for i, text in enumerate(rule.text_rules, 1):
-        out.append(Requirement(f"r{i}", text, classify(text), "must"))
+        topic = detect_topic(text)
+        if topic:
+            out.append(Requirement(f"r{i}", text, "ladder", "must", topic=topic,
+                                   topic_detail=cruise_kind(text) if topic == TOPIC_CRUISE else None, negated=is_negated(text)))
+        else:
+            out.append(Requirement(f"r{i}", text, classify(text), "must"))
+    if welcab_guide(rule) and not any(r.topic == TOPIC_WELCAB for r in out):
+        out.append(Requirement("g:welcab", WELCAB_GUIDE_TEXT, "ladder", "must", topic=TOPIC_WELCAB))
+    if any(r.topic == TOPIC_WELCAB for r in out):
+        variant = rule.resolve_variant(hard.variant_name or "", "").variant if hard else None
+        sentences = approval_seat_sentences(rule.approvals_for(variant))
+        wording = (" Approval wording: " + "; ".join(sentences)) if sentences else " No approval text names the seat system; confirm on ROVER by hand."
+        for r in out:
+            if r.topic == TOPIC_WELCAB:
+                r.text += wording
     for t in (hard.toggles if hard else []):
         m = _CHIP.match(t.strip())
         note, amount = (m.group("note").strip(), int(m.group("amount"))) if m else (t.strip(), None)
@@ -71,7 +90,15 @@ def requirements_for(rule: ModelRule, hard: HardResult | None = None,
 
 
 def needs_photos(reqs: list[Requirement]) -> bool:
-    return any(r.source in ("photos", "any") for r in reqs)
+    return any(r.source in ("photos", "any", "ladder") for r in reqs)
+
+
+def has_ladder(reqs: list[Requirement]) -> bool:
+    return any(r.source == "ladder" for r in reqs)
+
+
+def ladder_topics(reqs: list[Requirement]) -> set[str]:
+    return {r.topic for r in reqs if r.source == "ladder" and r.topic}
 
 
 _SEAT_ONLY = re.compile(r"^[\d\s,/&+]*(?:or|and)?[\d\s,/&+]*seat(?:s|er|ers|ing)?\s*(?:only)?$", re.I)
@@ -120,7 +147,7 @@ def odd_flags(rule: ModelRule, hard: HardResult, facts: VehicleFacts, ocr_hints:
         if _HINT_ODD.search(msg):
             flags.append(f"listing mentions: {msg}"[:200])
     tr = facts.translator or {}
-    for key in ("VehicleCondition", "Comments"):
+    for key in ("VehicleCondition", "Comments", "SalesPoint"):
         if tr.get(key):
             flags.append(f"sheet notes ({key}): {str(tr[key])[:120]}")
             break
@@ -131,5 +158,5 @@ def odd_flags(rule: ModelRule, hard: HardResult, facts: VehicleFacts, ocr_hints:
 
 
 def requirements_hash(reqs: list[Requirement], flags: list[str]) -> str:
-    blob = "|".join(f"{r.id}={r.text}={r.amount_k}" for r in reqs) + "||" + "|".join(flags)
+    blob = "|".join(f"{r.id}={r.text}={r.amount_k}={r.topic}={r.topic_detail}={r.negated}" for r in reqs) + "||" + "|".join(flags)
     return hashlib.sha1(blob.encode("utf-8")).hexdigest()[:12]
