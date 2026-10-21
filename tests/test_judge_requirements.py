@@ -158,3 +158,19 @@ def test_sheet_requirements_the_ocr_cannot_read_need_the_model():
     assert machine_decided(Requirement("r4", "8 seater only", "sheet", "must"))
     assert not needs_judge([seats], []) and needs_judge([hybrid], []) and needs_judge([engine], [])
     assert not needs_judge([Requirement("r5", "White Minimum 4", "card", "must")], [])
+
+
+def test_eligibility_texts_become_requirements_and_flags():
+    from datetime import date
+    from auction_bot.rules.eligibility import check_lot
+    rule = _gdh206()
+    f = _facts(year=2020)
+    hard = evaluate_hard(f, rule)
+    elig = check_lot(rule, rule.variants[0], f, None, date(2026, 10, 20))
+    reqs = requirements_for(rule, hard, eligibility=elig)
+    sev = next(r for r in reqs if r.id == "elig:sev")
+    assert sev.kind == "eligibility" and sev.source == "sheet" and "4x4 Campervan only" in sev.text and sev.text.startswith("SEV-000813")
+    assert [r.id for r in reqs].index("elig:sev") < [r.id for r in reqs].index("note:1") if any(r.id == "note:1" for r in reqs) else True
+    assert needs_judge(reqs, [])
+    flags = odd_flags(rule, hard, f, eligibility=elig)
+    assert any(x.startswith("import approval model_code info") for x in flags)

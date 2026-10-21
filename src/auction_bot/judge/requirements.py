@@ -15,6 +15,7 @@ from dataclasses import asdict, dataclass
 
 from auction_bot.carbarn.models import ModelRule
 from auction_bot.nichibo.facts import VehicleFacts
+from auction_bot.rules.eligibility import Eligibility
 from auction_bot.rules.hard import HardResult
 from auction_bot.rules.instructions import free_text_lines
 
@@ -32,7 +33,7 @@ class Requirement:
     id: str
     text: str
     source: str  # card | sheet | photos | any
-    kind: str  # must | chip | instruction
+    kind: str  # must | chip | instruction | eligibility
     amount_k: int | None = None  # chips: the dashboard's adjustment
 
     def to_dict(self) -> dict:
@@ -52,7 +53,8 @@ def classify(text: str) -> str:
     return "any"
 
 
-def requirements_for(rule: ModelRule, hard: HardResult | None = None) -> list[Requirement]:
+def requirements_for(rule: ModelRule, hard: HardResult | None = None,
+                     eligibility: Eligibility | None = None) -> list[Requirement]:
     out: list[Requirement] = []
     for i, text in enumerate(rule.text_rules, 1):
         out.append(Requirement(f"r{i}", text, classify(text), "must"))
@@ -61,6 +63,8 @@ def requirements_for(rule: ModelRule, hard: HardResult | None = None) -> list[Re
         note, amount = (m.group("note").strip(), int(m.group("amount"))) if m else (t.strip(), None)
         out.append(Requirement(f"chip:{note.lower().replace(' ', '-')}", note, classify(note) if classify(note) != "any" else "photos",
                                "chip", amount))
+    for t in (eligibility.texts if eligibility else []):
+        out.append(Requirement(t["id"], f'{t["label"]}: {t["text"]}', "sheet", "eligibility"))
     for i, text in enumerate(free_text_lines(rule), 1):
         out.append(Requirement(f"note:{i}", text, classify(text), "instruction"))
     return out
@@ -90,7 +94,7 @@ _HINT_ODD = re.compile(r"repair|accident|welcab|wheelchair|dump|ambulance|\bR\b|
 
 
 def odd_flags(rule: ModelRule, hard: HardResult, facts: VehicleFacts, ocr_hints: list[dict] | None = None,
-              hints: list[dict] | None = None) -> list[str]:
+              hints: list[dict] | None = None, eligibility: Eligibility | None = None) -> list[str]:
     """What makes this lot unusual, in words the model and the reviewer both get."""
     flags: list[str] = []
     if hard.variant_how in ("trim", "single", "chassis-uncertain", "ambiguous"):
@@ -120,6 +124,9 @@ def odd_flags(rule: ModelRule, hard: HardResult, facts: VehicleFacts, ocr_hints:
         if tr.get(key):
             flags.append(f"sheet notes ({key}): {str(tr[key])[:120]}")
             break
+    for c in (eligibility.checks if eligibility else []):
+        if c.state != "pass" and c.name != "source_age":
+            flags.append(f"import approval {c.name} {c.state}: {c.detail}"[:200])
     return flags
 
 

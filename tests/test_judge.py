@@ -155,3 +155,22 @@ def test_judge_lot_with_a_stubbed_model(tmp_path, monkeypatch):
     assert res.judgement is None and res.recommendation == "review" and "no GEMINI_API_KEY" in res.unavailable
     assert res.proposed_bid_jpy_k == hard.bid_jpy_k and res.notes[0].startswith("model unavailable")
     store.close()
+
+
+def test_prompt_has_the_approval_section_and_decide_treats_it_as_must(tmp_path):
+    from datetime import date
+    from auction_bot.rules.eligibility import check_lot
+    rule = _gdh206()
+    f = _facts()
+    hard = evaluate_hard(f, rule)
+    elig = check_lot(rule, rule.variants[0], f, None, date(2026, 10, 20))
+    reqs = requirements_for(rule, hard, eligibility=elig)
+    messages, _ = build_messages(f, rule, hard, reqs, [], candidates_for(rule, f, hard), "", None, [], None)
+    text = "\n".join(p["text"] for p in messages[1]["content"] if p["type"] == "text")
+    assert "# Import approval conditions (ROVER SEV / Model Report)" in text and "elig:sev [eligibility, look at: sheet]" in text
+    assert "workshop obligation" in messages[0]["content"]
+    j = _judgement(requirements=[{"id": "r1", "verdict": "pass"}, {"id": "r2", "verdict": "pass"}, {"id": "r3", "verdict": "pass"},
+                                 *({"id": r.id, "verdict": "pass"} for r in reqs if r.kind == "eligibility" and r.id != "elig:sev"),
+                                 {"id": "elig:sev", "verdict": "fail", "evidence": "sheet: 2WD", "confidence": "high"}])
+    rec, _, notes = decide(j, reqs, candidates_for(rule, f, hard), hard)
+    assert rec == "skip" and "fails:" in notes[0] and "4x4 Campervan only" in notes[0]

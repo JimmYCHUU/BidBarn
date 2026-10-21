@@ -464,9 +464,9 @@ def evaluate_vehicle(cfg: Config, rule: ModelRule, facts: VehicleFacts, no_model
 
     if judge_mode(cfg):
         # The judgement layer: what to look at, whether the photos are needed, whether to ask the model.
-        reqs = requirements_for(rule, hard)
+        reqs = requirements_for(rule, hard, elig if cfg.eligibility.get("judge_text", True) else None)
         soft = manual_soft(rule, hard, facts, ocr, ocr_hints, evidence, mode="judge", eligibility=elig)
-        flags = odd_flags(rule, hard, facts, ocr_hints, soft["hints"])
+        flags = odd_flags(rule, hard, facts, ocr_hints, soft["hints"], eligibility=elig)
         if needs_photos(reqs) and not evidence.get("photos") and photo_loader is not None and not evidence.get("images_pending"):
             facts, evidence = photo_loader(facts)
             base["summary"] = summary_line(facts)
@@ -476,9 +476,9 @@ def evaluate_vehicle(cfg: Config, rule: ModelRule, facts: VehicleFacts, no_model
                 return dict(base, status=status, stage="hard", bid_jpy_k=hard.bid_jpy_k, base_jpy_k=hard.base_jpy_k,
                             facts_json=facts.to_dict(), hard_json=hard.to_dict(), evidence_json=evidence)
             elig = eligibility_for(cfg, rule, facts, ocr.to_dict() if ocr else None)
-            reqs = requirements_for(rule, hard)
+            reqs = requirements_for(rule, hard, elig if cfg.eligibility.get("judge_text", True) else None)
             soft = manual_soft(rule, hard, facts, ocr, ocr_hints, evidence, mode="judge", eligibility=elig)
-            flags = odd_flags(rule, hard, facts, ocr_hints, soft["hints"])
+            flags = odd_flags(rule, hard, facts, ocr_hints, soft["hints"], eligibility=elig)
             (out_dir / "facts.json").write_text(json.dumps(facts.to_dict(), indent=1, ensure_ascii=False), encoding="utf-8")
         rhash = requirements_hash(reqs, flags)
         soft.update(requirements=[r.to_dict() for r in reqs], flags=flags, requirements_hash=rhash,
@@ -696,8 +696,10 @@ def judge_pending(cfg: Config, store: Store, model_codes: list[str] | None = Non
         if hard.status != PASS:
             continue
         evidence = load_saved_evidence(cfg, row["ref_no"]) or {"dir": str(cfg.evidence_dir / _safe(row["ref_no"])), "sheet": None, "photos": []}
-        reqs = [Requirement(**r) for r in soft.get("requirements", [])] or requirements_for(rule, hard)
-        flags = soft.get("flags") or []
+        elig = eligibility_for(cfg, rule, facts, facts.sheet_ocr)
+        use_text = elig if cfg.eligibility.get("judge_text", True) else None
+        reqs = [Requirement(**r) for r in soft.get("requirements", [])] or requirements_for(rule, hard, use_text)
+        flags = soft["flags"] if "flags" in soft else odd_flags(rule, hard, facts, [], soft.get("hints") or [], eligibility=elig)
         if needs_photos(reqs) and not evidence.get("photos"):
             if browser is None:
                 soft["judge_notes"] = ["judge pending: the photos are needed; run `bot judge --pending` with a browser"]

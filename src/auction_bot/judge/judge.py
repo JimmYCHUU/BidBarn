@@ -67,6 +67,7 @@ buyer's own playbook. Money is at stake, so:
 - Read the requirement's "where to look" hint: photos for seat colour, leather, the Pro Pilot button (a blue button
   on the steering wheel), Autech badges, stickers and body condition; the sheet for seats, engine size, model code,
   4WD marks and the inspector's notes.
+- Import approval conditions: judge only properties of this vehicle (body, drive, seats, engine, odometer, registration date). An obligation on the workshop after import (conversion to a campervan, ADR evidence) passes with evidence "workshop obligation".
 - Chips are the buyer's own adjustments; say whether each one applies (yes / no / unclear). When unclear, the buyer
   uses the base amount.
 - Odd cases: name anything unusual the buyer should know (odometer at the cap, conversions, repairs, notes).
@@ -128,7 +129,8 @@ def build_messages(facts: VehicleFacts, rule: ModelRule, hard: HardResult, reqs:
                    ocr: dict | None, max_photos: int = 8) -> tuple[list[dict], list[str]]:
     """The chat messages (text plus images) and the names of the images that were attached."""
     req_lines = [f"- {r.id} [{r.kind}, look at: {r.source}]: {r.text}" + (f" (chip {r.amount_k:+d}K)" if r.amount_k else "")
-                 for r in reqs]
+                 for r in reqs if r.kind != "eligibility"]
+    elig_lines = [f"- {r.id} [eligibility, look at: {r.source}]: {r.text}" for r in reqs if r.kind == "eligibility"]
     cand_lines = [f"- {c.amount_k:,}K: {c.label}, {c.why}" for c in candidates]
     header = "\n".join([
         _facts_block(facts, ocr),
@@ -136,6 +138,7 @@ def build_messages(facts: VehicleFacts, rule: ModelRule, hard: HardResult, reqs:
         f"# The buyer's requirements for model code {rule.model_code} ({rule.make} {rule.model})",
         f"Minimum grade {rule.min_grade}. Variant used: {hard.variant_name or '?'} (resolved by {hard.variant_how}).",
         *(req_lines or ["- (no text requirements; check the sheet and photos for anything unusual)"]),
+        *(["", "# Import approval conditions (ROVER SEV / Model Report)", *elig_lines] if elig_lines else []),
         "",
         "# Odd-case flags raised by the rules",
         *([f"- {f}" for f in flags] or ["- none"]),
@@ -172,7 +175,7 @@ def decide(judgement: dict, reqs: list[Requirement], candidates: list[Candidate]
     """(recommendation, proposed amount, notes). Deterministic, so the reviewer can see why."""
     notes: list[str] = []
     verdicts = {v.get("id"): v for v in judgement.get("requirements", [])}
-    musts = [r for r in reqs if r.kind in ("must", "instruction")]
+    musts = [r for r in reqs if r.kind in ("must", "instruction", "eligibility")]
     fails = [r for r in musts if verdicts.get(r.id, {}).get("verdict") == "fail"
              and verdicts[r.id].get("confidence", "medium") != "low"]
     unclear = [r for r in musts if verdicts.get(r.id, {}).get("verdict", "unclear") == "unclear"]

@@ -161,3 +161,19 @@ def test_replay_sees_an_eligibility_change(cfg, monkeypatch):
     st = reevaluate(cfg, store, ["GDH206"], apply=True)
     assert st.changed == 1 and len(calls) == 1   # no model call for an eligibility text change in manual-text mode
     store.close()
+
+
+def test_judge_mode_sends_the_pair_text_and_never_skips_for_it(cfg, monkeypatch):
+    cfg.sheet_check = "judge"
+    cfg.eligibility = {"enabled": True, "judge_text": True}
+    calls = []
+    reply = json.loads(_answer()); reply["requirements"].append({"id": "elig:sev", "verdict": "fail", "evidence": "sheet: 2WD", "confidence": "high"})
+    _stub(monkeypatch, calls, reply=json.dumps(reply))
+    store = Store(cfg.db_path)
+    stats = scan(cfg, FakeBrowser(), store, ["GDH206"], limit_per_model=1)
+    assert "Import approval conditions" in calls[0]["text"] and "4x4 Campervan only" in calls[0]["text"]
+    row = store.list_proposals(decision="pending", status="NEEDS_REVIEW")[0]
+    soft = json.loads(row["soft_json"])
+    assert row["status"] == "NEEDS_REVIEW" and row["stage"] == "judge" and soft["recommendation"] == "skip"   # a model "skip" is a label, never SKIP
+    assert stats.review >= 1 and any(r["id"] == "elig:sev" for r in soft["requirements"]) and soft["eligibility"]["pair"]
+    store.close()
