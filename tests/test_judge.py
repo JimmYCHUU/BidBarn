@@ -174,3 +174,44 @@ def test_prompt_has_the_approval_section_and_decide_treats_it_as_must(tmp_path):
                                  {"id": "elig:sev", "verdict": "fail", "evidence": "sheet: 2WD", "confidence": "high"}])
     rec, _, notes = decide(j, reqs, candidates_for(rule, f, hard), hard)
     assert rec == "skip" and "fails:" in notes[0] and "4x4 Campervan only" in notes[0]
+
+
+def _alt_reqs():
+    from auction_bot.judge.requirements import Requirement
+    base = [Requirement(f"r{i}", f"rule {i}", "sheet", "must") for i in (1, 2, 3)]
+    return base + [Requirement("elig:sev:1", "SEV-1: 2WD only", "sheet", "eligibility"),
+                   Requirement("elig:sev:2", "SEV-2: 4x4 Campervan only", "sheet", "eligibility")]
+
+
+def _alt_decide(v1, v2):
+    rule = _gdh206()
+    f = _facts()
+    hard = evaluate_hard(f, rule)
+    j = _judgement(requirements=[{"id": "r1", "verdict": "pass"}, {"id": "r2", "verdict": "pass"}, {"id": "r3", "verdict": "pass"},
+                                 {"id": "elig:sev:1", "verdict": v1, "evidence": "sheet: 2WD", "confidence": "high"},
+                                 {"id": "elig:sev:2", "verdict": v2, "evidence": "sheet: 2WD", "confidence": "high"}])
+    return decide(j, _alt_reqs(), candidates_for(rule, f, hard), hard)
+
+
+def test_numbered_approval_pairs_are_alternatives():
+    assert _alt_decide("pass", "fail")[0] == "bid"
+    rec, _, notes = _alt_decide("unclear", "fail")
+    assert rec == "review" and any("confirm which approval pair applies" in n for n in notes)
+    rec, _, notes = _alt_decide("fail", "fail")
+    assert rec == "skip" and "no approval pair fits" in notes[0] and "4x4 Campervan only" in notes[0]
+
+
+def test_bare_approval_fail_still_skips_and_alternatives_line_is_conditional():
+    from auction_bot.judge.requirements import Requirement
+    rule = _gdh206()
+    f = _facts()
+    hard = evaluate_hard(f, rule)
+    reqs = [Requirement("r1", "rule 1", "sheet", "must"), Requirement("elig:sev", "SEV-1: 4x4 only", "sheet", "eligibility")]
+    j = _judgement(requirements=[{"id": "r1", "verdict": "pass"},
+                                 {"id": "elig:sev", "verdict": "fail", "evidence": "sheet: 2WD", "confidence": "high"}])
+    assert decide(j, reqs, candidates_for(rule, f, hard), hard)[0] == "skip"
+    line = "alternative approvals"
+    for rs, expected in ((reqs, False), (_alt_reqs(), True)):
+        messages, _ = build_messages(f, rule, hard, rs, [], candidates_for(rule, f, hard), "", None, [], None)
+        text = "\n".join(p["text"] for p in messages[1]["content"] if p["type"] == "text")
+        assert (line in text) is expected

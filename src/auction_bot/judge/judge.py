@@ -9,6 +9,7 @@ status of the lot stays NEEDS_REVIEW: Jim confirms everything on the review page
 """
 from __future__ import annotations
 
+import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Literal
@@ -25,6 +26,7 @@ from auction_bot.nichibo.facts import VehicleFacts
 from auction_bot.rules.hard import NEEDS_REVIEW, HardResult
 
 Confidence = Literal["high", "medium", "low"]
+_ALT_ID = re.compile(r"^elig:[a-z-]+:(\d+)$")  # a numbered approval pair: alternatives when no pair is selected
 
 
 class ReqVerdict(BaseModel):
@@ -138,7 +140,10 @@ def build_messages(facts: VehicleFacts, rule: ModelRule, hard: HardResult, reqs:
         f"# The buyer's requirements for model code {rule.model_code} ({rule.make} {rule.model})",
         f"Minimum grade {rule.min_grade}. Variant used: {hard.variant_name or '?'} (resolved by {hard.variant_how}).",
         *(req_lines or ["- (no text requirements; check the sheet and photos for anything unusual)"]),
-        *(["", "# Import approval conditions (ROVER SEV / Model Report)", *elig_lines] if elig_lines else []),
+        *(["", "# Import approval conditions (ROVER SEV / Model Report)",
+           *(["(Pairs numbered 1, 2, ... are alternative approvals: the lot needs to fit any one of them.)"]
+             if any(_ALT_ID.match(r.id) for r in reqs) else []),
+           *elig_lines] if elig_lines else []),
         "",
         "# Odd-case flags raised by the rules",
         *([f"- {f}" for f in flags] or ["- none"]),
@@ -171,11 +176,37 @@ def build_messages(facts: VehicleFacts, rule: ModelRule, hard: HardResult, reqs:
     return messages, images
 
 
+def _alternatives(groups: dict[str, list[Requirement]], verdicts: dict) -> tuple[str, bool]:
+    """Numbered approval pairs are alternatives: one pair that fits is enough.
+    Returns (fail note or "", whether the pairs are unclear)."""
+    if not groups:
+        return "", False
+
+    def said(r: Requirement) -> dict:
+        return verdicts.get(r.id, {})
+
+    if any(all(said(r).get("verdict") == "pass" for r in g) for g in groups.values()):
+        return "", False
+    lines = []
+    for n, g in groups.items():
+        bad = next((r for r in g if said(r).get("verdict") == "fail" and said(r).get("confidence", "medium") != "low"), None)
+        if bad is None:
+            return "", True
+        lines.append(f"{bad.text} ({said(bad).get('evidence', '')})")
+    return "no approval pair fits: " + "; ".join(lines), False
+
+
 def decide(judgement: dict, reqs: list[Requirement], candidates: list[Candidate], hard: HardResult) -> tuple[str, int | None, list[str]]:
     """(recommendation, proposed amount, notes). Deterministic, so the reviewer can see why."""
     notes: list[str] = []
     verdicts = {v.get("id"): v for v in judgement.get("requirements", [])}
-    musts = [r for r in reqs if r.kind in ("must", "instruction", "eligibility")]
+    groups: dict[str, list[Requirement]] = {}
+    for r in reqs:
+        m = _ALT_ID.match(r.id) if r.kind == "eligibility" else None
+        if m:
+            groups.setdefault(m.group(1), []).append(r)
+    musts = [r for r in reqs if r.kind in ("must", "instruction", "eligibility") and not (r.kind == "eligibility" and _ALT_ID.match(r.id))]
+    alt_fail, alt_unclear = _alternatives(groups, verdicts)
     fails = [r for r in musts if verdicts.get(r.id, {}).get("verdict") == "fail"
              and verdicts[r.id].get("confidence", "medium") != "low"]
     unclear = [r for r in musts if verdicts.get(r.id, {}).get("verdict", "unclear") == "unclear"]
@@ -184,13 +215,16 @@ def decide(judgement: dict, reqs: list[Requirement], candidates: list[Candidate]
     if missing:
         notes.append("model gave no verdict for: " + ", ".join(missing))
     chip_says = {c.get("id"): c for c in judgement.get("chips", [])}
-    if fails:
+    if fails or alt_fail:
         rec = "skip"
-        notes.append("fails: " + "; ".join(f"{r.text} ({verdicts[r.id].get('evidence', '')})" for r in fails))
-    elif unclear or low or missing or judgement.get("confidence") == "low":
+        parts = [f"{r.text} ({verdicts[r.id].get('evidence', '')})" for r in fails]
+        notes.append("fails: " + "; ".join(parts + ([alt_fail] if alt_fail else [])))
+    elif unclear or low or missing or alt_unclear or judgement.get("confidence") == "low":
         rec = "review"
         if unclear:
             notes.append("unclear: " + "; ".join(r.text for r in unclear))
+        if alt_unclear:
+            notes.append("unclear: confirm which approval pair applies")
         if low:
             notes.append("low confidence on: " + "; ".join(r.text for r in low))
     elif any(o.get("confidence") == "low" or not o.get("recommendation") for o in judgement.get("odd_cases", [])):
