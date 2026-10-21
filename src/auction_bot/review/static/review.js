@@ -54,7 +54,7 @@
   // -- lightbox for the sheet -----------------------------------------------------------------
   var box = document.getElementById("lightbox");
   function sheetOpen() { return !!box && box.dataset.open === "true"; }
-  function showSheet(src, pid) {
+  function showSheet(src, pid, evName, evValue) {
     if (!src || !box) return;
     var img = box.querySelector("img");
     if (!img) {
@@ -64,7 +64,7 @@
     }
     img.src = src;
     box.dataset.open = "true";
-    event(pid, "sheet_zoom", null);
+    event(pid, evName || "sheet_zoom", evValue === undefined ? null : evValue);
   }
   function hideSheet() { if (box) box.dataset.open = "false"; }
   if (box) box.addEventListener("click", hideSheet);
@@ -77,11 +77,23 @@
       event(row ? row.dataset.pid : pagePid, el.dataset.ev, null);
     });
   });
-  document.querySelectorAll("[data-sheet-zoom]").forEach(function (a) {
+  function openZoom(a) {
+    if (a.hasAttribute("data-sheet-zoom")) showSheet(a.getAttribute("href"), pagePid);
+    else showSheet(a.getAttribute("href"), pagePid, "photos_click", a.dataset.photoNo || null);
+  }
+  document.querySelectorAll("[data-zoom]").forEach(function (a) {
     a.addEventListener("click", function (e) {
       if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
       e.preventDefault();
-      showSheet(a.getAttribute("href"), pagePid);
+      openZoom(a);
+    });
+  });
+  document.querySelectorAll("[data-zoom-photo]").forEach(function (l) {
+    l.addEventListener("click", function (e) {
+      var a = document.getElementById("photo-" + l.dataset.zoomPhoto);
+      if (!a) return;
+      e.preventDefault();
+      openZoom(a);
     });
   });
   var amount = document.querySelector("form.decide input[name=amount]");

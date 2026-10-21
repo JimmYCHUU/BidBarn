@@ -130,3 +130,22 @@ def test_eligibility_card_and_badge(cfg, monkeypatch):
     assert '<option value="elig:sev">' in r.text                            # but still correctable
     r = client.get("/review")
     assert "cannot import" in r.text and r.text.index("cannot import") < r.text.index("model: skip")
+
+
+def test_ladder_steps_numbered_photos_and_corrections(cfg, monkeypatch):
+    from tests.test_judge_pipeline import _ladder_fixture, _ladder_reply
+    cfg.catalog = {"enabled": False}
+    cfg.judge = {"max_photos": 2, "max_photos_ladder": 40}
+    _ladder_fixture(cfg)
+    pid = _judged(cfg, monkeypatch, reply=_ladder_reply())
+    client = TestClient(create_app(cfg))
+    r = client.get(f"/p/{pid}")
+    assert 'class="steps"' in r.text and "<b>sheet</b>: not_mentioned" in r.text and 'data-zoom-photo="4"' in r.text and "bare spokes" in r.text
+    assert 'id="photo-4"' in r.text and 'class="photo-no">4<' in r.text and 'data-zoom data-photo-no="1"' in r.text
+    assert "step--decided" in r.text and "maker: not needed" not in r.text.split('class="steps"')[0]
+    r = client.get("/review")
+    assert "photo 4: no (bare spokes)" in r.text and "model: skip" in r.text   # the why-line and the pill
+    r = client.post(f"/p/{pid}/decide", data={"action": "approve", "amount": "1240", "feedback_req": "r2", "feedback_note": "stalk is behind the wheel, photo 6", "via": "detail"})
+    assert r.status_code in (200, 303)
+    line = next(ln for ln in code_lines(cfg, "GDH206") if "Model was wrong about" in ln)   # the overall "approved a skip" line follows it
+    assert "Model was wrong about 'Cruise control'" in line and "photo 4: no (bare spokes)" in line and "photo 6" in line

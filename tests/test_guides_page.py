@@ -362,3 +362,13 @@ def test_guide_page_lists_the_approvals(cfg):
     r = _client(cfg).get("/guides/GDH206")
     assert "inactive on the dashboard" in r.text
     assert r.text.index("SEV-000813 / MRE-000233") < r.text.index("SEV-000719 / MRE-000829")
+
+
+def test_guide_page_marks_ladder_notes(cfg):
+    import json
+    snap = cfg.snapshot_dir / "rules_test.json"
+    data = json.loads(snap.read_text(encoding="utf-8"))
+    data["guides"][0]["tree"]["notes"] = "No sticker paint|Cruise control"
+    snap.write_text(json.dumps(data), encoding="utf-8")
+    r = _client(cfg).get("/guides/GDH206")
+    assert "ladder: cruise control" in r.text and r.text.count("ladder:") == 1

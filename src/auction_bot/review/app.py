@@ -53,6 +53,11 @@ def _load(row) -> dict:
     d["proposed_bid_jpy_k"] = (soft.get("proposed_bid_jpy_k") if d["judge"] else None) or d.get("bid_jpy_k")
     d["badges"] = judge_badges(soft) if d["judge"] else []
     d["eligibility"] = eligibility_view(soft)
+    d["ladders"] = {l["id"]: l for l in (soft.get("ladders") or [])}
+    for r in soft.get("requirements") or []:
+        if r.get("kind") == "chip" and r["id"] in d["ladders"]:
+            d["ladders"][r["id"]] = {**d["ladders"][r["id"]], "applies": _ladder_applies(r, d["ladders"][r["id"]])}
+    d["catalog"] = soft.get("catalog")
     lines = check_lines(d.get("hard"), soft)
     d["verdict_counts"] = verdict_counts(d["badges"])
     d["verdict_title"] = verdict_title(d["badges"])
@@ -168,14 +173,32 @@ def _eligibility_reason(view: dict) -> str:
     return "no approval pair fits"
 
 
+def _ladder_applies(req: dict, ladder: dict) -> str:
+    """Whether a ladder chip applies: the ladder's verdict says the car has it, the chip's own wording decides what that means."""
+    from auction_bot.judge.ladders import chip_applies
+    from auction_bot.judge.requirements import Requirement
+
+    return chip_applies(Requirement(**req), ladder.get("verdict"))
+
+
 def judge_badges(soft: dict) -> list[dict]:
     """One badge per requirement and chip: mark, short text, evidence (for the title attribute)."""
     j = soft.get("judgement") or {}
     verdicts = {v.get("id"): v for v in j.get("requirements", [])}
     chips = {c.get("id"): c for c in j.get("chips", [])}
+    ladders = {l.get("id"): l for l in (soft.get("ladders") or [])}
     out = []
     for r in soft.get("requirements", []):
-        if r.get("kind") == "chip":
+        lad = ladders.get(r["id"])
+        if lad and r.get("kind") == "chip":
+            applies = _ladder_applies(r, lad)
+            out.append({"mark": {"yes": "chip", "no": "no chip"}.get(applies, "?"), "cls": {"yes": "unk", "no": "ok"}.get(applies, "unk"),
+                        "text": f"{r['text']} {r['amount_k']:+d}K" if r.get("amount_k") else r["text"], "evidence": lad.get("evidence", "")})
+        elif lad:
+            verdict = lad.get("verdict")
+            out.append({"mark": {"pass": "✓", "fail": "✗", "unclear": "?"}.get(verdict, "·"), "cls": {"pass": "ok", "fail": "bad"}.get(verdict, "unk"),
+                        "text": r["text"][:40], "evidence": lad.get("evidence", "")})
+        elif r.get("kind") == "chip":
             c = chips.get(r["id"], {})
             mark = {"yes": "chip", "no": "no chip", "unclear": "?"}.get(c.get("applies"), "?")
             out.append({"mark": mark, "cls": {"yes": "unk", "no": "ok"}.get(c.get("applies"), "unk"),
@@ -291,7 +314,13 @@ def feedback_lines(loaded: dict, action: str, amount: int | None, reason: str, r
     if req_id and note:
         v = next((x for x in j.get("requirements", []) if x.get("id") == req_id), None) or \
             next((x for x in j.get("chips", []) if x.get("id") == req_id), None) or {}
-        said = f"{v.get('verdict') or v.get('applies') or '?'}: {v.get('evidence', '')}"
+        lad = next((x for x in judge.get("ladders") or [] if x.get("id") == req_id), None)
+        if lad and reqs.get(req_id, {}).get("kind") == "chip":
+            said = f"chip applies {_ladder_applies(reqs[req_id], lad)}: {lad.get('evidence', '')}"
+        elif lad:
+            said = f"{lad.get('verdict') or '?'}: {lad.get('evidence', '')}"
+        else:
+            said = f"{v.get('verdict') or v.get('applies') or '?'}: {v.get('evidence', '')}"
         text = reqs.get(req_id, {}).get("text", req_id)
         out.append((req_id, said, note, f"Model was wrong about '{text}' (it said {said}); Jim: {note} [{lot}]"))
     rec = judge.get("recommendation")

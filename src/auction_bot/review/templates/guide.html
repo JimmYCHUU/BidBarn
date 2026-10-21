@@ -48,7 +48,7 @@
       <div class="card-body">
         {% if g.text_rules %}
         <ul class="checks">
-          {% for t in g.text_rules %}<li>{{ icon('circle-check', 'mark-ok') }}<span>{{ t }}</span></li>{% endfor %}
+          {% for t in g.rule_topics %}<li>{{ icon('circle-check', 'mark-ok') }}<span>{{ t.text }}{% if t.topic %} <span class="pill pill--info">ladder: {{ 'cruise control' if t.topic == 'cruise_control' else 'Welcab seat' }}</span>{% endif %}</span></li>{% endfor %}
         </ul>
         {% else %}
         <p class="muted">No text rules on this guide. The grid, the grade and the odometer decide.</p>

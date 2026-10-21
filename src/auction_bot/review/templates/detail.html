@@ -108,11 +108,17 @@
           {% set c = (j.chips or []) | selectattr('id', 'equalto', r.id) | list | first %}
           <li>{{ icon('circle-check', 'mark-ok') if (v and v.verdict == 'pass') or (c and c.applies == 'no') else (icon('circle-x', 'mark-bad') if v and v.verdict == 'fail' else icon('circle-alert', 'mark-unk')) }}
             <span><b>{{ r.text }}</b>{% if r.amount_k %} ({{ '%+d' % r.amount_k }}K chip){% endif %} <span class="muted">[{{ r.source }}]</span>
-            {% if v %}<br><b>{{ v.verdict }}</b>: {{ v.evidence }} <span class="muted">({{ v.confidence }})</span>{% elif c %}<br>chip applies: <b>{{ c.applies }}</b>. {{ c.evidence }}{% elif j %}<br><span class="muted">no verdict</span>{% endif %}</span></li>
+            {% set lad = p.ladders.get(r.id) %}
+            {% if lad %}<br>{% if r.kind == 'chip' %}chip applies: <b>{{ lad.applies }}</b>{% else %}<b>{{ lad.verdict }}</b>{% endif %}
+            <ul class="steps">
+              {% for st in lad.steps %}<li{% if st.decided %} class="step--decided"{% endif %}><b>{{ st.step }}</b>: {{ st.state }}{% if st.evidence %} <span class="muted">{{ st.evidence }}</span>{% endif %}{% if st.step == 'photo' and st.photo_no %} <a href="#photo-{{ st.photo_no }}" data-zoom-photo="{{ st.photo_no }}">photo {{ st.photo_no }}</a>{% endif %}{% if st.step == 'maker' and st.url %} <a href="{{ st.url }}" target="_blank" rel="noopener">{{ st.grade or 'catalogue' }}</a>{% if st.mark %} [{{ st.mark }}]{% endif %}{% endif %}</li>{% endfor %}
+            </ul>
+            {% elif v %}<br><b>{{ v.verdict }}</b>: {{ v.evidence }} <span class="muted">({{ v.confidence }})</span>{% elif c %}<br>chip applies: <b>{{ c.applies }}</b>. {{ c.evidence }}{% elif j %}<br><span class="muted">no verdict</span>{% endif %}</span></li>
         {% endfor %}
         {% for fl in p.judge.flags %}<li>{{ icon('flag', 'mark-unk') }}<span>{{ fl }}</span></li>{% endfor %}
         {% for o in j.odd_cases or [] %}<li>{{ icon('circle-alert', 'mark-unk') }}<span>Odd: {{ o.what }}. {{ o.recommendation }} <span class="muted">({{ o.confidence }})</span></span></li>{% endfor %}
         </ul>
+        {% if p.catalog %}<p class="faint">Maker catalogue: {{ p.catalog.source }}{% if p.catalog.note %}, {{ p.catalog.note }}{% endif %}{% if p.catalog.urls %} <a href="{{ p.catalog.urls[0] }}" target="_blank" rel="noopener">{{ p.catalog.urls[0] }}</a>{% endif %}</p>{% endif %}
         {% if j.sheet_notes %}<p class="faint">Sheet notes: {{ j.sheet_notes }}</p>{% endif %}
         {% for n in p.judge.judge_notes %}<p class="faint">{{ n }}</p>{% endfor %}
         {% if p.judge.candidates %}<p class="faint num">Candidate amounts: {% for c in p.judge.candidates %}{{ '{:,}'.format(c.amount_k) }}K ({{ c.label }}){% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
@@ -247,7 +253,7 @@
     {% if p.evidence_base and p.sheet_file %}
     <section class="card sheet">
       <div class="card-head"><h2>Auction sheet</h2><span class="faint">Click to open full size</span></div>
-      <div class="card-body"><a href="/evidence/{{ p.evidence_base }}/{{ p.sheet_file }}" target="_blank" data-sheet-zoom><img src="/evidence/{{ p.evidence_base }}/{{ p.sheet_file }}" alt="Auction sheet"></a></div>
+      <div class="card-body"><a href="/evidence/{{ p.evidence_base }}/{{ p.sheet_file }}" target="_blank" data-zoom data-sheet-zoom><img src="/evidence/{{ p.evidence_base }}/{{ p.sheet_file }}" alt="Auction sheet"></a></div>
     </section>
     {% elif f.sheet_url %}
     <section class="card sheet">
@@ -260,7 +266,7 @@
       <div class="card-body">
         <p class="faint">{% if p.photo_files %}The photos the model looked at, in page order (photo 1 first). The full set is on Nichibo.{% else %}No photos were downloaded for this lot. Open it in your own signed-in browser.{% endif %}</p>
         {% if p.photo_files %}<div class="thumbs">
-        {% for ph in p.photo_files %}<a href="/evidence/{{ p.evidence_base }}/{{ ph }}" target="_blank"><img src="/evidence/{{ p.evidence_base }}/{{ ph }}" alt="Photo {{ loop.index }}" loading="lazy"></a>{% endfor %}
+        {% for ph in p.photo_files %}<a id="photo-{{ loop.index }}" href="/evidence/{{ p.evidence_base }}/{{ ph }}" target="_blank" data-zoom data-photo-no="{{ loop.index }}"><img src="/evidence/{{ p.evidence_base }}/{{ ph }}" alt="Photo {{ loop.index }}" loading="lazy"><span class="photo-no">{{ loop.index }}</span></a>{% endfor %}
         </div>{% endif %}
         {% if p.evidence and p.evidence.failed %}<details><summary>{{ p.evidence.failed|length }} image(s) failed to download</summary><pre>{{ p.evidence.failed }}</pre></details>{% endif %}
       </div>

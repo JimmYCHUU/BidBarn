@@ -18,6 +18,7 @@ from auction_bot.dashboard import status as st
 from auction_bot.dashboard.jobs import MODEL_CODE
 from auction_bot.insights import propose_skip_lines
 from auction_bot.judge.playbook import code_lines
+from auction_bot.judge.topics import detect_topic
 from auction_bot.rules.hard import _grade_bonus_threshold  # the one reading of "grade 4" = 4 and above (Jim, 2026-09-14)
 from auction_bot.rules.eligibility import window_text  # the review card's words for a build window
 from auction_bot.rules.instructions import InstructionError, is_structured, parse_instruction, split_override_lines
@@ -202,6 +203,7 @@ def guide_view(rule: ModelRule) -> dict:
         "boss_bid": rule.boss_bid,
         "eligibility_summary": rule.eligibility_summary,
         "text_rules": list(rule.text_rules),
+        "rule_topics": [{"text": t, "topic": detect_topic(t)} for t in rule.text_rules],
         "years": rule.search_years,
         "max_odo": rule.search_max_odo,
         "variants": variants,
