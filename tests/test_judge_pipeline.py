@@ -2,9 +2,11 @@
 import json
 from pathlib import Path
 
+import auction_bot.catalog.client as cat_client
 import auction_bot.judge.client as client_mod
 from auction_bot.pipeline import judge_pending, reevaluate, scan
 from auction_bot.store import Store
+from tests.test_catalog_lookup import PAGES
 from tests.test_pipeline_offline import FakeBrowser, cfg  # noqa: F401  (fixture)
 
 
@@ -212,3 +214,140 @@ def test_ladder_lots_get_every_photo_and_a_short_bundle_is_extended(cfg, monkeyp
     assert len(ev["photos"]) == 10 and ev["extended"] == 7 and browser.images - before == 7   # only the missing seven were fetched
     assert photos_complete(ev, 40) and calls[-1]["images"] == 11                                   # sheet + 10 photos went to the model
     store.close()
+
+
+def _ladder_fixture(cfg, note="Cruise control"):
+    snap = cfg.snapshot_dir / "rules_test.json"
+    data = json.loads(snap.read_text(encoding="utf-8"))
+    data["guides"][0]["tree"]["notes"] = "No sticker paint|" + note
+    snap.write_text(json.dumps(data), encoding="utf-8")
+
+
+def _catalog_stub(monkeypatch, pages=PAGES, fetched=None):
+    def fetch(url):
+        if fetched is not None:
+            fetched.append(url)
+        if url not in pages:
+            raise RuntimeError("404")
+        return pages[url].read_text(encoding="utf-8")
+    monkeypatch.setattr(cat_client, "default_fetch", fetch)
+
+
+def _ladder_reply(photo_state="no", photo_no=4):
+    r = json.loads(_answer())
+    r["requirements"] = [x for x in r["requirements"] if x["id"] != "r2"]
+    r["observations"] = [{"id": "r2", "sheet": {"state": "not_mentioned"}, "photo": {"state": photo_state, "photo_no": photo_no, "evidence": "bare spokes"}}]
+    return json.dumps(r)
+
+
+def test_scan_looks_the_catalogue_up_before_the_call_and_stores_the_ladder(cfg, monkeypatch):
+    cfg.sheet_check = "judge"
+    cfg.catalog = {"enabled": True, "base_url": "https://www.kurumaerabi.com", "cache_days": 90, "pace_seconds": [0, 0]}
+    _ladder_fixture(cfg)
+    _catalog_stub(monkeypatch)
+    calls = []
+    _stub(monkeypatch, calls, reply=_ladder_reply())
+    store = Store(cfg.db_path)
+    stats = scan(cfg, FakeBrowser(), store, ["GDH206"], limit_per_model=1)
+    assert stats.errors == [] and len(calls) == 1
+    assert "ladder cruise_control/plain" in calls[0]["text"] and "# Maker catalogue" in calls[0]["text"]
+    row = store.list_proposals(decision="pending", status="NEEDS_REVIEW")[0]
+    soft = json.loads(row["soft_json"])
+    assert row["status"] == "NEEDS_REVIEW" and soft["recommendation"] == "skip" and soft["photos_complete"] is True
+    assert soft["ladders"][0]["id"] == "r2" and soft["ladders"][0]["verdict"] == "fail" and "photo 4: no (bare spokes)" in soft["ladders"][0]["evidence"]
+    assert soft["catalog"]["source"] == "kurumaerabi.com" and soft["catalog"]["key"]   # the sitemap names a GDH206V page, the fixture set has none: unknown, but recorded
+    assert soft["catalog"]["cruise"]["status"] == "unknown" and "404" in soft["catalog"]["note"]   # urls holds only the pages actually read
+    assert (Path(json.loads(row["evidence_json"])["dir"]) / "catalog.json").exists()
+    store.close()
+
+
+def test_catalogue_failure_never_fails_the_scan(cfg, monkeypatch):
+    cfg.sheet_check = "judge"
+    cfg.catalog = {"enabled": True, "base_url": "https://www.kurumaerabi.com", "pace_seconds": [0, 0]}
+    _ladder_fixture(cfg)
+    monkeypatch.setattr(cat_client, "default_fetch", lambda url: (_ for _ in ()).throw(OSError("network down")))
+    calls = []
+    _stub(monkeypatch, calls, reply=_ladder_reply(photo_state="maybe"))
+    store = Store(cfg.db_path)
+    stats = scan(cfg, FakeBrowser(), store, ["GDH206"], limit_per_model=1)
+    soft = json.loads(store.list_proposals(decision="pending", status="NEEDS_REVIEW")[0]["soft_json"])
+    assert stats.errors == [] and len(calls) == 1 and soft["recommendation"] == "review"
+    assert soft["catalog"]["cruise"]["status"] == "unknown" and "network down" in soft["catalog"]["note"]
+    assert soft["ladders"][0]["verdict"] == "unclear"
+    fetched = []
+    monkeypatch.setattr(cat_client, "default_fetch", lambda url: fetched.append(url) or "")
+    assert reevaluate(cfg, store, ["GDH206"], apply=True).changed == 0 and fetched == [] and len(calls) == 1   # replay never reads the catalogue
+    store.close()
+
+
+def test_replay_reresolves_ladders_from_stored_observations_without_the_model(cfg, monkeypatch):
+    cfg.sheet_check = "judge"
+    cfg.catalog = {"enabled": False}
+    _ladder_fixture(cfg)
+    calls = []
+    _stub(monkeypatch, calls, reply=_ladder_reply(photo_state="maybe"))
+    store = Store(cfg.db_path)
+    scan(cfg, FakeBrowser(), store, ["GDH206"], limit_per_model=1)
+    assert json.loads(store.list_proposals(decision="pending", status="NEEDS_REVIEW")[0]["soft_json"])["recommendation"] == "review"
+    assert reevaluate(cfg, store, ["GDH206"], apply=True).changed == 0 and len(calls) == 1
+    import auction_bot.judge.judge as judge_mod
+    real = judge_mod.resolve
+    monkeypatch.setattr(judge_mod, "resolve", lambda req, obs, maker, photos_complete=True: real(req, {**(obs or {"id": req.id}), "photo": {"state": "yes", "photo_no": 1}}, maker, photos_complete))
+    st = reevaluate(cfg, store, ["GDH206"], apply=True)       # the ladder now passes: the recommendation changes, no model call
+    assert st.changed == 1 and len(calls) == 1 and st.changes[0].endswith("(recommendation changed)")
+    soft = json.loads(store.list_proposals(decision="pending", status="NEEDS_REVIEW")[0]["soft_json"])
+    assert soft["recommendation"] == "bid" and soft["ladders"][0]["verdict"] == "pass" and soft["judgement"]
+    store.close()
+
+
+def test_pending_pass_reuses_the_stored_finding(cfg, monkeypatch):
+    cfg.sheet_check = "judge"
+    cfg.judge = {"max_photos": 2, "inline": False}
+    cfg.catalog = {"enabled": True, "base_url": "https://www.kurumaerabi.com", "pace_seconds": [0, 0]}
+    _ladder_fixture(cfg)
+    fetched = []
+    _catalog_stub(monkeypatch, fetched=fetched)   # the sitemap answers, the GDH206V page 404s: a real (unknown) finding
+    calls = []
+    _stub(monkeypatch, calls, reply=_ladder_reply())
+    store = Store(cfg.db_path)
+    scan(cfg, FakeBrowser(), store, ["GDH206"], limit_per_model=1)
+    n = len(fetched)
+    assert n >= 1 and calls == []
+    st = judge_pending(cfg, store, browser=FakeBrowser())
+    assert st.judged == 1 and len(fetched) == n            # the finding came from soft_json, no second lookup
+    soft = json.loads(store.list_proposals(decision="pending", status="NEEDS_REVIEW")[0]["soft_json"])
+    assert soft["ladders"] and soft["catalog"]["key"]
+    store.close()
+
+
+def test_catalog_finding_reuses_only_a_real_result(cfg, monkeypatch):
+    import auction_bot.pipeline as pl
+    from auction_bot.carbarn.client import load_rules
+    from auction_bot.catalog.lookup import candidate_codes, finding_key, unknown
+    from auction_bot.judge.requirements import ladder_topics, requirements_for
+    from auction_bot.nichibo.facts import VehicleFacts
+    _ladder_fixture(cfg)
+    rule = load_rules(cfg, None, ["GDH206"])[0][0]
+    reqs = requirements_for(rule)
+    facts = VehicleFacts(ref_no="r", url="u", year=2020, make="Toyota", model="Hiace", variant_text="", chassis="GDH206V", km=1, grade_raw="4")
+    key = finding_key(candidate_codes(facts, rule), facts.year, ladder_topics(reqs))
+    looked = []
+    monkeypatch.setattr(pl, "lookup", lambda client, f, r, topics: looked.append(client) or unknown("fresh", key=key))
+    client = object()
+
+    def prev(note, k=key):
+        return {"catalog": unknown(note, key=k).to_dict()}
+
+    plain = [r for r in reqs if r.source != "ladder"]
+    assert pl.catalog_finding(cfg, facts, rule, plain, prev("x"), client) is None            # no ladder, no finding
+    cfg.catalog = {"enabled": False}
+    off = pl.catalog_finding(cfg, facts, rule, reqs, None, client)
+    assert off["note"] == "catalogue disabled" and off["key"] == key and looked == []
+    assert pl.catalog_finding(cfg, facts, rule, reqs, {"catalog": off}, client) == off       # still disabled: kept
+    cfg.catalog = {"enabled": True}
+    real = prev("1 page(s), 2 grade(s), 0 grade pages failed")
+    assert pl.catalog_finding(cfg, facts, rule, reqs, real, client) == real["catalog"] and looked == []
+    for again in (prev("1 page(s)", k="other"), prev("catalogue sitemap unavailable: 503"),
+                  prev("catalogue lookup failed: boom"), {"catalog": off}, {}):
+        assert pl.catalog_finding(cfg, facts, rule, reqs, again, client)["note"] == "fresh"
+    assert looked == [client] * 5

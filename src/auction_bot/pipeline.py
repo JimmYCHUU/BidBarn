@@ -17,6 +17,8 @@ from typing import Callable
 from auction_bot import progress
 from auction_bot.carbarn.client import load_rules, snapshot_age_hours
 from auction_bot.carbarn.models import ModelRule, rule_to_summary
+from auction_bot.catalog.client import CatalogClient, catalog_enabled
+from auction_bot.catalog.lookup import candidate_codes, finding_key, lookup, unknown
 from auction_bot.config import Config, cache_dir
 from auction_bot.nichibo.browser import Browser, NotLoggedIn
 from auction_bot.nichibo.cache import NoCache, PageCache
@@ -24,13 +26,14 @@ from auction_bot.progress import Cancelled
 from auction_bot.nichibo.facts import VehicleFacts
 from auction_bot.nichibo.search import search_rule
 from auction_bot.nichibo.sheet_ocr import read_sheet
-from auction_bot.nichibo.vehicle import _safe, download_evidence, fetch_facts, load_saved_evidence
+from auction_bot.nichibo.vehicle import _safe, download_evidence, fetch_facts, load_saved_evidence, photos_complete
 from auction_bot.rules.hard import (NEEDS_REVIEW, PASS, SKIP, Check, allowed_seats, card_grid_check, card_prefilter,
                                     evaluate_hard)
 from auction_bot.rules.eligibility import Eligibility, check_lot
 from auction_bot.rules.hints import keyword_hints
 from auction_bot.rules.instructions import detail_fields_used, instruction_check, split_override_lines
-from auction_bot.judge.requirements import has_ladder, judge_photos, needs_judge, needs_photos, odd_flags, requirements_for, requirements_hash
+from auction_bot.judge.requirements import (has_ladder, judge_photos, ladder_topics, needs_judge, needs_photos, odd_flags,
+                                            requirements_for, requirements_hash)
 from auction_bot.store import Store
 
 log = logging.getLogger("auction_bot.scan")
@@ -179,6 +182,7 @@ def scan(cfg: Config, browser: Browser, store: Store, model_codes: list[str] | N
     if not no_model and judge_mode(cfg):
         from auction_bot.judge.client import make_client
         judge_client = make_client(cfg, store)
+    catalog_client = CatalogClient(cfg) if catalog_enabled(cfg) else None  # one per run: shared pacing and sitemap
     rules, snap_path = load_rules(cfg, snapshot, model_codes)
     age = snapshot_age_hours(snap_path)
     if age > cfg.max_rules_age_hours:
@@ -297,7 +301,7 @@ def scan(cfg: Config, browser: Browser, store: Store, model_codes: list[str] | N
                     cfg, rule, facts, no_model, evidence_loader=load_evidence,
                     past_decisions=store.past_decisions(rule.model_code) if not no_model else [],
                     stats=stats, judge_client=judge_client, store=store, photo_loader=load_photos,
-                    previous_soft=_deleted_soft(store, card.ref_no, rule.guide_id),
+                    previous_soft=_deleted_soft(store, card.ref_no, rule.guide_id), catalog_client=catalog_client,
                 )
                 store.supersede_pending(card.ref_no, rule.guide_id)
                 store.add_proposal(snapshot=snap_path.name, rule_updated_at=rule.updated_at, run_id=run, **proposal)
@@ -375,6 +379,57 @@ def eligibility_for(cfg: Config, rule: ModelRule, facts: VehicleFacts, ocr: dict
     return check_lot(rule, variant, facts, ocr, date.today(), stale_days)
 
 
+_LOOK_AGAIN = ("catalogue sitemap unavailable", "catalogue lookup failed")  # a failed lookup, not an answer
+
+
+def _reusable(cfg: Config, found, key: str) -> bool:
+    """A stored finding answers for this lot: same codes, year and topics, a real result, and not a
+    "catalogue disabled" placeholder once the catalogue is switched on."""
+    if not isinstance(found, dict) or found.get("key") != key:
+        return False
+    note = str(found.get("note") or "")
+    return not note.startswith(_LOOK_AGAIN) and (note != "catalogue disabled" or not catalog_enabled(cfg))
+
+
+def catalog_finding(cfg: Config, facts: VehicleFacts, rule: ModelRule, reqs: list[Requirement], previous_soft: dict | None,
+                    client: CatalogClient | None = None) -> dict | None:
+    """The maker-catalogue finding for a lot with an equipment ladder (None without one). A stored finding
+    for the same codes, year and topics is reused; otherwise the catalogue is read (never raises)."""
+    if not has_ladder(reqs):
+        return None
+    codes, topics = candidate_codes(facts, rule), ladder_topics(reqs)
+    key = finding_key(codes, facts.year, topics)
+    found = (previous_soft or {}).get("catalog")
+    if _reusable(cfg, found, key):
+        return found
+    if not catalog_enabled(cfg):
+        return unknown("catalogue disabled", codes, key).to_dict()
+    return lookup(client or CatalogClient(cfg), facts, rule, topics).to_dict()
+
+
+def _catalog_for(cfg: Config, facts: VehicleFacts, rule: ModelRule, reqs: list[Requirement], previous_soft: dict | None,
+                 client: CatalogClient | None) -> tuple[dict | None, dict | None]:
+    """(the finding to store, the finding the ladders read). Without a client while the catalogue is on (replay)
+    nothing is looked up: the stored finding stays as it was, and the ladders read it only while it still
+    belongs to this lot (else unknown)."""
+    if client is not None or not catalog_enabled(cfg):
+        found = catalog_finding(cfg, facts, rule, reqs, previous_soft, client)
+        return found, found
+    if not has_ladder(reqs):
+        return None, None
+    found = (previous_soft or {}).get("catalog")
+    key = finding_key(candidate_codes(facts, rule), facts.year, ladder_topics(reqs))
+    return found, (found if isinstance(found, dict) and found.get("key") == key else None)
+
+
+def _judge_fields(res) -> dict:
+    """The soft_json fields one judge call fills (the scan's inline call and the pending pass)."""
+    return dict(judgement=res.judgement, recommendation=res.recommendation, proposed_bid_jpy_k=res.proposed_bid_jpy_k,
+                judge_notes=res.notes, candidates=res.candidates, provider=res.provider, usage=res.usage,
+                unavailable=res.unavailable, images_used=res.images_used, judge_pending=res.judgement is None,
+                ladders=res.ladders)
+
+
 def _eligibility_lines(elig: Eligibility) -> list[str]:
     label = (elig.pair or {}).get("label") or "no selected pair"
     lines = [f"Import approval ({label}): {c.name} {c.state}: {c.detail}"
@@ -429,13 +484,16 @@ def manual_soft(rule: ModelRule, hard, facts: VehicleFacts, ocr, ocr_hints: list
 def evaluate_vehicle(cfg: Config, rule: ModelRule, facts: VehicleFacts, no_model: bool,
                      evidence_loader: Callable[[], dict], past_decisions: list[dict] | None = None,
                      stats: ScanStats | None = None, judge_client=None, store=None, photo_loader=None,
-                     previous_soft: dict | None = None) -> dict:
+                     previous_soft: dict | None = None, catalog_client: CatalogClient | None = None) -> dict:
     """Decide one vehicle. Returns the proposal row fields (without snapshot/rule_updated_at).
 
     Judge mode (`sheet_check: judge`): after the hard rules and the OCR, the guide's requirements
     and the odd-case flags decide whether the photos are needed (`photo_loader` opens the page)
     and whether the model is asked at all. The lot always stays NEEDS_REVIEW with the model's
-    recommendation and proposed amount beside the checklist; Jim confirms.
+    recommendation and proposed amount beside the checklist; Jim confirms. A lot with an equipment
+    ladder gets its maker-catalogue finding before the call (`catalog_client`, one per scan); replay
+    passes no client, so it never reads the catalogue and re-resolves the ladders from the stored
+    observations without the model.
     """
     base = dict(ref_no=facts.ref_no, guide_id=rule.guide_id, model_code=rule.model_code, summary=summary_line(facts))
     hard = evaluate_hard(facts, rule)
@@ -498,26 +556,34 @@ def evaluate_vehicle(cfg: Config, rule: ModelRule, facts: VehicleFacts, no_model
             flags = odd_flags(rule, hard, facts, ocr_hints, soft["hints"], eligibility=elig)
             (out_dir / "facts.json").write_text(json.dumps(facts.to_dict(), indent=1, ensure_ascii=False), encoding="utf-8")
         rhash = requirements_hash(reqs, flags)
+        complete = photos_complete(evidence, judge_photos(cfg, reqs))
+        catalog, maker = _catalog_for(cfg, facts, rule, reqs, previous_soft, catalog_client)
+        if catalog is not None:
+            (out_dir / "catalog.json").write_text(json.dumps(catalog, indent=1, ensure_ascii=False), encoding="utf-8")
         soft.update(requirements=[r.to_dict() for r in reqs], flags=flags, requirements_hash=rhash,
                     proposed_bid_jpy_k=hard.bid_jpy_k, judgement=None, recommendation="review", judge_notes=[],
-                    judge_pending=False, candidates=[], provider=None, usage=None, unavailable=None, images_used=[])
+                    judge_pending=False, candidates=[], provider=None, usage=None, unavailable=None, images_used=[],
+                    catalog=catalog, ladders=[], photos_complete=complete)
         wanted = needs_judge(reqs, flags)
         prev = previous_soft or {}
         if not wanted:
             soft.update(recommendation="bid", judge_notes=["routine: nothing to look at beyond the grid; confirm"])
         elif prev.get("judgement") and prev.get("requirements_hash") == rhash:
-            for k in ("judgement", "recommendation", "proposed_bid_jpy_k", "judge_notes", "candidates", "provider",
-                      "usage", "images_used"):
+            # The stored judgement still answers these requirements: re-resolve the ladders and decide, no call.
+            from auction_bot.judge.candidates import candidates_for
+            from auction_bot.judge.judge import redecide
+            for k in ("judgement", "candidates", "provider", "usage", "images_used"):
                 soft[k] = prev.get(k, soft.get(k))
+            rec, amount, notes, ladders = redecide(prev["judgement"], reqs, candidates_for(rule, facts, hard), hard,
+                                                   maker, complete)
+            soft.update(recommendation=rec, proposed_bid_jpy_k=amount, judge_notes=notes, ladders=ladders)
         elif judge_client is not None and judge_inline(cfg):
             from auction_bot.judge.judge import judge_lot
             res = judge_lot(judge_client, cfg, store, facts, rule, hard, evidence, ocr.to_dict() if ocr else None,
-                            ocr_hints, soft["hints"], reqs, flags)
+                            ocr_hints, soft["hints"], reqs, flags, maker=maker, photos_complete=complete)
             if stats is not None and res.provider:
                 stats.model_calls += 1
-            soft.update(judgement=res.judgement, recommendation=res.recommendation, proposed_bid_jpy_k=res.proposed_bid_jpy_k,
-                        judge_notes=res.notes, candidates=res.candidates, provider=res.provider, usage=res.usage,
-                        unavailable=res.unavailable, images_used=res.images_used, judge_pending=res.judgement is None)
+            soft.update(**_judge_fields(res))
             (out_dir / "judge.json").write_text(json.dumps(res.to_dict(), indent=1, ensure_ascii=False), encoding="utf-8")
             log.info("   judge %s -> %s, proposed %s (%s)", res.provider or "unavailable", res.recommendation,
                      res.proposed_bid_jpy_k, "; ".join(res.notes)[:120])
@@ -638,10 +704,13 @@ def reevaluate(cfg: Config, store: Store, model_codes: list[str] | None = None, 
         proposal = evaluate_vehicle(cfg, rule, facts, no_model, evidence_loader=lambda s=saved, m=missing: s or m,
                                     previous_soft=prev_soft)
         # A judge row whose requirements changed needs a fresh judgement: that counts as a change too.
-        old = (*old, prev_soft.get("requirements_hash"), (prev_soft.get("eligibility") or {}).get("hash"))
+        # So does a recommendation the stored observations now resolve differently (ladders, catalogue).
+        old = (*old, prev_soft.get("requirements_hash"), (prev_soft.get("eligibility") or {}).get("hash"),
+               prev_soft.get("recommendation"), prev_soft.get("proposed_bid_jpy_k"))
         new_soft = proposal.get("soft_json") or {}
         new = (proposal["status"], proposal["bid_jpy_k"], new_soft.get("requirements_hash"),
-               (new_soft.get("eligibility") or {}).get("hash"))
+               (new_soft.get("eligibility") or {}).get("hash"), new_soft.get("recommendation"),
+               new_soft.get("proposed_bid_jpy_k"))
         if new == old:
             st.unchanged += 1
             continue
@@ -653,6 +722,8 @@ def reevaluate(cfg: Config, store: Store, model_codes: list[str] | None = None, 
                 parts.append("eligibility changed")
             if old[2] != new[2]:
                 parts.append("requirements changed")
+            if not parts and old[4:] != new[4:]:
+                parts.append("recommendation changed")
             why = f" ({' and '.join(parts)})" if parts else ""
         st.changes.append(f"{label}: {old[0]} {old[1]} -> {new[0]} {new[1]}{why}")
         if apply:
@@ -689,6 +760,7 @@ def judge_pending(cfg: Config, store: Store, model_codes: list[str] | None = Non
     by_code = {r.model_code: r for r in rules}
     client = client or make_client(cfg, store)
     cache = PageCache(cache_dir(cfg), cfg.cache_hours)
+    catalog_client = CatalogClient(cfg) if catalog_enabled(cfg) else None  # one per pass
     st = JudgeStats()
     wanted = {c.upper() for c in model_codes} if model_codes else None
     todo = []  # the lots waiting for a judgement, in the stored order, so the total is known up front
@@ -743,13 +815,16 @@ def judge_pending(cfg: Config, store: Store, model_codes: list[str] | None = Non
                 st.errors.append(f"{row['ref_no']}: {exc}")
                 continue
         ocr = facts.sheet_ocr
-        res = judge_lot(client, cfg, store, facts, rule, hard, evidence, ocr, [], soft.get("hints") or [], reqs, flags)
-        soft.update(judgement=res.judgement, recommendation=res.recommendation, proposed_bid_jpy_k=res.proposed_bid_jpy_k,
-                    judge_notes=res.notes, candidates=res.candidates, provider=res.provider, usage=res.usage,
-                    unavailable=res.unavailable, images_used=res.images_used, judge_pending=res.judgement is None)
+        complete = photos_complete(evidence, judge_photos(cfg, reqs))
+        maker = catalog_finding(cfg, facts, rule, reqs, soft, catalog_client)
+        res = judge_lot(client, cfg, store, facts, rule, hard, evidence, ocr, [], soft.get("hints") or [], reqs, flags,
+                        maker=maker, photos_complete=complete)
+        soft.update(**_judge_fields(res), catalog=maker, photos_complete=complete)
         out_dir = Path(evidence["dir"])
         out_dir.mkdir(parents=True, exist_ok=True)
         (out_dir / "judge.json").write_text(json.dumps(res.to_dict(), indent=1, ensure_ascii=False), encoding="utf-8")
+        if maker is not None:
+            (out_dir / "catalog.json").write_text(json.dumps(maker, indent=1, ensure_ascii=False), encoding="utf-8")
         store.update_soft(row["id"], soft, facts=facts.to_dict(), evidence=evidence)
         if res.judgement is None:
             st.unavailable += 1
