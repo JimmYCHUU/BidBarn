@@ -4,6 +4,7 @@ The order is fixed: the auction sheet first, then the photos, then the maker cat
 The sheet outranks the photos. A steering-wheel photo that is missing from a complete photo
 set means "no". A catalogue entry of "optional" or "none" means "no"; only "standard"
 confirms. A Welcab with no seat statement on the sheet, the photos or the catalogue fails.
+When the model gave no observation at all, the verdict is unclear, never a silent "no".
 
 The model only reports what it saw at each step (`Observation`). It never decides a ladder:
 this module is the one place a ladder verdict is computed, from those observations and the
@@ -17,7 +18,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from auction_bot.judge.requirements import Requirement
-from auction_bot.judge.topics import SEAT_FAIL, SEAT_PASS, TOPIC_WELCAB
+from auction_bot.judge.topics import SEAT_FAIL, SEAT_PASS, TOPIC_CRUISE, TOPIC_WELCAB
 
 CRUISE_SHEET = ("yes", "no", "not_mentioned")
 CRUISE_PHOTO = ("yes", "no", "maybe", "not_visible")
@@ -27,6 +28,7 @@ WELCAB_PHOTO = SEAT_PASS + SEAT_FAIL + ("welcab_unspecified", "not_welcab", "not
 _NO_CRUISE_PHOTO = "no steering-wheel photo among the photos; some photos could not be downloaded"
 _NO_SEAT_PHOTO = "no seat photo among the photos; some photos could not be downloaded"
 _NO_SEATING = "no seating statement on the sheet, the photos or the catalogue"
+_NO_OBSERVATION = "model gave no observation"
 
 
 class StepObs(BaseModel):
@@ -57,11 +59,12 @@ class LadderVerdict:
 # ---------------------------------------------------------------- the catalogue
 
 def _grade_row(maker: dict | None, catalog_grade: str | None) -> dict | None:
-    if not maker or not catalog_grade:
+    if not maker or not isinstance(catalog_grade, str) or not catalog_grade.strip():
         return None
     wanted = catalog_grade.strip()
     for row in maker.get("grades") or []:
-        if (row.get("name") or "").strip() == wanted:
+        name = row.get("name")
+        if isinstance(name, str) and name.strip() == wanted:
             return row
     return None
 
@@ -116,24 +119,32 @@ def _seat_block(maker: dict | None, catalog_grade: str | None) -> tuple[str, str
 
 # ---------------------------------------------------------------- one step's reading
 
-def _read_step(obs: dict | None, which: str, allowed: tuple[str, ...], default: str) -> StepObs:
-    """The step as the table reads it: an unknown or missing state becomes `default`."""
-    raw: StepObs | None = None
-    if isinstance(obs, dict) and isinstance(obs.get(which), dict):
-        try:
-            raw = StepObs.model_validate(obs[which])
-        except Exception:
-            raw = None
-    if raw is None or not raw.state:
-        return StepObs(state=default, evidence="no observation")
-    if raw.state not in allowed:
-        return StepObs(state=default, evidence=f"unknown state '{raw.state}'", photo_no=raw.photo_no)
-    return raw
+def _read_step(obs: dict | None, which: str, allowed: tuple[str, ...], default: str) -> tuple[StepObs, bool]:
+    """The step as the table reads it, and whether the model gave no state at all.
+
+    Side fields are coerced one by one; a bad one never discards the step. An unknown state
+    reads as `default` with "unknown state 'x'" as its evidence.
+    """
+    raw = obs.get(which) if isinstance(obs, dict) else None
+    raw = raw if isinstance(raw, dict) else {}
+    state = raw.get("state")
+    state = state.strip() if isinstance(state, str) else ""
+    evidence = raw.get("evidence")
+    evidence = evidence if isinstance(evidence, str) else ""
+    photo_no = raw.get("photo_no")
+    photo_no = photo_no if isinstance(photo_no, int) and not isinstance(photo_no, bool) else None
+    adaptive = raw.get("adaptive")
+    adaptive = adaptive if adaptive in ("yes", "no", "unknown") else "unknown"
+    if not state:
+        return StepObs(state=default, evidence=_NO_OBSERVATION, photo_no=photo_no), True
+    if state not in allowed:
+        return StepObs(state=default, evidence=f"unknown state '{state}'", photo_no=photo_no), False
+    return StepObs(state=state, evidence=evidence, photo_no=photo_no, adaptive=adaptive), False
 
 
 def _step_line(step: dict) -> str:
     if step["step"] == "maker":
-        return step["evidence"] if step["evidence"] else f"maker: {step['state']}"
+        return f"maker: {step['evidence']}" if step["evidence"] else f"maker: {step['state']}"
     name = step["step"]
     if name == "photo" and step["photo_no"] is not None:
         name = f"photo {step['photo_no']}"
@@ -147,7 +158,7 @@ def _make_steps(sheet: StepObs, photo: StepObs) -> list[dict]:
          "grade": None, "mark": "", "url": "", "decided": False},
         {"step": "photo", "state": photo.state, "evidence": photo.evidence, "photo_no": photo.photo_no,
          "grade": None, "mark": "", "url": "", "decided": False},
-        {"step": "maker", "state": "not needed", "evidence": "maker: not needed", "photo_no": None,
+        {"step": "maker", "state": "not needed", "evidence": "not needed", "photo_no": None,
          "grade": None, "mark": "", "url": "", "decided": False},
     ]
 
@@ -159,14 +170,20 @@ def _fill_maker(step: dict, maker: dict | None, status: str, grade: str | None, 
     step["grade"] = grade
     step["mark"] = mark
     step["url"] = (row or {}).get("url") or (urls[0] if urls else "")
-    line = f"maker: {status}"
+    text = status
     if grade:
-        line += f" on {grade}"
+        text += f" on {grade}"
     if mark:
-        line += f" [{mark}]"
+        text += f" [{mark}]"
     if note:
-        line += f" ({note})"
-    step["evidence"] = line
+        text += f" ({note})"
+    step["evidence"] = text
+
+
+def _short_set(step: dict, text: str) -> None:
+    """The photo step could not be judged because photos are missing; keep any unknown-state note."""
+    old = step["evidence"]
+    step["evidence"] = f"{text}; {old}" if old.startswith("unknown state") else text
 
 
 def _finish(req: Requirement, steps: list[dict], verdict: str, decided: int) -> LadderVerdict:
@@ -176,41 +193,57 @@ def _finish(req: Requirement, steps: list[dict], verdict: str, decided: int) -> 
     return LadderVerdict(req.id, verdict, "; ".join(_step_line(s) for s in steps), steps)
 
 
+def _catalog_grade(obs: dict | None) -> str | None:
+    grade = obs.get("catalog_grade") if isinstance(obs, dict) else None
+    return grade if isinstance(grade, str) else None
+
+
 # ---------------------------------------------------------------- the two ladders
 
-def _cruise_state(step: StepObs, adaptive_kind: bool, weak: str) -> str:
-    """A `yes` counts for adaptive cruise only when the model says it is adaptive; otherwise `weak`."""
-    if adaptive_kind and step.state == "yes" and step.adaptive != "yes":
-        return weak
-    return step.state
+def _adaptive_reading(step: StepObs, weak: str) -> StepObs:
+    """Adaptive kind: a `yes` counts only when the model says it is adaptive.
+
+    `adaptive == "no"` makes it a plain `no`; `unknown` makes it the weaker reading `weak`.
+    The evidence shows the downgrade.
+    """
+    if step.state != "yes" or step.adaptive == "yes":
+        return step
+    if step.adaptive == "no":
+        state, note = "no", "yes (not adaptive)"
+    else:
+        state, note = weak, "yes (adaptive unknown)"
+    return StepObs(state=state, evidence=f"{note}: {step.evidence}" if step.evidence else note,
+                   photo_no=step.photo_no, adaptive=step.adaptive)
 
 
 def _resolve_cruise(req: Requirement, obs: dict | None, maker: dict | None, photos_complete: bool) -> LadderVerdict:
     adaptive_kind = req.topic_detail == "adaptive"
     kind = "adaptive" if adaptive_kind else "plain"
-    sheet = _read_step(obs, "sheet", CRUISE_SHEET, "not_mentioned")
-    photo = _read_step(obs, "photo", CRUISE_PHOTO, "not_visible")
+    sheet, _sheet_missing = _read_step(obs, "sheet", CRUISE_SHEET, "not_mentioned")
+    photo, photo_missing = _read_step(obs, "photo", CRUISE_PHOTO, "not_visible")
+    if adaptive_kind:
+        sheet = _adaptive_reading(sheet, "not_mentioned")
+        photo = _adaptive_reading(photo, "maybe")
     steps = _make_steps(sheet, photo)
 
-    sheet_state = _cruise_state(sheet, adaptive_kind, "not_mentioned")
-    if sheet_state == "yes":
+    if sheet.state == "yes":
         return _finish(req, steps, "pass", 0)
-    if sheet_state == "no":
+    if sheet.state == "no":
         return _finish(req, steps, "fail", 0)
 
-    photo_state = _cruise_state(photo, adaptive_kind, "maybe")
-    if photo_state == "yes":
+    if photo_missing:
+        return _finish(req, steps, "unclear", 1)
+    if photo.state == "yes":
         return _finish(req, steps, "pass", 1)
-    if photo_state == "no":
+    if photo.state == "no":
         return _finish(req, steps, "fail", 1)
-    if photo_state == "not_visible":
+    if photo.state == "not_visible":
         if photos_complete:
             return _finish(req, steps, "fail", 1)
-        steps[1]["evidence"] = _NO_CRUISE_PHOTO
+        _short_set(steps[1], _NO_CRUISE_PHOTO)
         return _finish(req, steps, "unclear", 1)
 
-    catalog_grade = (obs or {}).get("catalog_grade") if isinstance(obs, dict) else None
-    status, grade, mark, row = _cruise_block(maker, kind, catalog_grade)
+    status, grade, mark, row = _cruise_block(maker, kind, _catalog_grade(obs))
     _fill_maker(steps[2], maker, status, grade, mark, row)
     if status == "standard":
         verdict = "pass"
@@ -230,25 +263,27 @@ def _seat_verdict(state: str) -> str | None:
 
 
 def _resolve_welcab(req: Requirement, obs: dict | None, maker: dict | None, photos_complete: bool) -> LadderVerdict:
-    sheet = _read_step(obs, "sheet", WELCAB_SHEET, "not_mentioned")
-    photo = _read_step(obs, "photo", WELCAB_PHOTO, "not_visible")
+    sheet, _sheet_missing = _read_step(obs, "sheet", WELCAB_SHEET, "not_mentioned")
+    photo, photo_missing = _read_step(obs, "photo", WELCAB_PHOTO, "not_visible")
     steps = _make_steps(sheet, photo)
 
     verdict = _seat_verdict(sheet.state)
     if verdict:
         return _finish(req, steps, verdict, 0)
+    if photo_missing:
+        return _finish(req, steps, "unclear", 1)
     verdict = _seat_verdict(photo.state)
     if verdict:
         return _finish(req, steps, verdict, 1)
 
-    catalog_grade = (obs or {}).get("catalog_grade") if isinstance(obs, dict) else None
-    status, grade, row = _seat_block(maker, catalog_grade)
+    status, grade, row = _seat_block(maker, _catalog_grade(obs))
     verdict = _seat_verdict(status)
     if verdict:
         _fill_maker(steps[2], maker, status, grade, "", row)
         return _finish(req, steps, verdict, 2)
-    if photo.state == "not_visible" and not photos_complete:
-        steps[1]["evidence"] = _NO_SEAT_PHOTO
+    if photo.state in ("not_visible", "welcab_unspecified") and not photos_complete:
+        _fill_maker(steps[2], maker, status, grade, "", row)
+        _short_set(steps[1], _NO_SEAT_PHOTO)
         return _finish(req, steps, "unclear", 1)
     _fill_maker(steps[2], maker, status, grade, "", row, note=_NO_SEATING)
     return _finish(req, steps, "fail", 2)
@@ -257,7 +292,9 @@ def _resolve_welcab(req: Requirement, obs: dict | None, maker: dict | None, phot
 def resolve(req: Requirement, obs: dict | None, maker: dict | None, photos_complete: bool = True) -> LadderVerdict:
     if req.topic == TOPIC_WELCAB:
         return _resolve_welcab(req, obs, maker, photos_complete)
-    return _resolve_cruise(req, obs, maker, photos_complete)
+    if req.topic == TOPIC_CRUISE:
+        return _resolve_cruise(req, obs, maker, photos_complete)
+    raise ValueError(f"no ladder for topic {req.topic!r} (requirement {req.id})")
 
 
 def chip_applies(req: Requirement, verdict: str) -> str:
