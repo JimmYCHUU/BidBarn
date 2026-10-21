@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from datetime import date
 from typing import Any
 
 
@@ -96,6 +97,42 @@ class Modifier:
 
 
 @dataclass
+class Approval:
+    """One MRE/SEV approval pair of a variant, as the Carbarn guide lists it. Holder and contact
+    details are deliberately not parsed."""
+    mre_number: str
+    sev_number: str
+    selected: bool
+    active: bool
+    build_from_ym: int | None  # max of the two window starts, YYYYMM
+    build_to_ym: int | None  # min of the two window ends, None when both are open
+    expiry_date: date | None
+    sev_model_codes: str
+    sev_variant: str
+    sev_variant_details: str
+    sev_notes: str
+    sev_criterion: str
+    sev_category: str
+    mre_model: str
+    mre_notes: str
+    mre_special_notes: str
+    mre_category: str
+    mre_compliance: str
+    last_scraped_at: str
+    eligible_years: set[int] = field(default_factory=set)
+
+    @property
+    def label(self) -> str:
+        return f"{self.sev_number} / {self.mre_number}"
+
+    def texts(self) -> list[tuple[str, str]]:
+        """The approval's free text by source, empty entries dropped."""
+        sev = " ".join(t for t in (self.sev_variant_details, self.sev_notes) if t)
+        pairs = [("sev", sev), ("mre", self.mre_notes), ("mre-conditions", self.mre_special_notes)]
+        return [(kind, text) for kind, text in pairs if text]
+
+
+@dataclass
 class Variant:
     id: int
     name: str  # "" for the unnamed default variant that covers every chassis of the model code
@@ -104,6 +141,7 @@ class Variant:
     cells: dict[tuple[int, int, int], GridCell] = field(default_factory=dict)
     modifiers: list[Modifier] = field(default_factory=list)
     eligible_years: set[int] = field(default_factory=set)
+    approvals: list[Approval] = field(default_factory=list)
 
     @property
     def is_default(self) -> bool:
@@ -211,6 +249,12 @@ class ModelRule:
         return VariantMatch(None, "ambiguous", named,
                             f"cannot tell the variant from '{variant_text}'; candidates: {', '.join(v.name for v in named)}")
 
+    def approvals_for(self, variant: Variant | None) -> list[Approval]:
+        """The variant's approval pairs, or the first variant's when no variant is resolved."""
+        if variant is not None:
+            return variant.approvals
+        return self.variants[0].approvals if self.variants else []
+
     def variant_by_chassis(self, chassis: str) -> Variant | None:
         return self.resolve_variant(chassis).variant
 
@@ -276,6 +320,41 @@ def _int_or_none(v: Any) -> int | None:
     return None if v is None else int(round(float(v)))
 
 
+def _parse_approval(block: dict) -> Approval:
+    starts = [s for s in (_int_or_none(block.get("sevBuildFromYm")), _int_or_none(block.get("mreBuildFromYm"))) if s is not None]
+    ends = [e for e in (_int_or_none(block.get("sevBuildToYm")), _int_or_none(block.get("mreBuildToYm"))) if e is not None]
+    try:
+        expiry = date.fromisoformat(str(block.get("expiryDate"))[:10])
+    except ValueError:
+        expiry = None
+
+    def text(key: str) -> str:
+        return str(block.get(key) or "").strip()
+
+    return Approval(
+        mre_number=text("mreNumber"),
+        sev_number=text("sevNumber"),
+        selected=bool(block.get("selected")),
+        active=bool(block.get("active")),
+        build_from_ym=max(starts) if starts else None,
+        build_to_ym=min(ends) if ends else None,
+        expiry_date=expiry,
+        sev_model_codes=text("sevModelCodes"),
+        sev_variant=text("sevVariant"),
+        sev_variant_details=text("sevVariantDetails"),
+        sev_notes=text("sevNotes"),
+        sev_criterion=text("sevCriterion"),
+        sev_category=text("sevVehicleCategory"),
+        mre_model=text("mreModel"),
+        mre_notes=text("mreNotes"),
+        mre_special_notes=text("mreSpecialNotes"),
+        mre_category=text("mreModificationCategory"),
+        mre_compliance=text("mreComplianceLevel"),
+        last_scraped_at=text("lastScrapedAt"),
+        eligible_years={int(y["year"]) for y in block.get("years") or [] if y.get("eligible")},
+    )
+
+
 def parse_guide_tree(tree: dict, list_item: dict | None = None) -> ModelRule:
     """Build a ModelRule from /bidding-guides/{id}/tree (+ the list item for bossBid)."""
     variants: list[Variant] = []
@@ -284,6 +363,7 @@ def parse_guide_tree(tree: dict, list_item: dict | None = None) -> ModelRule:
         bands = [OdoBand(int(b["odoFrom"]), int(b["odoTo"])) for b in v.get("bandTemplate") or []]
         variant = Variant(id=int(v["id"]), name=(v.get("name") or "").strip(), active=bool(v.get("active")), bands=bands)
         blocks = v.get("blocks") or []
+        variant.approvals = [_parse_approval(b) for b in blocks]
         selected = [b for b in blocks if b.get("selected")] or blocks[:1]
         for block in selected:
             for y in block.get("years") or []:
