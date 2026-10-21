@@ -9,14 +9,14 @@ from __future__ import annotations
 
 import re
 
+from auction_bot.judge.topics import CRUISE_WORDS, WELCAB_WORDS
 from auction_bot.nichibo.facts import VehicleFacts
 
-_PATTERNS: list[tuple] = [
+_PATTERNS: list[tuple[str, str, str] | tuple[str, str, str, tuple[str, ...]]] = [
     # (regex, level, message[, source prefixes the pattern applies to; default all])
-    (r"welcab|well ?cab|wel+fare|wheel ?chair|swivel|rotat|lift[- ]?up|side lift|slope|ramp|ウェルキャブ|福祉|車いす|車椅子|クルマイス|"
-     r"回転シート|リフトアップ|スロープ", "warn", "wheelchair / Welcab conversion mentioned"),
-    (r"cruise|クルーズ|クルコン|追従", "info", "cruise control mentioned"),
-    (r"\bcc\b", "info", "the text says CC, which may be cruise control or a car stereo; the steering-wheel photo decides",
+    (WELCAB_WORDS, "warn", "wheelchair / Welcab conversion mentioned"),
+    (CRUISE_WORDS, "info", "cruise control mentioned"),
+    (r"(?<!\d)(?<!\d )\bcc\b", "info", "the text says CC, which may be cruise control or a car stereo; the steering-wheel photo decides",
      ("equipment", "translation:")),
     (r"\b(7|8|9|10|11|12|13|14)\s*(seat|seater|人|名)", "warn", "a seat count of 7 or more is mentioned"),
     (r"\b(2|3|5|6)\s*(seat|seater|人|名)", "info", "a seat count of 2/3/5/6 is mentioned"),

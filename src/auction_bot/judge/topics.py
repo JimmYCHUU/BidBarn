@@ -16,19 +16,19 @@ WELCAB_GUIDE_TEXT = "Welcab guide: the front passenger seat must be a swivel/rot
 SEAT_PASS = ("front_swivel", "front_lift_up", "second_row_lift_up")
 SEAT_FAIL = ("slope", "wheelchair_lift")
 
-_CRUISE = re.compile(r"cruise|クルーズ|クルコン|追従", re.I)
-_WELCAB = re.compile(r"welcab|well ?cab|wel+fare|wheel ?chair|swivel|rotat|lift[- ]?up|side lift|slope|ramp|"
-                     r"ウェルキャブ|福祉|車いす|車椅子|クルマイス|回転シート|リフトアップ|スロープ", re.I)
+CRUISE_WORDS = r"cruise(?!r)|クルーズ|クルコン|追従"
+WELCAB_WORDS = (r"welcab|well ?cab|wel+fare|wheel ?chair|swivel|rotating (?:passenger |front )?seat|lift[- ]?up|side lift|slope|ramp|"
+                r"ウェルキャブ|福祉|車いす|車椅子|クルマイス|回転シート|助手席回転|リフトアップ|スロープ")
+_CRUISE = re.compile(CRUISE_WORDS, re.I)
+_WELCAB = re.compile(WELCAB_WORDS, re.I)
 _ADAPTIVE = re.compile(r"(?i:radar|adaptive)|\bACC\b|追従")
 _NEGATED = re.compile(r"^\s*(?:no|not|without)\s", re.I)
 
 _SIDE_LIFT = re.compile(r"side lift|サイドリフト", re.I)
-_SWIVEL = re.compile(r"助手席回転|回転シート|swivel|rotat", re.I)
+_SWIVEL = re.compile(r"助手席回転|回転シート|swivel|rotating (?:passenger |front )?seat", re.I)
 _LIFT_UP = re.compile(r"リフトアップ|lift[- ]?up", re.I)
 _WHEELCHAIR_LIFT = re.compile(r"wheelchair lift|車いすリフト|rear lift|リヤリフト|リアリフト", re.I)
 _SLOPE = re.compile(r"slope|ramp|スロープ|車いす仕様|車椅子仕様|wheelchair (?:spec|type)|クルマイス", re.I)
-
-_SEAT_WORDS = re.compile(r"seat|wheelchair|lift|swivel|ramp|slope", re.I)
 
 
 def detect_topic(text: str) -> str | None:
@@ -79,7 +79,7 @@ def approval_seat_sentences(approvals: list[Approval]) -> list[str]:
             for part in text.split(". "):
                 for sentence in part.split("。"):
                     s = sentence.strip()
-                    if s and _SEAT_WORDS.search(s):
+                    if s and seat_system(s) != "not_welcab":
                         line = f"{a.label}: {s}"
                         if line not in out:
                             out.append(line)

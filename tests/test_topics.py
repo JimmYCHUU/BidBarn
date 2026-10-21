@@ -4,7 +4,7 @@ from pathlib import Path
 from auction_bot.carbarn.models import parse_guide_tree
 from auction_bot.judge.topics import (TOPIC_CRUISE, TOPIC_WELCAB, WELCAB_GUIDE_TEXT, approval_seat_sentences, cruise_kind,
                                       detect_topic, is_negated, seat_system, welcab_guide)
-from auction_bot.judge.requirements import has_ladder, ladder_topics, needs_photos, requirements_for, requirements_hash
+from auction_bot.judge.requirements import Requirement, has_ladder, ladder_topics, needs_photos, requirements_for, requirements_hash
 from auction_bot.rules.hints import keyword_hints
 from auction_bot.nichibo.facts import VehicleFacts
 
@@ -17,6 +17,8 @@ def test_detect_topic_and_kind():
     assert detect_topic("CC") is None and detect_topic("2000cc engine") is None
     assert detect_topic("Welcab, swivel passenger seat") == TOPIC_WELCAB and detect_topic("Side lift up seat only") == TOPIC_WELCAB
     assert detect_topic("No ramp / slope type") == TOPIC_WELCAB and detect_topic("Only dark coloured seats") is None
+    assert detect_topic("Land Cruiser 70 only") is None and detect_topic("No rotating captain seats") is None
+    assert detect_topic("tire rotation") is None and seat_system("rotating passenger seat") == "front_swivel"
     assert cruise_kind("Cruise control") == "plain" and cruise_kind("Adaptive cruise control") == "adaptive" and cruise_kind("追従クルコン") == "adaptive"
     assert is_negated("No cruise control") and is_negated("Without Welcab") and not is_negated("Cruise control, no sticker")
 
@@ -47,7 +49,7 @@ def test_requirements_carry_topics_and_the_welcab_guide_rule():
     assert by["r1"].topic is None and by["r1"].source == "photos"
     assert by["r2"].topic == TOPIC_CRUISE and by["r2"].topic_detail == "plain" and by["r2"].source == "ladder" and not by["r2"].negated
     assert by["r3"].topic == TOPIC_WELCAB and by["r3"].text.startswith("Welcab with swivel or lift up seat")
-    assert "Approval wording:" in by["r3"].text or "No approval text names the seat system" in by["r3"].text
+    assert by["r3"].text.endswith(" No approval text names the seat system; confirm on ROVER by hand.")
     assert has_ladder(reqs) and ladder_topics(reqs) == {TOPIC_CRUISE, TOPIC_WELCAB} and needs_photos(reqs)
     assert requirements_hash(reqs, []) != requirements_hash(requirements_for(_rule(notes="No sticker paint|Cruise control|Welcab")), [])
     plain = requirements_for(_rule(notes="No sticker paint"))
@@ -71,6 +73,16 @@ def test_approval_seat_sentences_and_hints():
     assert "wheelchair / Welcab conversion mentioned" in msgs and "cruise control mentioned" in msgs
     assert any(m.startswith("the text says CC") for m in msgs)
     assert not any(m.startswith("the text says CC") for m in [h["message"] for h in keyword_hints(VehicleFacts(ref_no="r", url="u", variant_text="2.8 cc test"))])
+    num = VehicleFacts(ref_no="r", url="u", translator={"Comments": "2.7 GL 2700 cc"}, equipment="2000cc")
+    assert not any(h["message"].startswith("the text says CC") for h in keyword_hints(num))
+
+
+def test_hash_sees_negation_and_cruise_kind():
+    def mk(**kw):
+        return [Requirement("r1", "Cruise control", "ladder", "must", topic=TOPIC_CRUISE, **kw)]
+    base = requirements_hash(mk(topic_detail="plain"), [])
+    assert base != requirements_hash(mk(topic_detail="adaptive"), [])
+    assert base != requirements_hash(mk(topic_detail="plain", negated=True), [])
 
 
 def test_odd_flags_read_the_sales_point():
