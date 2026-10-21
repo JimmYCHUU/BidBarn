@@ -81,9 +81,9 @@ def requirements_for(rule: ModelRule, hard: HardResult | None = None,
         m = _CHIP.match(t.strip())
         note, amount = (m.group("note").strip(), int(m.group("amount"))) if m else (t.strip(), None)
         topic = detect_topic(note)
-        if topic:
+        if topic == TOPIC_CRUISE:  # only cruise chips route to the ladder; seat chips keep the model's answer
             out.append(Requirement(f"chip:{note.lower().replace(' ', '-')}", note, "ladder", "chip", amount, topic=topic,
-                                   topic_detail=cruise_kind(note) if topic == TOPIC_CRUISE else None, negated=is_negated(note)))
+                                   topic_detail=cruise_kind(note), negated=is_negated(note)))
         else:
             out.append(Requirement(f"chip:{note.lower().replace(' ', '-')}", note, classify(note) if classify(note) != "any" else "photos",
                                    "chip", amount))

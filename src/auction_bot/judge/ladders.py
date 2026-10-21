@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from auction_bot.judge.requirements import Requirement
 from auction_bot.judge.topics import SEAT_FAIL, SEAT_PASS, TOPIC_CRUISE, TOPIC_WELCAB
@@ -37,12 +37,41 @@ class StepObs(BaseModel):
     photo_no: int | None = None
     adaptive: Literal["yes", "no", "unknown"] = "unknown"
 
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce(cls, data):
+        if not isinstance(data, dict):
+            return {}
+        d = dict(data)
+        for key in ("state", "evidence"):
+            if key in d and not isinstance(d[key], str):
+                d[key] = ""
+        if "adaptive" in d and d["adaptive"] not in ("yes", "no", "unknown"):
+            d["adaptive"] = "unknown"
+        p = d.get("photo_no")
+        if "photo_no" in d and (not isinstance(p, int) or isinstance(p, bool)):
+            d["photo_no"] = None
+        return d
+
 
 class Observation(BaseModel):
     id: str
     sheet: StepObs = Field(default_factory=StepObs)
     photo: StepObs = Field(default_factory=StepObs)
     catalog_grade: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce(cls, data):
+        if not isinstance(data, dict):
+            return data
+        d = dict(data)
+        for key in ("sheet", "photo"):
+            if key in d and not isinstance(d[key], dict):
+                d[key] = {}
+        if "catalog_grade" in d and not isinstance(d["catalog_grade"], str):
+            d["catalog_grade"] = None
+        return d
 
 
 @dataclass

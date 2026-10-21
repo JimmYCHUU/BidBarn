@@ -289,4 +289,107 @@ def test_judge_lot_stores_ladders_and_the_maker(tmp_path, monkeypatch):
     res = judge_lot(client, cfg, store, f, rule, hard, {"sheet": str(sheet), "photos": [str(p) for p in photos]}, maker=MAKER, photos_complete=True)
     assert res.ladders and res.ladders[0]["id"] == "r2" and res.ladders[0]["verdict"] == "pass" and "maker: standard on 2.8 DX ロング 4WD [◯]" in res.ladders[0]["evidence"]
     assert res.maker == MAKER and res.recommendation in ("bid", "review")   # the chip has no observation -> unclear -> review is fine
+    # Failure path keeps the maker and has no ladders.
+    monkeypatch.delenv("GEMINI_API_KEY")
+    res = judge_lot(client, cfg, store, f, rule, hard, {"sheet": str(sheet), "photos": []}, maker=MAKER)
+    assert res.unavailable and res.maker == MAKER and res.ladders == []
     store.close()
+
+
+def _chip_only_rule():
+    rule = _ladder_rule()
+    rule.text_rules = ["No sticker paint"]
+    return rule
+
+
+def _chip_only_setup():
+    rule = _chip_only_rule()
+    f = _facts()
+    hard = evaluate_hard(f, rule)
+    return requirements_for(rule, hard), candidates_for(rule, f, hard), hard
+
+
+def _chip_obs(sheet_state):
+    return [{"id": "chip:no-cruise-control", "sheet": {"state": sheet_state}, "photo": {"state": "no", "photo_no": 3}}]
+
+
+def test_ladder_chip_sets_the_amount_and_the_model_amount_is_ignored():
+    from auction_bot.judge.judge import redecide
+    reqs, cands, hard = _chip_only_setup()
+    grid = hard.bid_jpy_k
+    base = {"requirements": [{"id": "r1", "verdict": "pass"}]}
+    # Ladder: no cruise control, so the chip applies; the model picked the grid.
+    j = _judgement(**base, chips=[], amount_k=grid, observations=_chip_obs("not_mentioned"))
+    rec, amount, notes, _ = redecide(j, reqs, cands, hard, MAKER, True)
+    assert amount == grid - 100 and any(n == f"model amount {grid}K ignored: ladder says chip 'No cruise control' applies" for n in notes)
+    # Ladder: cruise control present, so the chip does not apply; the model picked grid - 100.
+    j = _judgement(**base, chips=[], amount_k=grid - 100, observations=_chip_obs("yes"))
+    rec, amount, notes, _ = redecide(j, reqs, cands, hard, MAKER, True)
+    assert amount == grid and any("ignored: ladder says chip 'No cruise control' does not apply" in n for n in notes)
+
+
+def test_only_cruise_chips_route_to_the_ladder():
+    rule = _ladder_rule()
+    rule.variants[0].modifiers.append(Modifier(id=97, variant_id=None, year_from=None, year_to=None, odo_from=None, odo_to=None,
+                                               conditions=[], amount_jpy_k=-180, percent=None, no_bid=False, strict=False,
+                                               note="Slope type", active=True, stale=False))
+    f = _facts()
+    reqs = {r.id: r for r in requirements_for(rule, evaluate_hard(f, rule))}
+    assert reqs["chip:slope-type"].topic is None
+    cc = reqs["chip:no-cruise-control"]
+    assert cc.topic == "cruise_control" and cc.negated
+
+
+def test_malformed_observations_never_reject_the_judgement():
+    from auction_bot.judge.judge import redecide
+    schema_before = json.dumps(Judgement.model_json_schema(), sort_keys=True)
+    j = Judgement.model_validate({**_judgement(), "observations": [
+        {"id": "r2", "sheet": None, "photo": {"state": None, "photo_no": "Photo 4", "adaptive": "Yes"}, "catalog_grade": 7},
+        {"sheet": {"state": "yes"}}, "junk", {"id": 5}]})
+    assert [o.id for o in j.observations] == ["r2"] and j.observations[0].photo.photo_no is None
+    assert j.observations[0].photo.adaptive == "unknown" and j.observations[0].catalog_grade is None
+    assert json.dumps(Judgement.model_json_schema(), sort_keys=True) == schema_before
+    rule = _ladder_rule()
+    f = _facts()
+    hard = evaluate_hard(f, rule)
+    out = redecide(j.model_dump(), requirements_for(rule, hard), candidates_for(rule, f, hard), hard, MAKER, True)
+    assert out[0] == "review" and any(n.startswith("unclear: Cruise control (sheet: not_mentioned (model gave no observation)") for n in out[2]), out[2]
+
+
+def test_conflicting_duplicate_observations_are_unclear_identical_ones_are_fine():
+    from auction_bot.judge.judge import resolve_ladders
+    reqs, _cands, _hard = _chip_only_setup()
+    a = {"id": "chip:no-cruise-control", "sheet": {"state": "yes"}, "photo": {"state": "not_visible"}}
+    b = {"id": "chip:no-cruise-control", "sheet": {"state": "no"}, "photo": {"state": "not_visible"}}
+    same = resolve_ladders({"observations": [a, dict(a)]}, reqs, MAKER, True)
+    assert same[0].verdict == "pass"
+    clash = resolve_ladders({"observations": [a, b]}, reqs, MAKER, True)
+    assert clash[0].verdict == "unclear" and "model gave two observations for chip:no-cruise-control" in clash[0].evidence
+
+
+def test_no_maker_no_block_and_stray_prices_never_reach_the_prompt():
+    rule = _ladder_rule()
+    f = _facts()
+    hard = evaluate_hard(f, rule)
+    reqs = requirements_for(rule, hard)
+    cands = candidates_for(rule, f, hard)
+    messages, _ = build_messages(f, rule, hard, reqs, [], cands, "", None, [], None, maker=None)
+    assert "Maker catalogue" not in "\n".join(p["text"] for p in messages[1]["content"] if p["type"] == "text")
+    priced = {**MAKER, "grades": [{**MAKER["grades"][0], "price": "424万円"}]}
+    messages, _ = build_messages(f, rule, hard, reqs, [], cands, "", None, [], None, maker=priced)
+    text = "\n".join(p["text"] for p in messages[1]["content"] if p["type"] == "text")
+    assert "424" not in text and "price" not in text and "Maker catalogue (kurumaerabi.com)" in text
+
+
+def test_welcab_must_goes_through_the_ladder():
+    from auction_bot.judge.judge import redecide
+    rule = _gdh206()
+    rule.text_rules = ["Welcab front swivel seat"]
+    f = _facts()
+    hard = evaluate_hard(f, rule)
+    reqs = requirements_for(rule, hard)
+    welcab = next(r for r in reqs if r.topic == "welcab_seat")
+    j = _judgement(requirements=[], chips=[], observations=[
+        {"id": welcab.id, "sheet": {"state": "front_swivel", "evidence": "助手席回転シート"}, "photo": {"state": "not_visible"}}])
+    rec, amount, notes, ladders = redecide(j, reqs, candidates_for(rule, f, hard), hard, MAKER, True)
+    assert rec == "bid" and ladders[0]["verdict"] == "pass"

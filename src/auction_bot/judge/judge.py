@@ -14,7 +14,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from auction_bot.carbarn.models import ModelRule
 from auction_bot.config import Config
@@ -53,6 +53,15 @@ class Judgement(BaseModel):
     requirements: list[ReqVerdict] = Field(default_factory=list)
     chips: list[ChipVerdict] = Field(default_factory=list)
     observations: list[Observation] = Field(default_factory=list)
+
+    @field_validator("observations", mode="before")
+    @classmethod
+    def _keep_usable_observations(cls, value):
+        if not isinstance(value, list):
+            return []
+        return [o for o in value if (isinstance(o, dict) and isinstance(o.get("id"), str))
+                or isinstance(o, Observation)]
+
     odd_cases: list[OddCase] = Field(default_factory=list)
     amount_k: int | None = Field(default=None, description="One of the candidate amounts, in thousands of yen, or null for the grid amount")
     amount_reason: str = ""
@@ -81,7 +90,7 @@ buyer's own playbook. Money is at stake, so:
   below the right spoke (Toyota, Lexus) or buttons on the right spoke marked CRUISE, RES+, SET-, CANCEL, or a car-with-lines icon
   (adaptive) = yes with the photo number; bare spokes and no stalk = no; something that might be a stalk or a button you cannot
   confirm = maybe; no photo of the steering wheel = not_visible. Set adaptive to yes when the sheet or the buttons show radar or
-  adaptive cruise.
+  adaptive cruise. A chip with a ladder is also reported in observations, not in chips.
 - Welcab seat states: front_swivel (助手席回転シート: the front passenger seat turns to the door), front_lift_up (助手席リフトアップシート:
   it turns and lowers), second_row_lift_up (サイドリフトアップシート or サイドリフトアップチルトシート: a second-row seat swings out and
   lowers), wheelchair_lift (a rear lift for a wheelchair), slope (a rear ramp or slope, wheelchair tie-downs, 車いす仕様),
@@ -161,11 +170,12 @@ def _maker_block(maker: dict | None, year) -> list[str]:
     grades = maker.get("grades") or []
     if not grades:
         return [f"# Maker catalogue: no data ({maker.get('note') or 'no catalogue page'})"]
-    lines = [f"# Maker catalogue (kurumaerabi.com) for 型式 {', '.join(maker.get('model_codes') or [])}, grades on sale around {year}"]
+    codes = ", ".join(c for c in (maker.get("model_codes") or []) if c)
+    lines = [f"# Maker catalogue (kurumaerabi.com) for 型式 {codes}, grades on sale around {year}"]
     for g in grades:
         seats = g.get("seats") if g.get("seats") is not None else "?"
         lines.append(f"- {g.get('name')} ({seats} seats): cruise {g.get('cruise_mark') or '?'}; adaptive {g.get('adaptive_mark') or '?'}; "
-                     f"welfare {'yes' if g.get('welfare') is True else 'no'}; seat system {g.get('seat_system')}")
+                     f"welfare {'yes' if g.get('welfare') is True else 'no'}; seat system {g.get('seat_system') or '?'}")
     lines.append("Name the catalogue grade that matches the listing's variant text in catalog_grade, or null.")
     return lines
 
@@ -215,7 +225,7 @@ def build_messages(facts: VehicleFacts, rule: ModelRule, hard: HardResult, reqs:
             images.append(Path(p).name)
     if not photo_paths:
         content.append(text_part("Photos: none available; anything that needs the photos is unclear."))
-    content.append(text_part("Now judge every requirement id listed above, every chip, the odd cases, and pick the amount."))
+    content.append(text_part("Now judge every requirement id listed above, every chip, the observations for the ladder requirements, the odd cases, and pick the amount."))
     messages = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": content}]
     return messages, images
 
@@ -242,8 +252,27 @@ def _alternatives(groups: dict[str, list[Requirement]], verdicts: dict) -> tuple
 
 def resolve_ladders(judgement: dict, reqs: list[Requirement], maker: dict | None, photos_complete: bool) -> list[LadderVerdict]:
     """One verdict per requirement with a topic, from the model's observations; the model never decides these."""
-    obs = {o.get("id"): o for o in judgement.get("observations") or [] if isinstance(o, dict)}
-    return [resolve(r, obs.get(r.id), maker, photos_complete) for r in reqs if r.topic]
+    obs: dict = {}
+    clash: set = set()
+    for o in judgement.get("observations") or []:
+        if not isinstance(o, dict):
+            continue
+        key = o.get("id")
+        if key in obs:
+            a, b = obs[key], o
+            if any((a.get(s) or {}).get("state") != (b.get(s) or {}).get("state") for s in ("sheet", "photo")):
+                clash.add(key)
+            continue
+        obs[key] = o
+    out = []
+    for r in reqs:
+        if not r.topic:
+            continue
+        if r.id in clash:
+            out.append(LadderVerdict(r.id, "unclear", f"model gave two observations for {r.id}", []))
+        else:
+            out.append(resolve(r, obs.get(r.id), maker, photos_complete))
+    return out
 
 
 def decide(judgement: dict, reqs: list[Requirement], candidates: list[Candidate], hard: HardResult,
@@ -253,12 +282,17 @@ def decide(judgement: dict, reqs: list[Requirement], candidates: list[Candidate]
     verdicts = {v.get("id"): v for v in judgement.get("requirements", [])}
     chip_says = {c.get("id"): c for c in judgement.get("chips", [])}
     by_id = {r.id: r for r in reqs}
+    ladder_ids: set[str] = set()
+    ladder_chips: list[Requirement] = []
     for lv in ladders or []:
         req = by_id.get(lv.id)
         if req is None:
             continue
+        ladder_ids.add(lv.id)
         if req.kind == "chip":
             chip_says[lv.id] = {"id": lv.id, "applies": chip_applies(req, lv.verdict), "evidence": lv.evidence}
+            if chip_says[lv.id]["applies"] in ("yes", "no"):
+                ladder_chips.append(req)
         else:
             verdicts[lv.id] = {"id": lv.id, "verdict": lv.verdict, "evidence": lv.evidence, "confidence": "high"}
     groups: dict[str, list[Requirement]] = {}
@@ -282,7 +316,9 @@ def decide(judgement: dict, reqs: list[Requirement], candidates: list[Candidate]
     elif unclear or low or missing or alt_unclear or judgement.get("confidence") == "low":
         rec = "review"
         if unclear:
-            notes.append("unclear: " + "; ".join(r.text for r in unclear))
+            notes.append("unclear: " + "; ".join(
+                f"{r.text} ({verdicts[r.id]['evidence']})" if r.topic and r.id in ladder_ids and verdicts[r.id].get("evidence") else r.text
+                for r in unclear))
         if alt_unclear:
             notes.append("unclear: confirm which approval pair applies")
         if low:
@@ -310,7 +346,21 @@ def decide(judgement: dict, reqs: list[Requirement], candidates: list[Candidate]
             notes.append("chips applied: " + ", ".join(f"{r.text} {r.amount_k:+d}K" for r in applied))
         else:
             proposed = grid
+    if ladder_chips and grid:
+        # The ladder decides these chips; the model's amount does not override it.
+        total = grid + sum(r.amount_k or 0 for r in chip_says_applied(reqs, chip_says))
+        if model_amount is not None and int(model_amount) != total:
+            why = "; ".join(f"chip '{r.text}' {'applies' if chip_says[r.id]['applies'] == 'yes' else 'does not apply'}"
+                            for r in ladder_chips)
+            notes.append(f"model amount {int(model_amount)}K ignored: ladder says {why}")
+        if proposed != total:
+            notes[:] = [n for n in notes if not n.startswith("chips applied:")]
+        proposed = total
     return rec, proposed, notes
+
+
+def chip_says_applied(reqs: list[Requirement], chip_says: dict) -> list[Requirement]:
+    return [r for r in reqs if r.kind == "chip" and r.amount_k and chip_says.get(r.id, {}).get("applies") == "yes"]
 
 
 def redecide(judgement: dict, reqs: list[Requirement], candidates: list[Candidate], hard: HardResult, maker: dict | None,
