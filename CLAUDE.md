@@ -66,6 +66,19 @@ hard constraints. Do not weaken them, work around them, or "temporarily" disable
   (below the first band, or in a gap between bands) takes the closest band; above the last band
   stays a skip. A lot parked for unpublished images keeps its grid amount from the card, so it can
   be approved.
+- Confirmed by Jim on 2026-10-20: cruise control and Welcab seat notes are judged by a ladder, in this
+  order and never the reverse. 1) The auction sheet: yes = yes; a bare "CC" is not cruise control (the JU
+  form uses ＣＣ for engine size, inspectors write クルコン / クルーズコントロール, and one Japanese
+  glossary reads CC as car stereo). 2) The steering-wheel photo: no cruise control visible, or no wheel
+  photo at all on a complete photo set = no; a short photo set (some photos could not be downloaded)
+  reads review. 3) The maker's catalogue: standard on that grade = yes; optional or not fitted = no; no
+  data, or grades that differ = review. Adaptive cruise counts as cruise control; a note that says
+  radar/adaptive needs adaptive specifically. A Welcab must have a front swivel/rotating, front lift-up
+  or second-row side lift-up seat; a slope/ramp or wheelchair-lift Welcab, a plain car, or a Welcab with
+  no seat statement on the sheet, in the photos or in the catalogue is not eligible. A guide named
+  "... Welcab" with no Welcab note gets the seat requirement from its name. The model only reports what
+  it sees per step (`judge/ladders.py` decides); a missing or malformed observation reads review, never a
+  yes. Do not move a step or change a verdict without asking Jim.
 - Anything not covered by a stored rule goes to the reviewer as NEEDS_REVIEW. Uncertainty is
   never resolved in favour of bidding.
 - Do not change how variants, modifiers or model matching are interpreted without asking Jim.
@@ -86,8 +99,10 @@ hard constraints. Do not weaken them, work around them, or "temporarily" disable
   facts, the OCR fields, Nichibo's translation, the guide's text requirements and chips, the
   odd-case flags, the selected MRE/SEV pair's (or, with none selected, each active pair's)
   restriction text (SEV variant details and notes, MRE notes and special notes; never holder
-  names or contacts), Jim's playbook (`rules/playbook/`, git-ignored), the candidate amounts, the
-  sheet and up to `judge.max_photos` photos. Keep it that way.
+  names or contacts), the maker catalogue's grade table for the lot's model code (grade names, seats,
+  cruise and welfare marks; never prices), Jim's playbook (`rules/playbook/`, git-ignored), the candidate
+  amounts, the sheet and up to `judge.max_photos` photos, or every photo up to `judge.max_photos_ladder`
+  for a lot with a cruise or Welcab requirement. Keep it that way.
 - The playbook is Jim's words (learn-mode comments, review-page corrections, the seeded
   principles). It is context for the model, not code rules; never turn it into automatic
   approvals. Quotas: respect `rpm`/`rpd` per provider; when every provider is out, lots go
@@ -105,8 +120,20 @@ hard constraints. Do not weaken them, work around them, or "temporarily" disable
   is flagged from `lastScrapedAt` (`eligibility.stale_days`).
 - Defaults chosen by the plan, to confirm with Jim: the selected pair decides even when an
   alternative covers the lot; with no selected pair the active pairs are alternatives (the bot may
-  only recommend against a lot when every pair fails it); an unmatched or unparseable model code
-  reads confirm, never cannot import; an unknown registration year reads confirm.
+  only recommend against a lot when every pair fails it); an unmatched model code reads
+  confirm and an unparseable one is not checked (the card says "eligible (model code not checked)");
+  neither reads cannot import; an unknown registration year reads confirm.
+
+## 3c. The maker's catalogue (Jim, 2026-10-20)
+
+- `catalog/` reads kurumaerabi.com (`catalog.base_url`) and no other site outside Nichibo, Carbarn and the
+  model providers: its model-code sitemap, model-code pages and grade pages. Requests are allow-listed to
+  `/catalog/` paths on that host, redirects are refused, pages are paced by `catalog.pace_seconds` and cached
+  under `data/cache/catalog` for `catalog.cache_days` (`bot scan --fresh` does not bypass this cache). A lookup
+  reads at most 6 model-code pages, and model codes shorter than 4 characters are ignored. It sends only the
+  catalogue's own addresses: never a lot, a price or anything from Carbarn.
+- A catalogue answer is the third step of a ladder and nothing more: it never sets an amount, never approves,
+  and a failed fetch is "unknown", never an error that stops a scan. `bot replay` never contacts the catalogue.
 
 ## 4. Data handling
 

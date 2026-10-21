@@ -153,7 +153,12 @@ Enforced in code, not by convention. The full list for anyone touching the code 
   (dry; read the labelled change list), then `bot replay --apply`, then `bot judge --pending`.
   The first apply also gives every pending judge lot whose pair carries text a new requirements
   hash, so the pending pass redoes its judgement: one model call per such lot, against the
-  free-tier daily limits.
+  free-tier daily limits. The equipment ladders add new requirement fields, so the first apply
+  after that change supersedes every stored judge lot once more and `bot judge --pending`
+  re-judges them (one model call each). Replay never contacts the maker catalogue. A lot whose
+  photo bundle grew after its judgement goes back to the pending pass (the change line says
+  "photos arrived after the judgement") instead of re-reading the old observations. Day-one
+  order: `bot replay` (dry), `bot replay --apply`, `bot judge --pending`.
 - **RULE-6 Learning only tightens.** Telemetry, `skip:` lines, `bot insights` and
   `bot learn` can add skips, ordering and pre-fills. Nothing learned can approve a bid.
 
@@ -346,6 +351,8 @@ Recorded here so the code and the team agree. Change the code only when this lis
 | Year | Nichibo's "Year of Registration" |
 | Detail page | Opened only when the guide's variants differ by chassis suffix (GDH206V / GDH206K), a modifier depends on the colour, a skip line needs a page-only fact, or the search card lacks a fact. Otherwise the lot is judged from the card and the sheet; placement re-opens the page and re-verifies it anyway |
 | Card-stage ceiling | A lot whose start price is above the highest bid any variant could reach (cell plus every positive modifier) is skipped before anything is downloaded |
+| Cruise control | Judged by a ladder, in this order (Jim, 2026-10-20): the sheet (yes is yes; a bare "CC" is not cruise control), then the steering-wheel photo (none visible, or no wheel photo on a complete set, is no), then the maker's catalogue (standard on that grade is yes; optional or not fitted is no; no data or differing grades is review). Adaptive cruise counts; a note that says radar or adaptive needs adaptive |
+| Welcab seats | A Welcab must have a front swivel/rotating, front lift-up or second-row side lift-up seat. A slope/ramp or wheelchair-lift Welcab, a plain car, or a Welcab with no seat statement on the sheet, in the photos or in the catalogue is not eligible. Same ladder order (Jim, 2026-10-20) |
 | Images not published yet | The lot is parked until the next scan, without opening its page. It keeps its grid amount from the card, so it can be approved; the sheet and photos, when they arrive, can only skip it or change the modifiers (Jim, 2026-09-30) |
 
 ## The judgement layer
@@ -359,10 +366,14 @@ cases (odometer at the cap, conversions, sheet notes). It works like this:
    a place to look: card, sheet or photos (`judge/requirements.py`). Odd-case flags name what is
    unusual about the lot. A lot with nothing to look at and nothing odd never costs a model call.
 2. When the photos are needed the lot's page is opened and up to `judge.max_photos` photos are
-   downloaded (only then; the scan stays fast).
+   downloaded (only then; the scan stays fast). A lot with a cruise or Welcab requirement gets
+   every photo instead, up to `judge.max_photos_ladder` (40), because the steering wheel or the
+   seat can be anywhere in the set. A cached bundle is extended with the missing photos. Photo
+   downloads are not paced, so such a lot sends up to 40 image requests back to back.
 3. The model receives the lot's facts, the OCR fields, Nichibo's translation, the requirements,
    the flags, the selected pair's (or, with none selected, each active pair's) SEV/MRE
-   restriction text, **your playbook** (`rules/playbook/general.md` and
+   restriction text, the maker catalogue's grade table for the lot's model code (grade names,
+   seats, cruise and welfare marks; never prices), **your playbook** (`rules/playbook/general.md` and
    `rules/playbook/<CODE>.md`, your own words from learn-mode comments and review corrections),
    the candidate amounts (the grid cell, the cell with a chip, the next odometer band when the
    odometer is on a boundary or near the cap; never the grid itself), the sheet and the photos.
@@ -373,9 +384,42 @@ cases (odometer at the cap, conversions, sheet notes). It works like this:
 4. It answers with a verdict and evidence per requirement, whether each chip applies, the odd
    cases, one of the candidate amounts or none, and a recommendation: bid, review or skip.
    The bot turns that into a proposal deterministically (`judge/judge.py::decide`).
-5. **You confirm.** Every judged lot stays on the triage view with the model's recommendation,
+5. **Cruise control and Welcab seats are judged by a ladder** (`judge/topics.py` routes a text
+   rule or chip to it by its words; `judge/ladders.py` decides). The order is fixed (Jim,
+   2026-10-20):
+   - **Sheet.** Yes is yes. A bare "CC" is not cruise control: the JU form uses ＣＣ for engine
+     size, inspectors write クルコン or クルーズコントロール, and one Japanese glossary reads CC as
+     car stereo.
+   - **Steering-wheel photo.** No cruise control visible, or no wheel photo at all on a complete
+     photo set, is no. A short photo set (some photos could not be downloaded) reads review.
+   - **Maker's catalogue.** Standard on that grade is yes. Optional or not fitted is no. No data,
+     or grades that differ, reads review.
+
+   Adaptive cruise counts as cruise control; a note that says radar or adaptive needs adaptive
+   specifically. A Welcab must have a front swivel/rotating, front lift-up or second-row side
+   lift-up seat. A slope/ramp or wheelchair-lift Welcab, a plain car, and a Welcab with no seat
+   statement on the sheet, in the photos or in the catalogue are not eligible. A guide named
+   "... Welcab" with no Welcab note gets the seat requirement from its name; its text quotes the
+   approval pair's sentences that name a seat system, or says "No approval text names the seat
+   system; confirm on ROVER by hand." The model only reports what it sees at each step;
+   `judge/ladders.py` decides, and a missing or malformed observation reads review, never a yes.
+   Only cruise chips go through the ladder. When the ladder resolves a cruise chip, the amount is
+   the grid plus the applied chips and the model's own amount pick is ignored (the notes say so).
+   Chips with Welcab or seat words are still judged by the model (see the open questions).
+
+   **The maker's catalogue** is kurumaerabi.com (`catalog.base_url`), the only third-party site the
+   bot reads. It reads the model-code sitemap, the model-code pages and the grade pages,
+   allow-listed to `/catalog/` paths on that host with redirects refused, paced by
+   `catalog.pace_seconds`, and cached under `data/cache/catalog` for `catalog.cache_days` (90).
+   `bot scan --fresh` does not bypass that cache. A lookup reads at most 6 model-code pages and
+   ignores codes shorter than 4 characters. It sends only the catalogue's own addresses. A failed
+   fetch is "unknown", never a scan error. The catalogue only feeds the third step: it never sets
+   an amount or approves.
+6. **You confirm.** Every judged lot stays on the triage view with the model's recommendation,
    its verdicts as counts and the proposed amount beside the grid's; the lot's page has the
-   verdict and evidence per requirement and the photos it looked at. Approve, change the
+   verdict and evidence per requirement and the photos it looked at. The photos are numbered and
+   open in the lightbox, and a ladder requirement shows its steps (sheet, photo, maker) with the
+   photo number and, for the maker step, the catalogue grade and its mark. Approve, change the
    amount, or reject. Telling it what it got wrong ("The model was wrong about … because …")
    writes a line into the playbook for that model code, so the next judgement reads your
    correction. `bot.cmd playbook CODE` prints what the model is told, and the guide's page
@@ -523,8 +567,11 @@ bidbarn/
 │   │                 sheet_ocr.py (local OCR) · cache.py · bid.py (placement) · facts.py
 │   ├── rules/        hard.py (deterministic rules) · instructions.py (skip lines) · hints.py
 │   │                 soft.py + schema.py (the opt-in OpenAI sheet check)
+│   ├── catalog/      client.py (kurumaerabi.com: allow-list, pacing, cache) · kurumaerabi.py (parsers)
+│   │                 lookup.py (model code and year to a finding: cruise marks, Welcab seat system)
 │   ├── judge/        client.py (free providers, fallback, quotas) · requirements.py · candidates.py
 │   │                 playbook.py · judge.py (prompt, schema, deterministic decision)
+│   │                 topics.py (which text is cruise or Welcab) · ladders.py (sheet, photo, maker verdicts)
 │   ├── review/       the local page (FastAPI): app.py (review routes, the only place a lot is decided),
 │   │                 templates, static/ (bidbarn.css, review.js, dashboard.js, icons, vendor/)
 │   ├── dashboard/    jobs.py (the command table and the job runner) · status.py (the state of the day)
@@ -539,7 +586,8 @@ bidbarn/
 │   ├── watch.py      watch mode: records Jim's own session (clicks, hovers, reasons, bids)
 │   ├── store.py      SQLite
 │   └── cli.py        commands
-└── tests/            fixtures are real guides and captured pages
+└── tests/            fixtures are real guides and captured pages (tests/fixtures/catalog/ holds
+                      public catalogue pages)
 ```
 
 ## Status
@@ -564,8 +612,11 @@ look at Insights once decisions exist.
   confirm.
 - With no selected pair the active pairs are alternatives, and the bot may only recommend
   against a lot when every pair fails it: confirm.
-- A model code that does not match, or cannot be parsed from the SEV text, reads "confirm
-  import", never "cannot import"; an unknown registration year also reads confirm: confirm.
+- A model code that does not match the SEV text reads "confirm import"; one that cannot be
+  parsed is not checked (the card says "eligible (model code not checked)"); neither reads
+  "cannot import"; an unknown registration year reads confirm: confirm.
+- Chips with Welcab or seat words (for example "Slope type -180K") are still judged by the
+  model, not by the ladder. How should they read?
 - Guide 213271 has two selected pairs whose cells overwrite each other; not changed here.
 - Odometer margin (from the teaching session of 2026-09-15): the reviewer skips a lot that is
   already at the last band's cap ("already 80k") and, for a lot exactly on a band boundary

@@ -63,3 +63,40 @@ Detail page:
 - Existing bid: `#currentBidRow` visible with `#currentBidAmount`
 - Bid inputs: `#bidAmountDisplay` (thousands, keyup drives `#bidAmount`), `#bidComment`, `#btnPlaceBid`; success shows `#boxBidSuccess`
 - "Request images from Live Support" button `#btn-request-image` appears when images are missing
+
+## kurumaerabi.com catalogue (2026-10-20)
+
+The maker's new-car catalogue, read by the equipment ladders (`catalog/`). Public pages, no sign-in,
+plain GET. Base address `catalog.base_url`; the client allow-lists `/catalog/` paths on that host,
+refuses redirects, paces calls by `catalog.pace_seconds`, and caches pages under `data/cache/catalog`
+for `catalog.cache_days` (90).
+
+| Page | URL shape |
+|---|---|
+| Model-code sitemap | `/catalog/xml-sitemap/type.xml` (the `<loc>` entries ending in `/type/<CODE>/` are model-code pages; per-model `/type/` index pages are skipped) |
+| Model-code page | `/catalog/<maker>/<id>/type/<CODE>/` (the code may carry the emissions prefix, `3BA-AGH30W`; the lookup matches on the bare part, `AGH30W`) |
+| Grade page | `/catalog/<maker>/<id>/fmc<NNN>/<grade id>/` |
+
+- Model-code page: grades are grouped in `<section id="section_...">` blocks headed "YYYY年M月モデル".
+  Each grade is a link box with its name (the `h3` link), its address and the `定員` `dt/dd` (seats, "5名").
+  The Welcab seat system is read from the grade's name.
+- Grade page `dt/dd` labels read: `型式` (model code), `乗車定員` (seats), `福祉車両` (welfare vehicle),
+  `クルーズコントロール` and `アダプティブクルーズコントロール`. The two cruise labels are read only
+  after the `運転支援` (driver assistance) heading. Title pattern:
+  `YYYY年M月〜販売中モデル <grade name>の新車カタログ` or `YYYY年M月〜YYYY年M月販売終了モデル <grade name>の新車カタログ`
+  (the sale period and the grade name come from it).
+- Marks, two vocabularies. Older pages write 標準装備 / オプション / ◯ / blank; newer pages write
+  ◯ / なし / メーカーオプション / blank.
+
+| Mark | Reads as |
+|---|---|
+| 標準装備, ◯, ○ | standard |
+| オプション, メーカーオプション, ディーラーオプション | optional |
+| なし, ー, -, × | none |
+| blank, anything else | unknown (the catalogue says nothing; never "none") |
+
+  For `福祉車両`, ◯ marks a Welcab grade; its seat system comes from the grade's name.
+- At most 6 model-code pages are read per lookup. Model codes whose bare part is shorter than 4
+  characters or has no digit are ignored.
+- Other catalogues tried on 2026-10-20: goo-net refused the connection and carsensor was in
+  maintenance. Neither is used.
