@@ -91,3 +91,16 @@ def test_triage_shows_suggested_skip_rules(cfg):
     r = client.post("/rules/GDH206/skip", data={"line": "skip: variant contains DUMP", "next": "/"}, follow_redirects=False)
     assert r.status_code == 303
     assert "skip: variant contains DUMP" in (cfg.override_dir / "GDH206.md").read_text(encoding="utf-8")
+
+
+def test_manual_lot_shows_confirm_import(cfg):
+    store = Store(cfg.db_path)
+    pid = _seed(store, "A", "GDH206", "4", 90_000)
+    store.update_soft(pid, {"mode": "manual", "checklist": ["Import approval (SEV-1 / MRE-1): window unclear: confirm the build month"], "hints": [],
+                            "eligibility": {"verdict": "confirm", "pair": {"label": "SEV-1 / MRE-1", "window": "07/2019 to 06/2023"},
+                                            "checks": [{"name": "window", "state": "unclear", "detail": "confirm the build month"}],
+                                            "texts": [], "alternatives": [], "hash": "abc"}})
+    store.close()
+    client = TestClient(create_app(cfg))
+    r = client.get("/review")
+    assert "confirm import" in r.text and "confirm the build month" in r.text

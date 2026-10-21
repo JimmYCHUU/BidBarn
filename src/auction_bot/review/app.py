@@ -52,6 +52,7 @@ def _load(row) -> dict:
     d["recommendation"] = soft.get("recommendation") if d["judge"] else None
     d["proposed_bid_jpy_k"] = (soft.get("proposed_bid_jpy_k") if d["judge"] else None) or d.get("bid_jpy_k")
     d["badges"] = judge_badges(soft) if d["judge"] else []
+    d["eligibility"] = eligibility_view(soft)
     lines = check_lines(d.get("hard"), soft)
     d["verdict_counts"] = verdict_counts(d["badges"])
     d["verdict_title"] = verdict_title(d["badges"])
@@ -94,6 +95,9 @@ def why_line(p: dict, lines: list[str] | None = None) -> str:
     else the first thing the reviewer has to check."""
     if lines is None:
         lines = check_lines(p.get("hard"), p.get("soft"))
+    view = p.get("eligibility")
+    if view and view["verdict"] == "cannot_import":
+        return f"cannot import: {_eligibility_reason(view)}"
     if p.get("judge"):
         failed = next((b for b in p.get("badges") or [] if b["cls"] == "bad"), None)
         if failed:
@@ -102,6 +106,60 @@ def why_line(p: dict, lines: list[str] | None = None) -> str:
         if summary:
             return summary
     return lines[0] if lines else ""
+
+
+_ELIG_NUMBERED = re.compile(r"^elig:[a-z-]+:(\d+)$")
+ELIG_WORDS = {"cannot_import": "cannot import", "confirm": "confirm import", "eligible": "eligible"}
+
+
+def eligibility_view(soft: dict | None) -> dict | None:
+    """The import-eligibility result for the review page: the stored checks plus what the model said about each
+    pair text (`elig:*` ids). A failed deterministic check or a model fail reads cannot import, anything unclear
+    reads confirm. When no pair is selected the numbered pairs are alternatives: the lot only needs to fit one."""
+    e = (soft or {}).get("eligibility")
+    if not e:
+        return None
+    said = {v.get("id"): v for v in ((soft.get("judgement") or {}).get("requirements") or [])}
+    texts: list[dict] = []
+    groups: dict[int, list[dict]] = {}
+    for t in e.get("texts") or []:
+        v = said.get(t.get("id")) or {}
+        row = {**t, "verdict": v.get("verdict"), "evidence": v.get("evidence")}
+        texts.append(row)
+        m = _ELIG_NUMBERED.match(t.get("id") or "")
+        if m:
+            groups.setdefault(int(m.group(1)), []).append(row)
+    alts = e.get("alternatives") or []
+    for n, rows in groups.items():
+        for row in rows:
+            row["group"] = alts[n - 1]["label"] if n <= len(alts) else f"Pair {n}"
+    plain = [t for t in texts if "group" not in t]
+    model = "eligible"
+    if any(t["verdict"] == "fail" for t in plain):
+        model = "cannot_import"
+    elif any(t["verdict"] == "unclear" for t in plain):
+        model = "confirm"
+    if groups and any(t["verdict"] for rows in groups.values() for t in rows):
+        if not any(all(t["verdict"] == "pass" for t in rows) for rows in groups.values()):
+            every_fail = all(any(t["verdict"] == "fail" for t in rows) for rows in groups.values())
+            if every_fail:
+                model = "cannot_import"
+            elif model == "eligible":
+                model = "confirm"
+    stored = e.get("verdict") or "eligible"
+    verdict = next((w for w in ("cannot_import", "confirm") if w in (stored, model)), "eligible")
+    return {**e, "verdict": verdict, "texts": texts, "label": ELIG_WORDS.get(verdict, verdict), "grouped": bool(groups)}
+
+
+def _eligibility_reason(view: dict) -> str:
+    """Why a lot cannot be imported: the first failed check, else the first failed pair text with the model's evidence."""
+    bad = next((c for c in view.get("checks") or [] if c.get("state") == "fail"), None)
+    if bad:
+        return bad.get("detail") or bad.get("name") or ""
+    t = next((t for t in view.get("texts") or [] if t.get("verdict") == "fail"), None)
+    if t:
+        return f"{t['label']}: {t['evidence']}" if t.get("evidence") else t["label"]
+    return "no approval pair fits"
 
 
 def judge_badges(soft: dict) -> list[dict]:

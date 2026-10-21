@@ -113,3 +113,20 @@ def test_playbook_command_lists_and_shows(cfg, monkeypatch):
     res = runner.invoke(cli.app, ["playbook", "gdh206"])
     assert res.exit_code == 0 and "leather package looks like this" in res.output and "# Principles" in res.output
     assert "Your review decisions on GDH206: 0" in res.output
+
+
+def test_eligibility_card_and_badge(cfg, monkeypatch):
+    cfg.eligibility = {"enabled": True, "judge_text": True}
+    reply = json.loads(__import__("tests.test_judge_pipeline", fromlist=["_answer"])._answer())
+    reply["requirements"].append({"id": "elig:sev", "verdict": "fail", "evidence": "sheet: 2WD", "confidence": "high"})
+    pid = _judged(cfg, monkeypatch, reply=json.dumps(reply))
+    client = TestClient(create_app(cfg))
+    r = client.get(f"/p/{pid}")
+    assert "Import eligibility (ROVER)" in r.text and "SEV-000813 / MRE-000233" in r.text and "4x4 Campervan only" in r.text
+    assert "cannot import" in r.text and "sheet: 2WD" in r.text
+    card = r.text.split("The model's judgement")[1].split("</section>")[0]
+    rows = card.split('<ul class="checks">')[1].split("</ul>")[0]
+    assert "SEV-000813" not in rows                                        # the requirement list leaves the pair to the eligibility card
+    assert '<option value="elig:sev">' in r.text                            # but still correctable
+    r = client.get("/review")
+    assert "cannot import" in r.text and r.text.index("cannot import") < r.text.index("model: skip")

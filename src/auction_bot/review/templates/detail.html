@@ -56,6 +56,38 @@
       </div>
     </section>
 
+    {% if p.eligibility %}
+    {% set el = p.eligibility %}
+    <section class="card">
+      <div class="card-head">
+        <h2>Import eligibility (ROVER)</h2>
+        <span class="pill {{ 'pill--bad' if el.verdict == 'cannot_import' else ('pill--warn' if el.verdict == 'confirm' else 'pill--ok') }}">{{ el.label }}</span>
+      </div>
+      <div class="card-body">
+        {% if el.pair %}
+        <p class="num"><b>{{ el.pair.label }}</b>{% if el.pair.criterion %} <span class="muted">{{ el.pair.criterion }}</span>{% endif %}{% if el.pair.category %} <span class="muted">{{ el.pair.category }}</span>{% endif %}{% if el.pair.window %}, window {{ el.pair.window }}{% endif %}{% if el.pair.expiry %}, expires {{ el.pair.expiry }}{% endif %}{% if el.pair.scraped %} <span class="faint">ROVER copy {{ el.pair.scraped }}</span>{% endif %}</p>
+        {% endif %}
+        <ul class="checks">
+        {% for c in el.checks or [] %}
+          <li>{{ icon('circle-check', 'mark-ok') if c.state == 'pass' else (icon('circle-x', 'mark-bad') if c.state == 'fail' else (icon('circle-alert', 'mark-unk') if c.state == 'unclear' else icon('info', 'mark-ok'))) }}<span><b>{{ c.name }}</b> {{ c.detail }}</span></li>
+        {% endfor %}
+        </ul>
+        {% for t in el.texts %}
+          {% if el.grouped and (loop.first or t.group != el.texts[loop.index0 - 1].group) %}<h3>{{ t.group }}</h3>{% endif %}
+          <p><b>{{ t.label }}</b>: {{ t.text }}
+          {% if t.verdict %}<br>{{ icon('circle-check', 'mark-ok') if t.verdict == 'pass' else (icon('circle-x', 'mark-bad') if t.verdict == 'fail' else icon('circle-alert', 'mark-unk')) }} <b>{{ t.verdict }}</b>{% if t.evidence %}: {{ t.evidence }}{% endif %}{% endif %}</p>
+        {% endfor %}
+        {% if el.alternatives %}
+        <details><summary class="faint">Other approval pairs ({{ el.alternatives|length }})</summary>
+          <ul class="checks">
+          {% for a in el.alternatives %}<li>{{ icon('circle', 'mark-unk') }}<span><b>{{ a.label }}</b> <span class="muted">window {{ a.window }}</span> {{ a.verdict|replace('_', ' ') }}</span></li>{% endfor %}
+          </ul>
+        </details>
+        {% endif %}
+      </div>
+    </section>
+    {% endif %}
+
     {% if p.judge %}
     {% set j = p.judge.judgement or {} %}
     <section class="card">
@@ -70,7 +102,7 @@
         </div>
         {% if j.summary %}<p><b>{{ j.summary }}</b></p>{% endif %}
         <ul class="checks">
-        {% for r in p.judge.requirements %}
+        {% for r in p.judge.requirements if r.kind != 'eligibility' %}
           {% set v = (j.requirements or []) | selectattr('id', 'equalto', r.id) | list | first %}
           {% set c = (j.chips or []) | selectattr('id', 'equalto', r.id) | list | first %}
           <li>{{ icon('circle-check', 'mark-ok') if (v and v.verdict == 'pass') or (c and c.applies == 'no') else (icon('circle-x', 'mark-bad') if v and v.verdict == 'fail' else icon('circle-alert', 'mark-unk')) }}
