@@ -53,7 +53,7 @@ def test_window_states_on_the_selected_alphard_pair():
     v = rule.variants[0]
     by_year = {y: check_lot(rule, v, _facts(y), None, TODAY) for y in (2018, 2019, 2021, 2023, 2024)}
     assert by_year[2018].verdict == "cannot_import" and "07/2019" in next(c.detail for c in by_year[2018].checks if c.name == "window")
-    assert by_year[2019].verdict == "confirm" and any(t["id"] == "elig:build" and "07/2019" in t["text"] for t in by_year[2019].texts)
+    assert by_year[2019].verdict == "confirm" and any(t["id"] == "elig:build" and "07/2019" in t["text"] and "初度登録" in t["text"] for t in by_year[2019].texts)
     assert by_year[2021].verdict == "eligible" and not any(t["id"] == "elig:build" for t in by_year[2021].texts)
     assert by_year[2023].verdict == "confirm" and by_year[2024].verdict == "confirm"
     e = by_year[2021]

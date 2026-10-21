@@ -1,4 +1,4 @@
-﻿"""Import eligibility of a lot against the MRE/SEV approval pair on its variant. Pure functions,
+"""Import eligibility of a lot against the MRE/SEV approval pair on its variant. Pure functions,
 no I/O. It never skips a lot and never decides a bid: the verdict is information for the reviewer.
 """
 from __future__ import annotations
@@ -20,7 +20,7 @@ ELIGIBLE = "eligible"
 CONFIRM = "confirm"
 CANNOT_IMPORT = "cannot_import"
 
-BUILD_TEXT = "Read åˆåº¦ç™»éŒ² (first registration) on the sheet; fail if before {start}; otherwise unclear"
+BUILD_TEXT = "Read 初度登録 (first registration) on the sheet; fail if before {start}; otherwise unclear"
 
 
 @dataclass
