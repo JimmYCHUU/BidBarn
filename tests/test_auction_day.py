@@ -163,6 +163,15 @@ def test_known_day_carries_only_a_day_that_has_not_passed(cfg):
     assert store.known_day("A", "20261028") is None  # past: read again, never fall back to an older row
     assert store.known_day("B", "20261026") is None
     assert store.known_day("C", "20261026") is None
+    add("D", {"auction_date": "20261101", "auction_place": "TAA Kinki"})
+    add("D", {"auction_date": "", "auction_day_read": True})  # the newest read found no date: it decides
+    assert store.known_day("D", "20261026") is None
+    add("E", {"auction_date": "20261101", "auction_place": "TAA Kinki"})
+    add("E", {"source": "card+sheet"})  # a row whose day was never read does not hide the one before it
+    assert store.known_day("E", "20261026")["auction_date"] == "20261101"
+    for odd in ("2026-11-01", "TBD", "2026110"):
+        add("F" + odd, {"auction_date": odd})
+        assert store.known_day("F" + odd, "20261026") is None, odd  # not an 8-digit day: read again
     store.close()
 
 

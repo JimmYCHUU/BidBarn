@@ -433,11 +433,12 @@ class Store:
                 f = json.loads(r["facts_json"] or "{}")
             except json.JSONDecodeError:
                 continue
-            if isinstance(f, dict) and f.get("auction_date"):
-                if str(f["auction_date"]) < on_or_after:
-                    return None
-                return {"auction_date": f["auction_date"], "auction_place": f.get("auction_place") or "",
-                        "auction_day_read": True}
+            if not isinstance(f, dict) or not (f.get("auction_date") or f.get("auction_day_read")):
+                continue  # this row never had its day read: look further back
+            day = str(f.get("auction_date") or "")
+            if len(day) != 8 or not day.isdigit() or day < on_or_after:
+                return None  # the newest read found no date, an odd one, or a day that has passed: read again
+            return {"auction_date": day, "auction_place": f.get("auction_place") or "", "auction_day_read": True}
         return None
 
     def supersede_pending(self, ref_no: str, guide_id: int | None) -> int:
