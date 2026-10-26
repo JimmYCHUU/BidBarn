@@ -31,7 +31,13 @@
     return "/desk/board?session=" + encodeURIComponent(state.session) + "&lane=" + encodeURIComponent(state.lane);
   }
   function lotUrl(pid) { return "/desk/lot/" + encodeURIComponent(pid); }
-  function lotView() { return $(".desk-lotview", lotPane); }
+  // The article counts only while it is the lot that was asked for: during a load the old one stays on screen,
+  // and nothing may act on it.
+  function lotView() {
+    var v = $(".desk-lotview", lotPane);
+    return v && state.lot && v.dataset.lot === state.lot ? v : null;
+  }
+  function refOf(v, pid) { return (v && v.dataset.ref) || ("Lot " + pid); }
   function typing(el) {
     if (!el || !el.tagName) return false;
     var t = el.tagName;
@@ -41,28 +47,47 @@
     return queue.some(function (q) { return q.row === String(pid) || q.pid === String(pid); });
   }
 
-  // -- the toast: one line, optionally with an Undo button ---------------------------------------
-  function undoButton() {
+  // -- the toast: an error line that stays until dismissed or replaced, and one line for notes and the Undo ----
+  var errorText = "", noteText = "";
+  function undoButton(q) {
     var b = document.createElement("button");
     b.type = "button"; b.className = "desk-toast-undo"; b.textContent = "Undo";
-    b.addEventListener("click", undo);
+    b.addEventListener("click", function () { undo(q); });      // q: that row's own entry; none: the newest
     return b;
+  }
+  function renderToast() {
+    toast.textContent = "";
+    var newest = queue[queue.length - 1];
+    if (errorText) {
+      var e = document.createElement("div");
+      e.className = "desk-toast-error";
+      e.appendChild(document.createTextNode(errorText + " "));
+      var d = document.createElement("button");
+      d.type = "button"; d.className = "desk-toast-undo"; d.textContent = "Dismiss";
+      d.addEventListener("click", function () { errorText = ""; renderToast(); });
+      e.appendChild(d);
+      toast.appendChild(e);
+    }
+    if (noteText) {
+      var n = document.createElement("div");
+      n.textContent = noteText;
+      toast.appendChild(n);
+    } else if (newest) {
+      var w = document.createElement("div");
+      w.appendChild(document.createTextNode(newest.label + " "));
+      w.appendChild(undoButton());
+      toast.appendChild(w);
+    }
+    toast.classList.toggle("is-on", toast.childNodes.length > 0);
   }
   function say(text) {
     clearTimeout(noteTimer);
-    toast.textContent = text;
-    toast.classList.add("is-on");
-    noteTimer = setTimeout(showWaiting, NOTE_MS);
+    noteText = text;
+    noteTimer = setTimeout(function () { noteText = ""; renderToast(); }, NOTE_MS);
+    renderToast();
   }
-  function showWaiting() {
-    clearTimeout(noteTimer);
-    toast.textContent = "";
-    var q = queue[queue.length - 1];
-    if (!q) { toast.classList.remove("is-on"); return; }
-    toast.appendChild(document.createTextNode(q.label + " "));
-    toast.appendChild(undoButton());
-    toast.classList.add("is-on");
-  }
+  function fail(text) { errorText = text; renderToast(); }
+  function showWaiting() { renderToast(); }
 
   // -- board: session and lane, rows ---------------------------------------------------------------
   function rowFor(pid) { return $('.desk-row[data-pid="' + pid + '"]', board); }
@@ -85,7 +110,7 @@
       var s = document.createElement("span");
       s.className = "desk-pending";
       s.appendChild(document.createTextNode(q.label + " "));
-      s.appendChild(undoButton());
+      s.appendChild(undoButton(q));
       r.parentNode.appendChild(s);
     }
   }
@@ -107,11 +132,12 @@
   function refreshBoard() {
     return fetch(boardUrl(), { headers: { Accept: "text/html" } })
       .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
-      .then(function (html) { board.innerHTML = html; readBoardState(); paintBoard(); })
+      .then(function (html) { board.innerHTML = html; readBoardState(); paintBoard(); autoOpen(); })
       .catch(function () { say("The board could not be refreshed. Reload the page."); });
   }
   function switchTo(session, lane) {
     state.session = session; state.lane = lane;
+    dropLot();                // the lot on screen may belong to another lane
     paintBoard();             // at once, from the rows already here
     refreshBoard();           // then from the server, so the counts and notes are current
   }
@@ -122,17 +148,23 @@
     state.lot = String(pid);
     if (rowPid !== undefined) state.row = String(rowPid);
     shown = null;
+    lotPane.setAttribute("aria-busy", "true");
     paintBoard();
     return fetch(lotUrl(pid), { headers: { Accept: "text/html" } })
       .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
       .then(function (html) {
         if (token !== state.token) return;      // a newer selection won
         lotPane.innerHTML = html;
+        lotPane.removeAttribute("aria-busy");
         lotPane.scrollTop = 0;
         told = {};
         if (lotView()) telemetry("open", "desk");
       })
-      .catch(function () { if (token === state.token) say("The lot could not be opened."); });
+      .catch(function () {
+        if (token !== state.token) return;
+        lotPane.innerHTML = ""; lotPane.removeAttribute("aria-busy");     // nothing stays to act on
+        fail("Lot " + pid + " could not be opened.");
+      });
   }
   function select(pid) {
     if (!pid) return Promise.resolve();
@@ -148,15 +180,32 @@
     return n ? n.dataset.pid : null;
   }
   function nextAfter(pid) { return neighbour(pid, 1) || neighbour(pid, -1); }
+  function dropLot() {
+    state.token++;
+    state.lot = null; shown = null;
+    lotPane.innerHTML = ""; lotPane.removeAttribute("aria-busy");
+  }
+  function selectRow(pid) {       // narrow: only the selection moves, Enter opens the lot
+    dropLot();
+    state.row = String(pid);
+    paintBoard();
+    var r = rowFor(pid);
+    if (r) { r.focus({ preventScroll: true }); r.scrollIntoView({ block: "nearest", behavior: "auto" }); }
+  }
   function move(step) {
     var to = neighbour(state.row, step);
-    if (to) select(to);
+    if (!to) return;
+    if (narrow.matches) selectRow(to); else select(to);
   }
   function closeLot() {
-    state.token++;
-    state.lot = null; state.row = null; shown = null;
-    lotPane.innerHTML = "";
+    dropLot();
+    state.row = null;
     paintBoard();
+  }
+  function autoOpen() {           // wide layouts only: the first lot of the lane shows beside the list
+    if (narrow.matches || state.lot) return;
+    var first = laneRows().filter(function (r) { return !waitingFor(r.dataset.pid); })[0];
+    if (first) select(first.dataset.pid);
   }
 
   // -- telemetry: what Jim looked at, through the existing event route ------------------------------
@@ -235,7 +284,7 @@
     if (action === "approve") body.append("amount", String(amount));
     Object.keys(extra || {}).forEach(function (k) { if (extra[k] !== "") body.append(k, extra[k]); });
     var q = {
-      pid: String(pid), row: String(row), url: v.dataset.decide, body: body, session: state.session, lane: state.lane,
+      pid: String(pid), ref: refOf(v, pid), row: String(row), url: v.dataset.decide, body: body, session: state.session, lane: state.lane,
       label: action === "approve" ? "Approved " + fmtK(amount) + " ·" : "Rejected ·", timer: null,
     };
     q.timer = setTimeout(function () { send(q, true); }, UNDO_MS);
@@ -264,6 +313,8 @@
   function approveChosen() {
     var v = lotView();
     if (!v) return;
+    var own = $('input[name="amount"]', v);
+    if (own && own.value.trim() !== "" && !/^\d+$/.test(own.value.trim())) { say("Type a whole number of thousands of yen."); return; }
     var amt = chosenAmount();
     if (!(amt > 0)) { say("Type or pick an amount first."); return; }
     if (v.dataset.start && amt < Number(v.dataset.start)) { say("The amount is below the start price (" + fmtK(v.dataset.start) + ")."); return; }
@@ -283,9 +334,9 @@
       feedback_note: $('input[name="feedback_note"]', v).value.trim(),
     });
   }
-  function describeError(r, data) {
-    if (r.status === 409) return "This lot changed while you decided. It is back on the desk.";
-    return (data && data.detail && String(data.detail)) || "The decision was not accepted (" + r.status + ").";
+  function describeError(r, data, ref) {
+    if (r.status === 409) return ref + ": This lot changed while you decided. It is back on the desk.";
+    return ref + ": " + ((data && data.detail && String(data.detail)) || "The decision was not accepted (" + r.status + ").");
   }
   function send(q, refresh) {
     clearTimeout(q.timer);
@@ -296,18 +347,20 @@
     return p.then(function (r) {
       if (r.ok) return refreshBoard().then(showWaiting);
       return r.json().catch(function () { return null; }).then(function (data) {
-        return refreshBoard().then(function () { say(describeError(r, data)); });
+        return refreshBoard().then(function () { fail(describeError(r, data, q.ref)); });
       });
     }).catch(function () {
-      refreshBoard().then(function () { say("The decision could not be sent. The lot is back on the desk."); });
+      refreshBoard().then(function () { fail(q.ref + ": The decision could not be sent. The lot is back on the desk."); });
     });
   }
-  function undo() {
-    var q = queue.pop();
-    if (!q) { say("Nothing to undo."); return; }
+  function undo(q) {              // a row's own Undo passes its entry; U and the toast cancel the newest
+    q = q || queue[queue.length - 1];
+    var i = q ? queue.indexOf(q) : -1;
+    if (i < 0) { say("Nothing to undo."); return; }
+    queue.splice(i, 1);
     clearTimeout(q.timer);
     state.session = q.session; state.lane = q.lane;
-    showWaiting();
+    renderToast();
     paintBoard();
     select(q.row);
   }
@@ -320,7 +373,7 @@
     var v = lotView();
     if (!v || !$('[data-act="clear"]', v)) return;
     var pid = v.dataset.lot, row = state.row || pid;
-    if (waitingFor(row)) { say("This lot already waits to be sent. Undo it first."); return; }
+    if (waitingFor(row) || waitingFor(pid)) { say("This lot already waits to be sent. Undo it first."); return; }
     var now = Date.now();
     if (!clearArmed || clearArmed.pid !== pid || now - clearArmed.at > CLEAR_ARM_MS) {
       clearArmed = { pid: pid, at: now };
@@ -328,15 +381,18 @@
       return;
     }
     clearArmed = null;
-    var next = nextAfter(row);
+    var next = nextAfter(row), ref = refOf(v, pid);
     fetch(v.dataset["delete"], { method: "POST", headers: { Accept: "application/json" } })
       .then(function (r) {
         return r.json().catch(function () { return null; }).then(function (data) {
-          if (!r.ok) { say(describeError(r, data)); return refreshBoard(); }
+          if (!r.ok) {
+            var why = r.status === 409 ? "it is no longer waiting." : ((data && data.detail && String(data.detail)) || "error " + r.status + ".");
+            return refreshBoard().then(function () { fail(ref + " could not be cleared: " + why); });
+          }
           return refreshBoard().then(function () { say("Cleared, not a decision."); if (next) select(next); else closeLot(); });
         });
       })
-      .catch(function () { say("The lot could not be cleared."); });
+      .catch(function () { fail(ref + " could not be cleared: the server did not answer."); });
   }
 
   // -- keys --------------------------------------------------------------------------------------------
@@ -344,6 +400,8 @@
   function onKey(e) {
     if (e.ctrlKey || e.altKey || e.metaKey) return;
     var t = e.target;
+    var moves = /^(j|k|ArrowUp|ArrowDown)$/i.test(e.key);
+    if (e.repeat && !moves) return;       // a held key never decides, clears or undoes a second lot
     if (typing(t)) {
       if (e.key === "Escape") closePanels();
       else if (e.key === "Enter" && t.tagName === "INPUT" && t.closest('[data-panel="amount"]')) { e.preventDefault(); approveChosen(); }
@@ -355,7 +413,7 @@
     else if (k === "k" || k === "ArrowUp") move(-1);
     else if (k === "Enter") {
       if (t.closest && t.closest("button, a")) return;     // a focused button or link keeps its own Enter
-      if (state.row) loadLot(state.row, state.row);
+      if (state.row && !lotView()) loadLot(state.row, state.row);
     }
     else if (k === "a") approve();
     else if (k === "e") { if (lotView() && panel("amount")) openPanel("amount"); }
@@ -393,6 +451,8 @@
   }
   function onLotClick(e) {
     var t = e.target;
+    if (t.closest('button[data-act="close"]')) { closeLot(); return; }
+    if (!lotView()) return;               // the lot on screen is not the one chosen yet
     var btn = t.closest("button[data-act]");
     if (btn) {
       var act = btn.dataset.act;
@@ -435,8 +495,13 @@
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && e.target.name === "reason") { e.preventDefault(); rejectWithReason(); }
   });
   document.addEventListener("keydown", onKey);
+  document.addEventListener("click", function (e) {     // narrow: a click outside the lot overlay closes it
+    var t = e.target;
+    if (narrow.matches && state.lot && !lotPane.contains(t) && !t.closest("#desk-toast, .desk-row, .desk-pending, .desk-sess, .desk-lane")) closeLot();
+  });
   window.addEventListener("pagehide", sendAllNow);
 
   readBoardState();
   paintBoard();
+  autoOpen();
 })();

@@ -144,3 +144,9 @@
 .desk-pending { display: block; margin: 4px 2px 0; font-size: 12.5px; font-weight: 600; color: var(--ink-3); }
 .desk-flash { outline: 3px solid var(--blue); outline-offset: 2px; transition: outline-color .3s; }
 @media (prefers-reduced-motion: reduce) { .desk-flash { transition: none; } }
+
+/* Fix round 1: sticky error line, busy lot, close button for the overlay widths. */
+.desk-toast-error { color: #ffd7d2; font-weight: 700; }
+.desk-lot[aria-busy="true"] { opacity: .55; }
+.dl-close { display: none; float: right; margin: 0 0 8px 8px; }
+@media (max-width: 1279px) { .dl-close { display: inline-flex; } }

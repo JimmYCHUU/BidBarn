@@ -313,3 +313,36 @@ def test_the_desk_page_loads_desk_js_deferred(cfg):
     client, _ = _client(cfg)
     assert re.search(r'<script[^>]*src="/static/desk\.js[^"]*"[^>]*defer', client.get("/desk").text)
     assert client.get("/static/desk.js").status_code == 200
+
+
+# -- Task 4 fix round 1 ----------------------------------------------------------------------------------
+
+def test_desk_js_acts_only_on_the_lot_that_is_shown():
+    src = DESK_JS.read_text(encoding="utf-8")
+    assert "v.dataset.lot === state.lot" in src          # lotView() is null while another lot loads
+    assert "if (!lotView()) return;" in src               # clicks in a stale article do nothing
+    assert "waitingFor(row) || waitingFor(pid)" in src    # clear refuses a lot with a decision waiting
+    assert "if (e.repeat && !moves) return;" in src       # a held key never decides or clears
+    assert "undo(q)" in src and "function undo(q)" in src  # a row's Undo cancels its own entry
+
+
+def test_desk_js_errors_name_the_lot_and_stay():
+    src = DESK_JS.read_text(encoding="utf-8")
+    assert "function fail(" in src and "Dismiss" in src
+    assert 'ref + ": This lot changed while you decided. It is back on the desk."' in src
+    assert 'could not be cleared: " + why' in src and "it is no longer waiting." in src
+    assert "Type a whole number of thousands of yen." in src
+
+
+def test_desk_js_narrow_moves_select_only_and_wide_opens_the_first_lot():
+    src = DESK_JS.read_text(encoding="utf-8")
+    assert "if (narrow.matches) selectRow(to); else select(to);" in src
+    assert "if (narrow.matches || state.lot) return;" in src and "autoOpen();" in src
+
+
+def test_the_lot_fragment_has_a_close_button_and_names_its_ref(cfg):
+    pid = _three(cfg)[0]
+    client, _ = _client(cfg)
+    html = client.get(f"/desk/lot/{pid}").text
+    assert re.search(r'<button[^>]*data-act="close"[^>]*aria-label="Close the lot"', html)
+    assert 'data-ref="A1"' in html
