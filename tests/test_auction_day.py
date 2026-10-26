@@ -165,3 +165,80 @@ def test_a_stop_during_the_day_read_keeps_the_judged_lot(cfg, monkeypatch):
     rows = store.list_proposals(decision="pending", status="NEEDS_REVIEW")
     assert len(rows) == 1 and json.loads(rows[0]["facts_json"]).get("auction_date", "") == ""
     store.close()
+
+
+# -- Final review fix T6: a known day is copied, and the read mark survives every rewrite of the facts ------
+
+class _NoDate(FakeBrowser):
+    """A lot page with no auction date."""
+    def __init__(self):
+        super().__init__()
+        self.detail_html = self.detail_html.replace("AuctionDate: '20260915'", "AuctionDate: ''")
+
+
+def test_a_waiting_lot_copies_a_day_another_row_already_holds(cfg, monkeypatch):
+    _card_only(cfg, monkeypatch)
+    store = Store(cfg.db_path)
+    scan(cfg, FakeBrowser(), store, ["GDH206"], limit_per_model=1)
+    row = store.list_proposals(decision="pending", status="NEEDS_REVIEW")[0]
+    facts = json.loads(row["facts_json"])
+    # The same vehicle under another guide already holds the day...
+    store.add_proposal(ref_no=row["ref_no"], guide_id=987654, model_code="OTHER", snapshot="s", rule_updated_at="u",
+                       status="SKIP", stage="card", summary="", facts_json=dict(facts), hard_json={"checks": []})
+    # ...and the waiting row was stored before the scan read days.
+    facts["auction_date"] = facts["auction_place"] = ""
+    facts.pop("auction_day_read", None)
+    store.update_soft(row["id"], json.loads(row["soft_json"]), facts=facts)
+    again = FakeBrowser()
+    stats = scan(cfg, again, store, ["GDH206"], limit_per_model=0, fresh=True)  # no new lot, cold cache
+    assert stats.reused >= 1 and stats.day_pages == 0
+    assert not any(u.endswith(f"/auction/{row['ref_no']}") for u in _lot_visits(again))
+    got = json.loads(store.proposal(row["id"])["facts_json"])
+    assert got["auction_date"] == "20260915" and got["auction_place"] == "CAA Gifu" and got["auction_day_read"] is True
+    store.close()
+
+
+def test_the_read_mark_round_trips_through_vehicle_facts():
+    from auction_bot.nichibo.facts import VehicleFacts
+    f = VehicleFacts.from_dict({"ref_no": "X", "url": "u", "auction_date": "", "auction_day_read": True})
+    assert f.auction_day_read is True and f.to_dict()["auction_day_read"] is True
+    assert VehicleFacts(ref_no="Y", url="u").to_dict()["auction_day_read"] is False
+
+
+def test_the_read_mark_survives_replay_apply(cfg, monkeypatch):
+    from auction_bot.pipeline import reevaluate
+    from tests.test_instructions import _add_line
+    _card_only(cfg, monkeypatch)
+    store = Store(cfg.db_path)
+    scan(cfg, _NoDate(), store, ["GDH206"], limit_per_model=2)
+    refs = {r["ref_no"] for r in store.list_proposals(decision="pending", status="NEEDS_REVIEW")}
+    assert len(refs) == 2
+    _add_line(cfg, "skip: km > 0")  # every stored lot changes outcome, so replay rewrites both from their facts
+    st = reevaluate(cfg, store, ["GDH206"], apply=True)
+    assert st.applied == 2
+    new = [r for r in store.list_proposals(decision="pending", status="SKIP", limit=1000) if r["ref_no"] in refs]
+    assert len(new) == 2
+    for r in new:
+        f = json.loads(r["facts_json"])
+        assert f["auction_date"] == "" and f["auction_day_read"] is True
+    store.close()
+
+
+def test_the_read_mark_survives_the_pending_judge_pass(cfg, monkeypatch):
+    from pathlib import Path
+    from auction_bot.pipeline import judge_pending
+    from tests.test_judge_pipeline import _stub
+    cfg.sheet_check = "judge"
+    cfg.judge = {"max_photos": 2, "inline": False}
+    _stub(monkeypatch, [])
+    store = Store(cfg.db_path)
+    scan(cfg, _NoDate(), store, ["GDH206"], limit_per_model=1)
+    row = store.list_proposals(decision="pending", status="NEEDS_REVIEW")[0]
+    assert json.loads(row["facts_json"])["auction_day_read"] is True
+    for photo in json.loads(row["evidence_json"])["photos"]:  # the pending pass must open the page for photos
+        Path(photo).unlink()
+    st = judge_pending(cfg, store, browser=_NoDate())
+    assert st.pages == 1 and st.judged == 1
+    f = json.loads(store.proposal(row["id"])["facts_json"])
+    assert f["auction_date"] == "" and f["auction_day_read"] is True
+    store.close()

@@ -194,7 +194,8 @@ def _read_day_into(store: Store, pid: int, ref_no: str, browser: Browser, cfg: C
 
 def _fill_waiting_day(store: Store, browser: Browser, cfg: Config, ref_no: str, rule: ModelRule, cache,
                       stats: ScanStats) -> None:
-    """A lot already waiting for review whose day was never read: read it and add it to that row, nothing else."""
+    """A lot already waiting for review whose day was never read: copy the day another row of this vehicle holds
+    (no page), else read it; either way it is added to that row and nothing else changes."""
     prev = store.latest_proposal(ref_no, rule.guide_id)
     if prev is None or prev["decision"] != "pending" or prev["status"] not in ("BID", "NEEDS_REVIEW"):
         return
@@ -203,6 +204,10 @@ def _fill_waiting_day(store: Store, browser: Browser, cfg: Config, ref_no: str, 
     except json.JSONDecodeError:
         return
     if not isinstance(facts, dict) or _day_known(facts):
+        return
+    known = store.known_day(ref_no)
+    if known:
+        store.set_auction_day(prev["id"], known["auction_date"], known["auction_place"])
         return
     _read_day_into(store, prev["id"], ref_no, browser, cfg, cache, stats)
 
@@ -906,6 +911,7 @@ def judge_pending(cfg: Config, store: Store, model_codes: list[str] | None = Non
                 full = fetch_facts(browser, cfg, row["ref_no"], cache)
                 full.ref_no = row["ref_no"]
                 full.seats, full.sheet_ocr = facts.seats, facts.sheet_ocr
+                full.auction_day_read = True  # the lot's page was just read: its day (or none) is in `full`
                 evidence = download_evidence(browser, cfg, full, judge_photos(cfg, reqs), cache)
                 facts = full
                 st.pages += 1

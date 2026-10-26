@@ -35,6 +35,9 @@ class VehicleFacts:
     seats: int | None = None  # filled from the auction-sheet check (OCR or model)
     sheet_ocr: dict | None = None  # SheetRead.to_dict() when the sheet was OCR-read
     source: str = "detail"  # "card" when only search-card data is known
+    # The lot's own page was read for its auction day (Jim, 2026-10-26), even when it showed none. Kept through
+    # every rewrite of the stored facts (replay, the pending judge pass) so that page is not read again.
+    auction_day_read: bool = False
 
     @property
     def grade(self) -> float | None:
