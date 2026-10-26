@@ -18,7 +18,7 @@ Each session has four lanes:
 | Needs a look | Anything the model observed, anything unclear or failing, any odd-case flag, an import eligibility verdict other than eligible, an ambiguous variant, or no amount. Each row carries up to two "look at" chips. |
 | Card-clear | A lot whose requirements were all answered by the card, the sheet header the OCR reads, or the rules, and nothing else. You still check the sheet, then decide. |
 | Waiting | Images not published yet, or the model has not judged the lot yet. |
-| Decided | Approved and rejected lots. |
+| Decided | Approved and rejected lots, lots you cleared ("Cleared, not a decision") and lots covered by the other guide's approval, for the last 24 hours. |
 
 Inside a lane the order is today's triage order: model, best grade, fewest km.
 
@@ -29,7 +29,7 @@ those notes. Card-clear is mostly the lots whose guide has no text requirement.
 A vehicle proposed under two guides is one row marked "2 guides", with a switch between the
 guides. Approve it once. The other guide's proposal is never decided for you.
 
-A lot opens beside the list (three panes from 1280 px wide), over the list under 1280 px, and full
+A lot opens beside the list (three panes from 1280 px wide), opens over the list under 1280 px, and full
 screen under 900 px. It shows the facts, the amount with the grid and the used cell lit, the
 requirements with their source and verdict (ladder steps for cruise control and Welcab), the import
 eligibility card, the model's pre-fill in violet, the sheet and the numbered photos, and a decision
@@ -78,7 +78,7 @@ dashboard edits are committed.
 | `J` / `K`, or arrows | Next, previous lot in the lane |
 | `Enter` | Open the lot (narrow widths) |
 | `A` | Approve at the shown amount |
-| `E` | Change the amount: the candidates first, or type one (flagged "not a candidate") |
+| `E` | Change the amount: the candidates first, or type one. A typed amount wins over the picked candidate, and the edit is recorded as an `amount_edit` event |
 | `R` | Reject, with a reason |
 | `D` twice | Clear the lot, not a decision |
 | `U` | Undo the newest waiting decision |
@@ -89,9 +89,12 @@ dashboard edits are committed.
 | `?` | The key list |
 | `Esc` | Close a panel, or the lot at narrow widths; cancels a first `D` |
 
-Keys do nothing while you type in a field. A held key never decides, clears or undoes a second lot.
-Approve is disabled, with the reason, for a lot with no amount, and a typed amount below the start
-price shows the route's own message.
+Letter keys do nothing while you type in a field. `Esc` still closes the panel, `Enter` in the
+amount field approves through the 10-second window, and `Ctrl+Enter` in the reason field rejects.
+A held key never decides, clears or undoes a second lot. Approve is disabled, with the reason, for a
+lot with no amount, and when the shown amount is below the start price. A typed amount below the
+start price is refused by the page before it is sent: "The amount is below the start price (nnK)."
+
 
 ## What phase 1 leaves out
 
@@ -111,7 +114,7 @@ Every action on `/review` and `/p/<n>`, and where it is on the desk.
 | Change amount | `E` or Change amount: candidates first, a typed amount allowed |
 | Reject with a reason | `R` or Reject: reason field, sent with the undo window |
 | Standing instruction ("save as standing instruction", `skip:` line suggested from the reason) | The same checkbox and text in the reject panel |
-| "The model was wrong about ... because ..." | The same fields in the reject panel, for a judged lot |
+| "The model was wrong about ... because ..." | The same select in the reject panel, for every lot, with "(nothing to correct)" as the default |
 | Delete (a lot, without a decision) | Clear, `D` twice. **Delete session** stays on `/review` (phase 2) |
 | Open on Nichibo | Open on Nichibo in the lot header, `O` |
 | Sheet full size | `S` and `Z`, or a click on the sheet |
@@ -131,35 +134,52 @@ Do these on the copy (see below). Each line is one action and what you should se
 - [ ] Open `/desk`. Press `A` on a lot, then `U` within 10 seconds. The lot stays pending; `/p/<n>` shows no decision.
 - [ ] Press `A` on a lot and wait 10 seconds. The lot moves to Decided; `/p/<n>` shows Approved.
 - [ ] Press `A` on a lot, then close the tab within 10 seconds. Reopen the desk: the lot is Approved.
-- [ ] Press `A` on a lot, then run `replay --apply` (or approve it on `/p/<n>`) in another window before the 10 seconds end. The desk says the lot could not be decided and the lot comes back, undecided.
+- [ ] Open a lot on the desk, then approve the same lot on its old page `/p/<n>` in the copy's dashboard. Back on the desk, press `A` on it. The desk says the lot changed and puts it back.
 - [ ] Press `R`, type a reason, tick the skip line, send. After 10 seconds the lot is Rejected and the skip line is in the guide's standing instructions.
 - [ ] Press `D` twice on a lot. It leaves the desk; `/p/<n>` shows it as deleted, with no decision.
-- [ ] Make the browser window 1024 px wide. Select a lot: it slides over the list. Click Close: the list returns.
-- [ ] Click in the reject reason field and type `a`, `r`, `d`, `j`. The letters appear in the field and nothing is approved, rejected or cleared.
+- [ ] Make the browser window 1024 px wide. Select a lot: it opens over the list. Click Close: the list returns.
+- [ ] Click in the reject reason field and type `a`, `r`, `d`, `j`. The letters appear in the field and nothing is approved, rejected or cleared. `Esc` closes the panel.
 - [ ] Open `/`, `/review`, `/list` and `/p/<n>`. They look and behave as before.
 - [ ] Open `/bids`. The lock band says the testing lock is on and placement is a dry run.
-- [ ] On `/bids`, click Place as dry run. A run starts; each approved lot gets a screenshot and "Dry-run placed", and nothing is submitted. The lock keeps it a dry run.
+- [ ] Optional, after the merge (or only if you sign in to Nichibo in the copy): on `/bids`, click Place as dry run. A run starts; each approved lot gets a screenshot and "Dry-run placed", and nothing is submitted. The lock keeps it a dry run. This opens Nichibo lot pages with the bot's browser profile, which is empty in the worktree, so it needs a sign-in and real Nichibo traffic. Skip it otherwise.
 
 ## How to try it before the merge
 
-Run the dashboard from the branch's worktree. `load_config` resolves `data/` and `rules/` under the
-folder the code runs from, so the worktree needs its own copy of the data. Never link or move the
-originals: copy. `<main>` is your main checkout (`D:\Jim\Auction Automation`) and `<worktree>` is the
-desk branch's worktree.
+The program reads `data/` and `rules/` from the folder of the code that is imported (`ROOT` in
+`auction_bot.config`). The main checkout's venv has an editable install that points at
+`D:\Jim\Auction Automation\src`. Started as it is, it imports the main checkout's code, with your real
+`data/` and `rules/`, and has no `/desk`. So the copy is started with `PYTHONPATH` set to the
+worktree's `src`. Never link or move the originals: copy. `<worktree>` is the desk branch's worktree.
 
-1. Copy `<main>\data\bot.sqlite` to `<worktree>\data\bot.sqlite`.
-2. Copy the newest file in `<main>\rules\snapshots\` (the newest `*.json`) to `<worktree>\rules\snapshots\`.
-3. For each lot you want to see on the desk, copy its folder `<main>\data\evidence\<ref>\` to `<worktree>\data\evidence\<ref>\`. Copy only those folders.
-4. From `<worktree>`, start the dashboard with the main checkout's Python:
+1. Close the real dashboard first. The copy must be the only dashboard running: `config.yaml` uses port 8765, and if the real one is up the command just opens a tab on it.
+2. Copy `D:\Jim\Auction Automation\dataot.sqlite` to `<worktree>\dataot.sqlite`.
+3. Copy the newest `*.json` in `D:\Jim\Auction Automationules\snapshots\` to `<worktree>ules\snapshots\`.
+4. For each lot you want to see on the desk, copy its folder `D:\Jim\Auction Automation\data\evidence\<ref>\` to `<worktree>\data\evidence\<ref>\`. Copy only those folders.
+5. Open a fresh PowerShell window and go to the worktree:
 
    ```
    cd <worktree>
-   "<main>\.venv\Scripts\python" -m auction_bot.cli dashboard
+   $env:PYTHONPATH = "<worktree>\src"
    ```
 
-5. Open http://127.0.0.1:8765/desk.
+6. Check it before starting:
+
+   ```
+   & "D:\Jim\Auction Automation\.venv\Scripts\python" -c "import auction_bot.config as c; print(c.ROOT)"
+   ```
+
+   It must print the worktree path. If it prints `D:\Jim\Auction Automation`, stop: the copy would run on the real data.
+7. Start the dashboard:
+
+   ```
+   & "D:\Jim\Auction Automation\.venv\Scripts\python" -m auction_bot.cli dashboard
+   ```
+
+8. Open http://127.0.0.1:8765/desk.
 
 Decisions made there are thrown away with the copy. The originals are not touched.
 
-No Nichibo action is needed to try the desk. Do not run a scan from both places at once: the same
-browser profile lock applies, and the bot runs one scan or placement at a time.
+No Nichibo action is needed to try the desk, the lot views or the old pages. Do not start a scan or
+a placement from both places at once: the same browser profile lock covers scans and `place`, and
+the bot runs one at a time. The optional dry run on the bid sheet (last item of the check list) is
+the one thing that does need Nichibo.
