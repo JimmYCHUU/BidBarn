@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Desk · BidBarn{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/desk.css?v={{ asset_v }}">{% endblock %}
+{% block body %}
+{% set sg = pulse.signin %}{% set ru = pulse.rules %}{% set prov = pulse.judge.providers %}
+<div class="page-head"><h1>Desk</h1>
+  <div class="desk-pulse end" aria-label="Status">
+    <span class="pill {{ 'pill--ok' if sg.ok and sg.fresh else 'pill--warn' }}">{{ icon('circle-check' if sg.ok and sg.fresh else 'circle-alert') }} Nichibo {{ 'signed in' if sg.ok and sg.fresh else 'sign-in not confirmed' }}</span>
+    <span class="pill {{ 'pill--warn' if ru.stale else 'pill--plain' }}">Guides {{ ('%d h old' % ru.age_hours) if ru.age_hours is not none else 'age unknown' }}</span>
+    <span class="pill {{ 'pill--warn' if prov|rejectattr('level', 'equalto', 'ok')|list else 'pill--plain' }}">Model quota {{ 'low' if prov|rejectattr('level', 'equalto', 'ok')|list else ('ok' if prov else 'not used') }}</span>
+    <span class="pill pill--lock {{ 'pill--bad' if pulse.lock.label == 'LIVE PLACEMENT' else ('pill--info' if pulse.lock.label == 'DRY RUN' else 'pill--warn') }}">{{ pulse.lock.label }}</span>
+  </div>
+</div>
+<div class="desk" id="desk">
+  <section class="desk-board" id="desk-board" aria-label="Lots">{% include "_desk_board.html" %}</section>
+  <aside class="desk-lot" id="desk-lot" aria-label="Lot"></aside>
+</div>
+<div id="desk-toast" class="desk-toast" role="status" aria-live="polite"></div>
+{% endblock %}

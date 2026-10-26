@@ -7,6 +7,7 @@
 <link rel="icon" href="/static/favicon.svg?v={{ asset_v }}" type="image/svg+xml">
 <link rel="preload" href="/static/vendor/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/static/bidbarn.css?v={{ asset_v }}">
+{% block head %}{% endblock %}
 </head>
 <body data-lock="{{ lock_state or '' }}">
 <header class="app-header">
@@ -30,7 +31,9 @@
 <div class="shell">
   <nav class="nav" aria-label="Sections">
     <a href="/" {% if nav == 'overview' %}aria-current="page"{% endif %}>{{ icon('layout-dashboard') }} Overview</a>
+    <a href="/desk" {% if nav == 'desk' %}aria-current="page"{% endif %}>{{ icon('inbox') }} Desk</a>
     <a href="/review" {% if nav == 'review' %}aria-current="page"{% endif %}>{{ icon('list-checks') }} Review{% if counts %} <span class="count {{ 'count--hot' if (counts.bid + counts.review) else '' }}">{{ counts.bid + counts.review }}</span>{% endif %}</a>
+    <a href="/bids" {% if nav == 'bids' %}aria-current="page"{% endif %}>{{ icon('clipboard-list') }} Bid sheet</a>
     <a href="/guides" {% if nav == 'guides' %}aria-current="page"{% endif %}>{{ icon('book-open') }} Guides</a>
     <a href="/list" {% if nav == 'list' %}aria-current="page"{% endif %}>{{ icon('table-2') }} All lots</a>
     <a href="/runs" {% if nav == 'runs' %}aria-current="page"{% endif %}>{{ icon('history') }} Runs</a>

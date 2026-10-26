@@ -1,0 +1,55 @@
+{# The desk board: session strip, lane tabs, rows. Every session's rows are here; the ones outside the current
+   session and lane are `hidden`, so it works without JavaScript. Also served alone by GET /desk/board. #}
+{% macro href(session, lane) %}/desk?session={{ session|urlencode }}&amp;lane={{ lane }}{% endmacro %}
+{% macro k(jpy) %}{{ '{:,}'.format((jpy / 1000)|round|int) }}K{% endmacro %}
+{% set cur = sessions|selectattr('key', 'equalto', current)|first %}
+{% if not sessions %}
+<div class="desk-empty card"><div class="card-body">{{ icon('inbox') }} <b>Nothing to decide</b><p class="muted">No lots are waiting. A scan puts new ones here.</p></div></div>
+{% else %}
+<nav class="desk-strip" aria-label="Auction sessions">
+  {% for s in sessions %}{% set c = s.counts() %}
+  <a class="desk-sess" data-session="{{ s.key }}" href="{{ href(s.key, 'look' if c.look else ('clear' if c.clear else ('wait' if c.wait else 'done'))) }}"{% if s.key == current %} aria-current="true"{% endif %}>
+    <span class="desk-sess-label">{{ s.label }}</span>
+    <span class="desk-sess-counts num">{{ s.undecided() }} to decide{% if c.done %} · {{ c.done }} decided{% endif %}</span>
+  </a>
+  {% endfor %}
+</nav>
+<div class="desk-lanes" role="group" aria-label="Lanes">
+  {% for l in lanes %}
+  <a class="desk-lane" data-lane="{{ l }}" href="{{ href(current, l) }}"{% if l == lane %} aria-current="true"{% endif %}>{{ lane_names[l] }} <span class="count num">{{ cur.counts()[l] }}</span></a>
+  {% endfor %}
+</div>
+{% if cur.undecided() == 0 %}<p class="desk-note muted">This session is decided.</p>{% endif %}
+{% if not cur.lanes[lane] %}<p class="desk-note muted">Nothing in this lane.</p>{% endif %}
+<ul class="desk-rows">
+  {% for s in sessions %}{% for ln in lanes %}{% for lot in s.lanes[ln] %}{% set p = lot.p %}{% set f = p.facts or {} %}{% set e = p.eligibility %}
+  <li{% if s.key != current or ln != lane %} hidden{% endif %}>
+    <button type="button" class="desk-row" data-pid="{{ p.id }}" data-session="{{ s.key }}" data-lane="{{ ln }}"{% if s.key != current or ln != lane %} hidden{% endif %}>
+      {% if p.sheet_src %}<img class="desk-thumb" src="{{ p.sheet_src }}" alt="Auction sheet" loading="lazy">{% else %}<span class="desk-thumb desk-thumb--none">No sheet yet</span>{% endif %}
+      <span class="desk-main">
+        <span class="desk-title">{{ f.year or '' }} {{ f.make }} {{ f.model }} <span class="muted">{{ f.variant_text }}</span></span>
+        <span class="desk-facts num">
+          <span class="mono">{{ f.chassis or p.model_code }}</span>
+          <span>{{ '{:,}'.format(f.km or 0) }} km</span>
+          {% if f.grade_raw %}<span class="pill pill--tan">Grade {{ f.grade_raw }}</span>{% endif %}
+          <span>start {{ k(f.start_price_jpy or 0) }}</span>
+          <span class="faint">{{ p.ref_no }}</span>
+        </span>
+        <span class="desk-chips">
+          {% for item in lot.look[:2] %}<span class="desk-chip desk-chip--{{ item.kind }}" title="{{ item.text }}">{{ item.text }}</span>{% endfor %}
+          {% if lot.look|length > 2 %}<span class="desk-chip desk-chip--more">+{{ lot.look|length - 2 }} more</span>{% endif %}
+        </span>
+        {% if lot.cleared %}<span class="desk-state">Cleared, not a decision</span>
+        {% elif lot.covered_by %}<span class="desk-state">Covered by the approval under the other guide</span>
+        {% elif ln == 'done' %}<span class="desk-state">{{ p.decision|capitalize }}</span>{% endif %}
+      </span>
+      <span class="desk-side">
+        {% if p.proposed_bid_jpy_k %}<b class="desk-amount num">{{ '{:,}'.format(p.proposed_bid_jpy_k) }}K</b>{% else %}<span class="muted">No amount</span>{% endif %}
+        {% if e %}<span class="pill {{ 'pill--ok' if e.verdict == 'eligible' else ('pill--bad' if e.verdict == 'cannot_import' else 'pill--warn') }}">{{ e.label }}</span>{% endif %}
+        {% if lot.siblings %}<span class="pill pill--info">2 guides</span>{% endif %}
+      </span>
+    </button>
+  </li>
+  {% endfor %}{% endfor %}{% endfor %}
+</ul>
+{% endif %}
