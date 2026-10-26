@@ -37,7 +37,7 @@ builds it: the review routes are defined there, the dashboard routes are registe
 | `POST /finish` | The header's Finish button. Under `bot bid` on a console it sets the event the console waits on; under a Bid run started from the page it writes that run's finish file (see Finish). 404 when no review is waiting |
 | `GET /review`, `/list`, `/p/{id}` | The review pages |
 | `GET /desk`, `/desk/board`, `/desk/lot/{id}` | The desk: lots by auction session and lane. Reads only; its decisions go to `POST /p/{id}/decide`, `/delete` and `/event`. See `docs/desk.md` |
-| `GET /bids` | The bid sheet: approved lots per auction, exposure, and a button that starts the dry-run `place` command |
+| `GET /bids` | The bid sheet: the approved lots `bot place` will take, in its order, per auction, the next dry run's lots marked, exposure, the last day's placed lots, and a button that starts the dry-run `place` command |
 | `GET /api/status` | The state of the day, as the overview shows it |
 | `GET /api/commands` | The command table, for the forms |
 | `POST /api/runs` | Start a command. Body `{"command": "scan", "options": {...}}`. 201 the run, 400 unknown command or option, 409 something is running |
