@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Sheet reader trial · BidBarn{% endblock %}
+{% block body %}
+{% set words = {'carbarn': 'Carbarn right', 'bot': 'Bot right', 'neither': 'Neither'} %}
+{% set readers = [('carbarn', "Carbarn's read"), ('ocr', 'Local OCR'), ('translator', "Nichibo's translation"), ('listing', 'Listing'), ('model', 'Free model')] %}
+<div class="page-head">
+  <h1 class="page-title">Sheet reader trial</h1>
+  <span class="page-sub">Carbarn's own sheet reader against the bot's reading of the same sheets.{% if trial %} {{ summary.lots }} sheets, {{ trial.stamp }}.{% endif %}</span>
+  {% if stamps|length > 1 %}
+  <div class="end">
+    <form method="get" class="form-row form-row--tight">
+      <div class="field field--narrow"><label for="t-stamp">Trial</label>
+        <select id="t-stamp" name="stamp">{% for s in stamps %}<option value="{{ s }}" {% if trial and s == trial.stamp %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></div>
+      <button>Show</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+
+{% if not trial %}
+<div class="card">
+  <div class="empty">
+    {{ icon('file-text') }}
+    <h3>No trial yet</h3>
+    <p>Start <b>Sheet reader trial</b> on the Runs page. It sends stored auction sheets to Carbarn's sheet reader and compares the answers with the bot's own reading. Nothing goes to Nichibo.</p>
+    <a class="btn" href="/runs">Open the Runs page</a>
+  </div>
+</div>
+{% else %}
+
+<section class="card">
+  <div class="card-head"><h2>Result</h2>
+    <span class="pill {{ 'pill--ok' if summary.decision.startswith('wire') else ('pill--warn' if summary.decision.startswith('marks') else 'pill--bad') }}">{{ summary.decision.split(':')[0] }}</span>
+  </div>
+  <div class="card-body">
+    <p>{{ summary.decision }}.</p>
+    {% if summary.signed_out %}<div class="banner">{{ icon('triangle-alert') }}<div>The trial stopped early: signed out of the Carbarn dashboard. Sign in, then start it again; the sheets already read are kept and cost nothing the second time.</div></div>{% endif %}
+    <dl class="facts num">
+      <div class="fact"><dt>Sheets</dt><dd>{{ summary.lots }}</dd></div>
+      <div class="fact"><dt>Read</dt><dd>{{ summary.ok }}</dd></div>
+      <div class="fact"><dt>Failed</dt><dd>{{ summary.failed }}</dd></div>
+      <div class="fact"><dt>Hard to read</dt><dd>{{ summary.low_confidence }}</dd></div>
+      <div class="fact"><dt>Paid reads</dt><dd>{{ summary.calls }}</dd></div>
+      <div class="fact"><dt>From the cache</dt><dd>{{ summary.cached }}</dd></div>
+      <div class="fact"><dt>Time per read</dt><dd>{% if summary.median_s is not none %}{{ summary.median_s }} s<small>slowest {{ summary.max_s }} s</small>{% else %}—{% endif %}</dd></div>
+      <div class="fact"><dt>Disagreements</dt><dd>{{ summary.disagreements }}<small>{{ summary.marked }} marked</small></dd></div>
+    </dl>
+    <p class="num">Carbarn right: {{ summary.marks.carbarn }} · Bot right: {{ summary.marks.bot }} · Neither: {{ summary.marks.neither }}</p>
+    {% if summary.fields %}
+    <p class="faint">Disagreements by field: {% for name, d in summary.fields.items() %}{{ name }} {{ d.disagree }} of {{ d.rows }}{% if not loop.last %} · {% endif %}{% endfor %}</p>
+    {% endif %}
+    <p class="faint">The rule, set before the trial: wire it in when at most 10 % of the reads failed or were hard to read and, where the readers disagree, Carbarn's read was right more often than the bot.</p>
+  </div>
+</section>
+
+<form method="post" action="/sheet-trial/{{ trial.stamp }}/marks">
+<div class="row"><button class="btn--primary">Save marks</button><span class="faint">Mark each highlighted row after looking at the sheet. Click the sheet to enlarge it.</span></div>
+{% for lot in trial.lots %}
+<section class="card trial-lot">
+  <div class="card-head">
+    <h2 class="mono">{{ lot.model_code }}</h2><span class="faint mono">{{ lot.ref_no }}</span>
+    {% if lot.status == 'ok' %}<span class="pill {{ 'pill--warn' if lot.low_confidence else 'pill--ok' }}">{{ 'hard to read' if lot.low_confidence else 'read' }}</span>{% else %}<span class="pill pill--bad">failed</span>{% endif %}
+    <span class="faint push num">{% if lot.cached %}from the cache{% else %}{{ lot.seconds }} s{% endif %}{% if lot.needs %} · guide needs {{ lot.needs|join(', ') }}{% endif %}</span>
+  </div>
+  <div class="card-body cols cols--detail">
+    <div>
+      {% if lot.status != 'ok' %}
+        <p class="muted">The reader gave no answer: {{ lot.error }}</p>
+      {% else %}
+      <div class="table-wrap">
+      <table class="lots trial-table">
+        <thead><tr><th>Field</th>{% for key, label in readers %}<th>{{ label }}</th>{% endfor %}<th>Your mark</th></tr></thead>
+        <tbody>
+        {% for r in lot.rows %}
+          <tr class="{{ 'is-disagree' if r.disagree }}">
+            <td><b>{{ r.field }}</b></td>
+            {% for key, label in readers %}<td>{{ r['values'][key] if key in r['values'] else '' }}</td>{% endfor %}
+            <td class="nowrap">{% if r.disagree %}{% set chosen = (marks.get(lot.pid|string) or {}).get(r.field) %}
+              {% for c in choices %}<label class="check-row"><input type="radio" name="mark:{{ lot.pid }}:{{ r.field }}" value="{{ c }}" {% if chosen == c %}checked{% endif %}> {{ words[c] }}</label>{% endfor %}
+            {% endif %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      </div>
+      {% set w = (lot.read or {}).welfare %}
+      {% if w and w.found %}<p><b>Welfare:</b> {{ w.sentence }}{% if w.confidence %} <span class="muted">({{ w.confidence }} confidence)</span>{% endif %}</p>
+        {% if w.evidence %}<ul class="plain">{% for e in w.evidence %}<li><span lang="ja">{{ e.ja }}</span>{% if e.en %} <span class="muted">{{ e.en }}</span>{% endif %}</li>{% endfor %}</ul>{% endif %}
+      {% endif %}
+      {% endif %}
+    </div>
+    <div>
+      {% if lot.evidence_base %}<a href="/evidence/{{ lot.evidence_base }}/{{ lot.sheet_file }}" target="_blank" data-zoom data-sheet-zoom><img class="trial-sheet" src="/evidence/{{ lot.evidence_base }}/{{ lot.sheet_file }}" alt="Auction sheet {{ lot.ref_no }}" loading="lazy"></a>{% else %}<span class="muted">{{ lot.sheet_file }}</span>{% endif %}
+    </div>
+  </div>
+</section>
+{% endfor %}
+<div class="row"><button class="btn--primary">Save marks</button></div>
+</form>
+{% endif %}
+{% endblock %}

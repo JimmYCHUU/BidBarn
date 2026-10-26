@@ -311,6 +311,44 @@ def replay(model: list[str] = typer.Option(None, "--model", "-m", help="Only the
                       **({"errors": [str(e)[:300] for e in st.errors[:20]], "errors_total": len(st.errors)} if st.errors else {})})
 
 
+@app.command("sheet-trial")
+@friendly
+def sheet_trial(count: int = typer.Option(50, help="How many stored sheets to send"),
+                model: list[str] = typer.Option(None, "--model", "-m", help="Only these model codes"),
+                headless: bool = typer.Option(True, "--headless/--no-headless", help="Hide the bot's browser window")) -> None:
+    """Send stored auction sheets to Carbarn's own sheet reader and compare its answers with the bot's reading.
+
+    Only lots whose guide needs the sheet; one paid read per sheet image, never twice. No Nichibo traffic.
+    Open /sheet-trial on the dashboard afterwards to mark who was right where they disagree.
+    """
+    _log()
+    cfg = load_config()
+    from auction_bot.carbarn.client import load_rules
+    from auction_bot.carbarn.sheet_reader import SheetReader
+    from auction_bot.nichibo.browser import Browser
+    from auction_bot.sheet_trial import run_trial
+    from auction_bot.store import Store
+
+    rules, _ = load_rules(cfg)
+    store = Store(cfg.db_path)
+    try:
+        with Browser(cfg, headless=headless) as b:
+            reader = SheetReader.for_browser(cfg, b, max_calls=count)
+            path, s = run_trial(cfg, store, reader, rules, count, model or None, echo=typer.echo)
+    finally:
+        store.close()
+    typer.echo(f"{s['lots']} sheets: read {s['ok']}, failed {s['failed']}, hard to read {s['low_confidence']}, "
+               f"paid reads {s['calls']}, from the cache {s['cached']}, disagreements {s['disagreements']}")
+    if s["median_s"] is not None:
+        typer.echo(f"time per read: median {s['median_s']} s, slowest {s['max_s']} s")
+    typer.echo(f"saved {path}")
+    typer.echo(f"decision so far: {s['decision']}")
+    host, port = cfg.review.get("host", "127.0.0.1"), int(cfg.review.get("port", 8765))
+    typer.echo(f"mark the disagreements: http://{host}:{port}/sheet-trial")
+    progress.summary({k: s[k] for k in ("lots", "ok", "failed", "low_confidence", "calls", "cached", "disagreements", "decision")}
+                     | {"stamp": s["stamp"]} | ({"errors": [s["signed_out"]]} if s["signed_out"] else {}))
+
+
 @app.command()
 @friendly
 def insights(model: list[str] = typer.Option(None, "--model", "-m", help="Only these model codes"),

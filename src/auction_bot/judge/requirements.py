@@ -130,6 +130,22 @@ def ladder_topics(reqs: list[Requirement]) -> set[str]:
     return {r.topic for r in reqs if r.source == "ladder" and r.topic}
 
 
+def sheet_needs(rule: ModelRule, hard: HardResult | None = None) -> set[str]:
+    """What the guide asks of the auction sheet: its ladder topics (cruise control, Welcab seat), "sheet" for a text
+    rule, chip or standing instruction the sheet answers (engine, 4WD, hybrid, seats...), and "seats" for a seat-count
+    rule. Empty means the sheet decides nothing beyond the grid. Jim, 2026-10-22: Carbarn's sheet reader is asked only
+    for lots whose guide needs the sheet. The import-approval texts do not count: nearly every guide has them."""
+    from auction_bot.rules.hard import allowed_seats
+
+    reqs = [r for r in requirements_for(rule, hard) if r.kind in ("must", "chip", "instruction")]
+    needs = ladder_topics(reqs)
+    if any(r.source == "sheet" for r in reqs):
+        needs.add("sheet")
+    if allowed_seats(rule) is not None:
+        needs.add("seats")
+    return needs
+
+
 _SEAT_ONLY = re.compile(r"^[\d\s,/&+]*(?:or|and)?[\d\s,/&+]*seat(?:s|er|ers|ing)?\s*(?:only)?$", re.I)
 
 

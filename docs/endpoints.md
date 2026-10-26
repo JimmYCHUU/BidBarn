@@ -10,6 +10,19 @@ Only the requests below are used.
 |---|---|
 | Guide list | `GET /core/api/admin/bidding-guides?page=0&size=2000` -> Spring page `{content:[guide]}` |
 | Guide tree | `GET /core/api/admin/bidding-guides/{id}/tree` -> full grid |
+| Sheet reader (Jim, 2026-10-22) | `POST /auc/api/admin/aleado-auction/sheet-discovery/read-sheet`, multipart, one field `file` (any image); see below |
+
+Sheet reader: learned from the dashboard's own front-end code (`AuctionPage` chunk, "Read an auction sheet"), not from a
+HAR. The dashboard waits up to 300 s; "both AI reads" usually take under a minute. Stateless (Jim). Reply:
+`{sheet, welfare, identifiedAs, sheetError, welfareError}`.
+- `sheet`: `auction_house, lot_no, model_name, grade` (the grade line), `model_code` (with the emissions prefix,
+  e.g. `DAA-ZVW30`), `chassis_no, registration_date_raw, shaken_expiry_raw, overall_grade, exterior_grade,
+  interior_grade, mileage_raw, repair_history, vehicle_history, cautions, displacement_cc, fuel, transmission, aircon,
+  door_type, seats, exterior_color, color_code, interior_color, max_load_kg, equipment[], selling_points[],
+  inspector_notes[{ja, en}], low_confidence`, and `start_price_jpy`, `recycling_deposit_jpy`, which the bot drops.
+- `welfare`: `found, sentence, features[]` (`SIDE_LIFT_UP_SEAT, LIFT_UP_SEAT, SWIVEL_SEAT, WHEELCHAIR_SLOPE,
+  WHEELCHAIR_LIFT`), `confidence, evidence[{ja, en}], sheetText` (false: no sheet text on the image).
+- The bot POSTs to no other dashboard address: the POST guard (`Browser.post_multipart`) refuses everything but this one.
 
 Guide (list item): `id, make, model, modelCode, minGrade, notes` (pipe-separated text rules),
 `bossBid` (false = Team Bid), `dialPercent` (null = x100%, already baked into values),

@@ -13,7 +13,7 @@ from pathlib import Path
 
 from auction_bot.carbarn.models import ModelRule, parse_guide_tree
 from auction_bot.config import Config
-from auction_bot.nichibo.browser import Browser, NotLoggedIn
+from auction_bot.nichibo.browser import CARBARN_READ_SHEET_PATH, Browser, NotLoggedIn
 
 _KEEP_HEADERS = {"authorization", "cookie", "x-auth-token", "x-xsrf-token", "accept", "origin", "referer", "user-agent"}
 
@@ -54,6 +54,20 @@ class CarbarnClient:
         if not r.ok:
             raise RuntimeError(f"Carbarn API {path} -> {r.status}: {r.text()[:200]}")
         return r.json()
+
+    def read_sheet(self, data: bytes, filename: str, mime: str, timeout_s: float = 300.0) -> tuple[int, object]:
+        """Carbarn's own auction-sheet reader (Jim, 2026-10-22): (HTTP status, JSON body or text). The dashboard
+        runs its paid model on the image; the bot sends the sheet image and nothing else."""
+        if self._headers is None:
+            self._capture()
+        r = self.browser.post_multipart(self.api_base + CARBARN_READ_SHEET_PATH, "file", filename, data, mime,
+                                        headers=self._headers, timeout_s=timeout_s)
+        if r.status in (401, 403):
+            raise NotLoggedIn(f"Carbarn API returned {r.status} for the sheet reader; run `bot login`.")
+        try:
+            return r.status, r.json()
+        except Exception:  # an error page or an empty body
+            return r.status, (r.text() or "")[:300]
 
     # -- data --------------------------------------------------------------
     def list_guides(self) -> list[dict]:

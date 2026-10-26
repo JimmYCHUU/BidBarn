@@ -105,6 +105,12 @@ hard constraints. Do not weaken them, work around them, or "temporarily" disable
   endpoints (`judge/client.py`, keys in `.env`). Never add Anthropic/Claude API calls. The
   OpenAI path stays opt-in (`sheet_check: openai`, `OPENAI_API_KEY`). `sheet_check: none`
   means Jim judges the sheet and photos himself.
+- Carbarn's own sheet reader (Jim, 2026-10-22): the dashboard's backend runs a paid model on a sheet image
+  (`POST /auc/api/admin/aleado-auction/sheet-discovery/read-sheet`, `carbarn/sheet_reader.py`). Jim allowed it
+  only for lots whose guide needs the sheet, after a trial on 50 stored sheets (`bot sheet-trial`); until he
+  approves the trial result, only the trial calls it. It receives the sheet image and nothing else, each image is
+  read once (cached for good), and the bot POSTs to no other dashboard endpoint (`Browser.post_multipart` refuses
+  every other URL).
 - The model's output is a pre-fill and a recommendation: per-requirement verdicts with
   evidence, whether a chip applies, odd cases, and one of the candidate amounts computed from
   the grid (`judge/candidates.py`). Every judged lot stays NEEDS_REVIEW; only Jim's click on

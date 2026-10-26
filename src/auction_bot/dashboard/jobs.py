@@ -118,6 +118,10 @@ def _replay(v: dict) -> list[str]:
     return ["replay", *_models(v), *(["--apply"] if v.get("apply") else [])]
 
 
+def _sheet_trial(v: dict) -> list[str]:
+    return ["sheet-trial", *_models(v), *_number(v, "count", "--count")]
+
+
 def _place(v: dict) -> list[str]:
     return ["place", *_window(v)]
 
@@ -160,6 +164,13 @@ COMMANDS: dict[str, Cmd] = {
          "apply": Opt("bool", default=False, label="Store the new outcomes",
                       help="Off only reports what would change.")},
         _replay, help="Re-apply the current rules to the stored proposals. No Nichibo traffic."),
+    "sheet-trial": Cmd(
+        "Sheet reader trial", True,
+        {"model": _MODEL, "count": Opt("int", label="Sheets", help="How many stored sheets to send. Empty means 50.")},
+        _sheet_trial,
+        help="Sends stored auction sheets to Carbarn's own sheet reader (its paid model) and compares the answers with "
+             "the bot's reading. Nothing goes to Nichibo; a sheet already read costs nothing. Open the Sheet trial page "
+             "afterwards."),
     "place": Cmd(
         "Place approved bids (dry run)", True, {"headless": _HIDDEN}, _place,
         help="Types every approved bid into Nichibo's form and takes a screenshot. Nothing is submitted."),

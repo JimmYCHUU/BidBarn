@@ -664,4 +664,36 @@ def create_app(cfg: Config, finish_event=None, jobs=None) -> FastAPI:
         append_override(cfg, code.upper(), text)
         return RedirectResponse(next if next.startswith("/") and not next.startswith("//") else "/review", status_code=303)
 
+    @app.get("/sheet-trial", response_class=HTMLResponse)
+    def sheet_trial_page(request: Request, stamp: str | None = None):
+        """The trial of Carbarn's sheet reader: per lot what each reader said, and Jim's marks where they disagree."""
+        from auction_bot import sheet_trial
+
+        if stamp is not None and not sheet_trial.valid_stamp(stamp):
+            raise HTTPException(404)
+        trial = sheet_trial.load_trial(cfg, stamp)
+        if stamp is not None and trial is None:
+            raise HTTPException(404)
+        marks = sheet_trial.load_marks(cfg, trial["stamp"]) if trial else {}
+        return page(request, "sheet_trial.html", "runs", trial=trial, marks=marks, stamps=sheet_trial.list_trials(cfg),
+                    summary=sheet_trial.summarize(trial, cfg, marks) if trial else None, choices=sheet_trial.MARKS)
+
+    @app.post("/sheet-trial/{stamp}/marks")
+    async def sheet_trial_marks(request: Request, stamp: str):
+        """Keep Jim's marks: only for a row the trial flagged, only the three words; the earlier marks stay."""
+        from auction_bot import sheet_trial
+
+        trial = sheet_trial.load_trial(cfg, stamp) if sheet_trial.valid_stamp(stamp) else None
+        if trial is None:
+            raise HTTPException(404)
+        flagged = {(str(lot["pid"]), r["field"]) for lot in trial["lots"] for r in lot.get("rows") or [] if r["disagree"]}
+        marks = sheet_trial.load_marks(cfg, stamp)
+        form = await request.form()
+        for key, value in form.items():
+            parts = key.split(":", 2)
+            if len(parts) == 3 and parts[0] == "mark" and (parts[1], parts[2]) in flagged and value in sheet_trial.MARKS:
+                marks.setdefault(parts[1], {})[parts[2]] = value
+        sheet_trial.save_marks(cfg, stamp, marks)
+        return RedirectResponse(f"/sheet-trial?stamp={stamp}", status_code=303)
+
     return app

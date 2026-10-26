@@ -130,6 +130,7 @@
 {% endfor %}</pre></details>
     {% endif %}
     {% if run.command in ('scan', 'bid') and (summary.review or summary.bid) %}<div class="row"><a class="btn btn--primary" href="/review">{{ icon('list-checks') }} Review the lots</a></div>{% endif %}
+    {% if run.command == 'sheet-trial' and summary.stamp %}<div class="row"><a class="btn btn--primary" href="/sheet-trial?stamp={{ summary.stamp }}">{{ icon('file-text') }} Open the sheet trial</a></div>{% endif %}
   </div>
 </section>
 {% endif %}

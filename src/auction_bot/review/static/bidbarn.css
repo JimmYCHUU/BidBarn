@@ -437,6 +437,8 @@ tr.is-done td:not(:last-child) { opacity: 0.6; }  /* a decided lot steps back; i
 .thumbs a { position: relative; display: block; }
 .photo-no { position: absolute; top: 4px; left: 4px; min-width: 18px; padding: 0 5px; border-radius: 9px; background: rgba(0, 0, 0, .65); color: #fff; font-size: 11px; line-height: 18px; text-align: center; }
 .thumbs img { display: block; height: 108px; border: 1px solid var(--line-strong); border-radius: var(--r-xs); }
+.trial-sheet { display: block; max-width: 100%; border: 1px solid var(--line-strong); border-radius: var(--r-xs); cursor: zoom-in; }
+.trial-table tr.is-disagree td { background: var(--warn-bg); }
 .lightbox {
   position: fixed; inset: 0; z-index: 50;
   display: none; align-items: center; justify-content: center;

@@ -21,6 +21,9 @@ def test_the_runs_page_folds_the_steps_with_few_options(cfg):
     assert "Uses the bot's browser" not in page and "Offline. No Nichibo traffic." not in page
     assert ">Learn</a>" in page and ">Bid</a>" in page and ">Steps</a>" in page
     assert client.get("/runs?command=steps").status_code == 200 and "single steps only" in client.get("/runs?command=steps").text
+    # The sheet reader trial is a step on this page, with its one option (how many sheets) showing.
+    trial = page.split('data-run-command="sheet-trial"')[1].split("</form>")[0]
+    assert "Sheet reader trial" in page and 'name="count"' in trial and 'name="model"' not in trial
 
 
 def test_the_review_page_is_slim(cfg):

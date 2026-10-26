@@ -58,6 +58,23 @@ def nichibo_url_allowed(url: str) -> tuple[bool, str]:
     return False, f"not an auction page: {path}"
 
 
+# Jim, 2026-10-22: the bot may send a stored auction sheet to Carbarn's own sheet reader. That one POST is the
+# only request the bot sends to the dashboard's API that is not a read: every other address is refused here.
+_CARBARN_HOST = re.compile(r"(^|\.)carbarn\.com\.au$", re.I)
+CARBARN_READ_SHEET_PATH = "/auc/api/admin/aleado-auction/sheet-discovery/read-sheet"
+
+
+def carbarn_post_allowed(url: str) -> tuple[bool, str]:
+    """(allowed, reason) for a POST: only the Carbarn sheet reader, over https, with nothing extra in the URL."""
+    parts = urlsplit(url)
+    if parts.scheme != "https" or not _CARBARN_HOST.search(parts.hostname or "") or parts.username or parts.password \
+            or parts.port is not None:
+        return False, "not the Carbarn API"
+    if parts.path != CARBARN_READ_SHEET_PATH or parts.query or parts.fragment:
+        return False, f"only the sheet reader may receive a POST, not {parts.path}"
+    return True, "Carbarn sheet reader"
+
+
 def _route_guard(route) -> None:
     ok, _ = nichibo_url_allowed(route.request.url)
     if ok:
@@ -155,6 +172,17 @@ class Browser:
         if not ok:
             raise ForbiddenUrl(f"refusing to request {url}: {why}")
         return self.context.request.get(url, headers=headers or {}, params=params or {}, timeout=60_000)
+
+    def post_multipart(self, url: str, field: str, filename: str, data: bytes, mime: str,
+                       headers: dict | None = None, timeout_s: float = 300.0):
+        """One file as multipart form data, to the Carbarn sheet reader only (`carbarn_post_allowed`)."""
+        ok, why = carbarn_post_allowed(url)
+        if not ok:
+            raise ForbiddenUrl(f"refusing to POST to {url}: {why}")
+        assert self.context is not None
+        hdrs = {k: v for k, v in (headers or {}).items() if k.lower() != "content-type"}  # the boundary is set by Playwright
+        return self.context.request.post(url, headers=hdrs, timeout=timeout_s * 1000,
+                                         multipart={field: {"name": filename, "mimeType": mime, "buffer": data}})
 
     def get_bytes(self, url: str, headers: dict | None = None) -> tuple[bytes, str]:
         r = self.get(url, headers=headers)

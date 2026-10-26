@@ -639,14 +639,15 @@ def combinations(cmd: Cmd):
 
 
 def test_the_table_is_the_daily_set():
-    assert list(COMMANDS) == ["bid", "learn", "scan", "fetch-rules", "judge", "replay", "place", "insights", "login", "check-login"]
-    assert {n for n, c in COMMANDS.items() if c.needs_profile} == {"bid", "learn", "scan", "fetch-rules", "judge", "place", "login",
-                                                                   "check-login"}
+    assert list(COMMANDS) == ["bid", "learn", "scan", "fetch-rules", "judge", "replay", "sheet-trial", "place", "insights", "login",
+                              "check-login"]
+    assert {n for n, c in COMMANDS.items() if c.needs_profile} == {"bid", "learn", "scan", "fetch-rules", "judge", "sheet-trial",
+                                                                   "place", "login", "check-login"}
     assert {n: sorted(c.options) for n, c in COMMANDS.items()} == {
         "bid": [], "learn": [],  # the two modes take no options from the page
         "scan": ["fresh", "headless", "limit", "model", "rescan"], "fetch-rules": ["model"], "judge": ["limit", "model"],
-        "replay": ["apply", "model"], "place": ["headless"], "insights": ["days", "min_support", "model"],
-        "login": [], "check-login": []}
+        "replay": ["apply", "model"], "sheet-trial": ["count", "model"], "place": ["headless"],
+        "insights": ["days", "min_support", "model"], "login": [], "check-login": []}
     for cmd in COMMANDS.values():
         assert cmd.label and cmd.help and all(o.kind in jobs.KINDS and o.label for o in cmd.options.values())
         assert "live" not in cmd.label.lower() and "live" not in cmd.help.lower()

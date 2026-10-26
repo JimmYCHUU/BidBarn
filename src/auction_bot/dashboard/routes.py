@@ -23,12 +23,13 @@ LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1", "[::1]"}
 MODES = ("learn", "bid")  # the two runs the overview starts; everything else is a single step
 # The single steps the Runs page offers, in order, and the options its form shows for each. The
 # `COMMANDS` table keeps every option: what is not shown falls to its default through `build_argv`.
-STEP_COMMANDS = ["login", "check-login", "fetch-rules", "scan", "judge", "replay", "place"]
-SHOWN_OPTIONS = {"scan": ["model", "limit"], "replay": ["apply"]}
+STEP_COMMANDS = ["login", "check-login", "fetch-rules", "scan", "judge", "replay", "sheet-trial", "place"]
+SHOWN_OPTIONS = {"scan": ["model", "limit"], "replay": ["apply"], "sheet-trial": ["count"]}
 # What a log entry shows of a run's closing numbers: at most three, by the labels `summary_pairs` gives them.
 ENTRY_LABELS = {"scan": ["For review", "Skipped", "Errors"], "fetch-rules": ["Guides"], "judge": ["Judged", "Model unavailable"],
                 "replay": ["Changed", "Stored"], "place": ["Bids", "Dry run"], "login": ["Nichibo", "Carbarn dashboard"],
-                "check-login": ["Nichibo", "Carbarn dashboard"], "learn": ["Lots", "Agree", "Disagree"], "bid": ["For review", "Bids"]}
+                "check-login": ["Nichibo", "Carbarn dashboard"], "learn": ["Lots", "Agree", "Disagree"], "bid": ["For review", "Bids"],
+                "sheet-trial": ["Sheets", "Failed", "Disagreements"]}
 
 
 def local_only(request: Request, allowed: set[str]) -> str | None:
@@ -102,13 +103,16 @@ def summary_pairs(run: dict) -> list[tuple[str, str]]:
         return [(label, f"{int(counts[key]):,}") for key, label in LEARN_COUNTS if isinstance(counts.get(key), int)]
     order = ["guides", "cards", "opened", "sheet_only", "pages", "review", "bid", "skip", "reused", "pending", "model_calls",
              "checked", "changed", "applied", "unchanged", "needs_fetch", "judged", "unavailable", "decisions",
-             "approved", "snapshot", "nichibo", "carbarn", "dry_run"]
+             "approved", "snapshot", "nichibo", "carbarn", "dry_run",
+             "lots", "ok", "failed", "low_confidence", "calls", "cached", "disagreements", "decision"]
     names = {"guides": "Guides", "cards": "Cards read", "opened": "Lots opened", "sheet_only": "Judged from the sheet",
              "pages": "Pages opened", "review": "For review", "bid": "Bid", "skip": "Skipped", "reused": "Reused",
              "pending": "Images pending", "model_calls": "Model calls", "checked": "Checked", "changed": "Changed",
              "applied": "Stored", "unchanged": "Unchanged", "needs_fetch": "Need a page", "judged": "Judged",
              "unavailable": "Model unavailable", "decisions": "Decisions", "approved": "Approved", "snapshot": "Snapshot",
-             "nichibo": "Nichibo", "carbarn": "Carbarn dashboard", "dry_run": "Dry run"}
+             "nichibo": "Nichibo", "carbarn": "Carbarn dashboard", "dry_run": "Dry run",
+             "lots": "Sheets", "ok": "Read", "failed": "Failed", "low_confidence": "Hard to read", "calls": "Paid reads",
+             "cached": "From the cache", "disagreements": "Disagreements", "decision": "Decision"}
     out = []
     if run.get("command") in ("place", "bid") and isinstance(s.get("lines"), list):
         out.append(("Bids", str(len(s["lines"]))))

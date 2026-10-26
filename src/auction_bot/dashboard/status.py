@@ -230,11 +230,14 @@ def placements_between(store, started: str | None, finished: str | None) -> list
 
 
 COMMAND_ICONS = {"bid": "route", "learn": "graduation-cap", "scan": "scan-search", "fetch-rules": "book-open", "judge": "eye",
-                 "replay": "rotate-ccw", "place": "gavel", "insights": "chart-column", "login": "log-in", "check-login": "shield-check"}
+                 "replay": "rotate-ccw", "sheet-trial": "file-text", "place": "gavel", "insights": "chart-column",
+                 "login": "log-in", "check-login": "shield-check"}
 COMMAND_SHORT = {"bid": "Bid", "learn": "Learn", "scan": "Scan", "fetch-rules": "Guides", "judge": "Judge", "replay": "Replay",
-                 "place": "Place", "insights": "Insights", "login": "Sign in", "check-login": "Sign-in check"}
+                 "sheet-trial": "Sheet trial", "place": "Place", "insights": "Insights", "login": "Sign in",
+                 "check-login": "Sign-in check"}
 DOING = {"bid": "Running Bid mode", "learn": "Recording your session", "scan": "Scanning Nichibo",
          "fetch-rules": "Fetching the bidding guides", "judge": "Judging pending lots", "replay": "Replaying the rules",
+         "sheet-trial": "Reading sheets with Carbarn's reader",
          "place": "Placing the approved bids as a dry run", "insights": "Working out the insights",
          "login": "Waiting for the sign-in", "check-login": "Checking the sign-in"}
 # A Bid run's progress stage, as the step of the day it is at (the scan step includes the judge).
