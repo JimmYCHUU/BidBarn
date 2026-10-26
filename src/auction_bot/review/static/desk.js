@@ -7,6 +7,9 @@
 
   var UNDO_MS = 10000;          // Jim, 2026-10-26: a decision waits this long, and U or Undo takes it back
   var CLEAR_ARM_MS = 3000;      // D twice within this time clears the lot
+  var CLEAR_GAP_MS = 300;       // ...but the second D must come at least this long after the first: a deliberate press
+  var SETTLE_MS = 400;          // no decision for this long after a lot view is swapped in: the next lot's
+                                // Approve sits under the cursor, and a double click must not decide it too
   var NOTE_MS = 6000;           // how long a plain message stays in the toast
 
   var board = document.getElementById("desk-board");
@@ -20,6 +23,7 @@
   var clearArmed = null;        // { pid, at } after one D
   var noteTimer = null;
   var shown = null;             // the sheet or photo that Z zooms
+  var shownAt = 0;              // when the lot view on screen was swapped in (SETTLE_MS counts from here)
   var narrow = window.matchMedia("(max-width: 1279px)");
   var reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
 
@@ -46,6 +50,8 @@
   function waitingFor(pid) {
     return queue.some(function (q) { return q.row === String(pid) || q.pid === String(pid); });
   }
+  // True just after a lot view appeared: a decision key or click then belongs to the lot before it.
+  function settling() { return Date.now() - shownAt < SETTLE_MS; }
 
   // -- the toast: an error line that stays until dismissed or replaced, and one line for notes and the Undo ----
   var errorText = "", noteText = "";
@@ -157,6 +163,7 @@
       .then(function (html) {
         if (token !== state.token) return;      // a newer selection won
         lotPane.innerHTML = html;
+        shownAt = Date.now();
         lotPane.removeAttribute("aria-busy");
         lotPane.scrollTop = 0;
         told = {};
@@ -306,6 +313,7 @@
     if (next) select(next); else closeLot();
   }
   function approve() {
+    if (settling()) return;
     var v = lotView();
     var b = v && $('[data-act="approve"]', v);
     if (!b) return;
@@ -321,6 +329,7 @@
     return pick ? Number(pick.value) : 0;
   }
   function approveChosen() {
+    if (settling()) return;
     var v = lotView();
     if (!v) return;
     var own = $('input[name="amount"]', v);
@@ -331,6 +340,7 @@
     queueDecision("approve", amt);
   }
   function rejectWithReason() {
+    if (settling()) return;
     var v = lotView();
     if (!v) return;
     var reason = $('textarea[name="reason"]', v).value.trim();
@@ -380,6 +390,7 @@
 
   // -- clear: out of the desk without a decision, no undo window ---------------------------------------
   function clearLot() {
+    if (settling()) return;
     var v = lotView();
     if (!v || !$('[data-act="clear"]', v)) return;
     var pid = v.dataset.lot, row = state.row || pid;
@@ -390,6 +401,7 @@
       say("Press D again to clear this lot. Cleared is not a decision.");
       return;
     }
+    if (now - clearArmed.at < CLEAR_GAP_MS) return;   // too soon after the first to be a second, deliberate press
     clearArmed = null;
     var next = nextAfter(row), ref = refOf(v, pid);
     fetch(v.dataset["delete"], { method: "POST", headers: { Accept: "application/json" } })
@@ -443,6 +455,7 @@
   }
 
   // -- clicks ------------------------------------------------------------------------------------------
+  var DECIDING = { approve: true, "amount-submit": true, "reject-submit": true, clear: true };
   function onBoardClick(e) {
     var link = e.target.closest(".desk-sess, .desk-lane");
     if (link) {
@@ -466,6 +479,9 @@
     var btn = t.closest("button[data-act]");
     if (btn) {
       var act = btn.dataset.act;
+      // The second click of a double click (e.detail 2, 3...) never decides or clears: by then the next lot's
+      // bar may sit under the cursor. A keyboard press on a focused button has e.detail 0 and still counts.
+      if (e.detail > 1 && DECIDING[act]) return;
       if (act === "approve") approve();
       else if (act === "amount") openPanel("amount");
       else if (act === "reject") openPanel("reject");

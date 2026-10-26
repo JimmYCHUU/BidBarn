@@ -420,3 +420,23 @@ def test_the_bid_sheet_lock_band_in_the_live_state(cfg):
     assert "Placement from this page is still a dry run. Live placement is started only by hand, outside this page." in html
     assert "Testing lock is on" not in html and "--" + "live" not in html
     assert 'data-run-command="place"' in html
+
+
+# -- Final review fixes -----------------------------------------------------------------------------------
+
+def _js_fn(src: str, name: str) -> str:
+    body = src[src.index(f"function {name}("):]
+    return body[:body.index("\n  }")]
+
+
+def test_desk_js_a_double_click_decides_one_lot():
+    """C1: the second click of a double click lands on the next lot's Approve (the bar is sticky); it must not
+    decide that lot. Decision clicks with e.detail > 1 are ignored, and nothing decides for SETTLE_MS after a
+    lot view is swapped in. The second D of a clear must come CLEAR_GAP_MS after the first."""
+    src = DESK_JS.read_text(encoding="utf-8")
+    assert "var SETTLE_MS = 400;" in src and "var CLEAR_GAP_MS = 300;" in src
+    assert "e.detail > 1" in _js_fn(src, "onLotClick")
+    assert "shownAt = Date.now();" in _js_fn(src, "loadLot")
+    for fn in ("approve", "approveChosen", "rejectWithReason", "clearLot"):
+        assert "if (settling()) return;" in _js_fn(src, fn), fn
+    assert "now - clearArmed.at < CLEAR_GAP_MS" in _js_fn(src, "clearLot")
