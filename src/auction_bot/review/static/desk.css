@@ -150,3 +150,8 @@
 .desk-lot[aria-busy="true"] { opacity: .55; }
 .dl-close { display: none; float: right; margin: 0 0 8px 8px; }
 @media (max-width: 1279px) { .dl-close { display: inline-flex; } }
+
+/* Bid sheet */
+.bids-lock { margin-bottom: 16px; }
+.bids-group { margin-bottom: 16px; }
+.bids-table td .faint { margin-top: 2px; max-width: 36ch; }

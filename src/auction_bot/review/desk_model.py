@@ -138,6 +138,11 @@ def session_of(p: dict) -> tuple[str, str, str, str]:
     return (f"{date}|{hall}", label, date, hall)
 
 
+def session_order(s) -> tuple:
+    """Sessions with no auction day first, then by date, then by hall (any object with key, date, hall)."""
+    return (s.key != UNKNOWN_KEY, s.date, s.hall)
+
+
 def _utc(d: datetime) -> datetime:
     """Aware UTC; a naive value is taken to be UTC already."""
     return d.replace(tzinfo=timezone.utc) if d.tzinfo is None else d.astimezone(timezone.utc)
@@ -187,4 +192,63 @@ def build_desk(pending: list[dict], decided: list[dict], sort_key: Callable[[dic
         for lane in ("look", "clear", "wait"):
             s.lanes[lane].sort(key=lambda lot: sort_key(lot.p))
         s.lanes["done"].sort(key=lambda lot: _when(lot.p) or _MIN, reverse=True)
-    return sorted(sessions.values(), key=lambda s: (s.key != UNKNOWN_KEY, s.date, s.hall))
+    return sorted(sessions.values(), key=session_order)
+
+
+@dataclass
+class BidRow:
+    p: dict
+    amount_k: int
+    state: str  # approved | dry_run | blocked | placed
+    message: str
+    screenshot: str | None
+
+
+@dataclass
+class BidGroup:
+    key: str
+    label: str
+    rows: list[BidRow]
+    exposure_k: int
+    date: str = ""
+    hall: str = ""
+
+
+def _screenshot_url(p: dict, shot: str | None) -> str | None:
+    """`/evidence/<lot folder>/<file>` from the stored screenshot path, built from path names only so it
+    cannot leave the evidence folder (same rule as `status.placements_between`)."""
+    if not shot:
+        return None
+    from pathlib import PurePath
+    name = PurePath(str(shot).replace("\\", "/")).name
+    ev_dir = (p.get("evidence") or {}).get("dir")
+    folder = PurePath(str(ev_dir).replace("\\", "/")).name if ev_dir else PurePath(str(shot).replace("\\", "/")).parent.name
+    if not name or not folder or name in (".", "..") or folder in (".", ".."):
+        return None
+    return f"/evidence/{folder}/{name}"
+
+
+def bid_row(p: dict) -> BidRow:
+    pl = p.get("placement") or {}
+    if p.get("placed_at"):
+        state = "placed"
+    elif pl and pl.get("ok") and pl.get("dry_run"):
+        state = "dry_run"
+    elif pl and not pl.get("ok"):
+        state = "blocked"
+    else:
+        state = "approved"
+    return BidRow(p, int(p.get("approved_bid_jpy_k") or 0), state, pl.get("message") or "", _screenshot_url(p, pl.get("screenshot")))
+
+
+def bid_sheet(approved: list[dict]) -> list[BidGroup]:
+    """Approved lots per auction session, in the desk's session order, with each session's exposure
+    (the sum of its amounts; shown, never capped)."""
+    groups: dict[str, BidGroup] = {}
+    for p in approved:
+        key, label, date, hall = session_of(p)
+        g = groups.setdefault(key, BidGroup(key, label, [], 0, date, hall))
+        row = bid_row(p)
+        g.rows.append(row)
+        g.exposure_k += row.amount_k
+    return sorted(groups.values(), key=session_order)

@@ -365,3 +365,39 @@ def test_desk_js_lot_keys_use_the_lot_shown():
         body = body[:body.index("\n  }")]
         assert "lotView()" in body, fn
     assert "lotPane)" not in src[src.index("function inLot"):src.index("function look(")]
+
+
+# -- Task 5: the bid sheet -------------------------------------------------------------------------------
+
+def _approve_two(cfg):
+    ids = _three(cfg)
+    client, _ = _client(cfg)
+    for pid in ids[:2]:
+        r = client.post(f"/p/{pid}/decide", data={"action": "approve", "via": "triage"}, headers={"Accept": "application/json"})
+        assert r.status_code == 200, r.text
+    return client, ids
+
+
+def test_the_bid_sheet_page_lists_approved_lots(cfg):
+    client, _ = _approve_two(cfg)
+    html = client.get("/bids").text
+    assert "A1" in html and "B2" in html and "C3" not in html and "Exposure" in html
+    assert "Testing lock is on." in html
+
+
+def test_the_bid_sheet_shows_a_dry_run_and_a_block(cfg):
+    client, ids = _approve_two(cfg)
+    store = Store(cfg.db_path)
+    store.record_placement(ids[0], "A1", "GDH206", 1000, ok=True, message="typed and read back", screenshot=None, dry_run=True)
+    store.record_placement(ids[1], "B2", "GDH206", 1000, ok=False, message="start price changed", screenshot=None, dry_run=True)
+    store.close()
+    html = client.get("/bids").text
+    assert "Dry-run placed" in html and "start price changed" in html
+
+
+def test_the_bid_sheet_cannot_ask_for_a_live_placement(cfg):
+    client, _ = _approve_two(cfg)
+    html = client.get("/bids").text
+    assert "--" + "live" not in html
+    assert 'data-run-command="place"' in html
+    assert 'data-run-command="scan"' not in html

@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 from auction_bot.judge.requirements import machine_decided, Requirement
 from auction_bot.review.app import triage_sort_key
-from auction_bot.review.desk_model import LookItem, build_desk, look_items, lane_of
+from auction_bot.review.desk_model import LookItem, bid_sheet, build_desk, look_items, lane_of
 
 NOW = datetime(2026, 10, 26, 12, 0, 0)
 
@@ -176,3 +176,35 @@ def test_the_sibling_choice_follows_the_sort_key():
     b = _p(2, "X", guide_id=2, facts={"grade": 4.5, "km": 10000})
     lot = build_desk([a, b], [], triage_sort_key, NOW)[0].lanes["clear"][0]
     assert lot.p["id"] == 2 and lot.siblings == [1]
+
+
+# -- Task 5: the bid sheet ---------------------------------------------------------------------------------
+
+def _a(pid, ref, amount, date="", place="", **over):
+    return _p(pid, ref, decision="approved", approved_bid_jpy_k=amount,
+              facts={"auction_date": date, "auction_place": place}, **over)
+
+
+def test_bid_sheet_groups_by_auction_and_sums_exposure():
+    groups = bid_sheet([_a(1, "A", 1000, "20261030", "USS Tokyo"), _a(2, "B", 1220, "20261030", "USS Tokyo"), _a(3, "C", 900)])
+    assert len(groups) == 2
+    assert groups[0].label == "Auction day not known" and groups[0].exposure_k == 900
+    assert groups[1].exposure_k == 2220 and [r.amount_k for r in groups[1].rows] == [1000, 1220]
+
+
+def test_bid_sheet_states():
+    rows = bid_sheet([
+        _a(1, "A", 1000),
+        _a(2, "B", 1000, placement={"ok": True, "dry_run": True, "message": "typed", "screenshot": None}),
+        _a(3, "C", 1000, placement={"ok": False, "dry_run": True, "message": "start price changed", "screenshot": None}),
+        _a(4, "D", 1000, placed_at="2026-10-26T01:00:00+00:00", placement={"ok": True, "dry_run": False, "message": "", "screenshot": None}),
+    ])[0].rows
+    assert [r.state for r in rows] == ["approved", "dry_run", "blocked", "placed"]
+    assert rows[2].message == "start price changed"
+
+
+def test_bid_sheet_screenshot_url_stays_inside_evidence():
+    shot = "C:/data/evidence/lotdir/shot.png"
+    r = bid_sheet([_a(1, "A", 1000, placement={"ok": True, "dry_run": True, "screenshot": shot},
+                      evidence={"dir": "C:/x/evidence/lotdir"})])[0].rows[0]
+    assert r.screenshot == "/evidence/lotdir/shot.png"

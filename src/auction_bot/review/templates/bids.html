@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% from "_parts.html" import launcher %}
+{% from "_desk_macros.html" import k %}
+{% block title %}Bid sheet · BidBarn{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/desk.css?v={{ asset_v }}">{% endblock %}
+{% block body %}
+<div class="page-head"><h1>Bid sheet</h1>
+  <span class="page-sub">{{ groups|sum(attribute='rows', start=[])|length }} approved{% if groups %}, exposure {{ '{:,}'.format(total_k) }}K{% endif %}</span>
+</div>
+<div class="banner banner--warn bids-lock">{{ icon('lock') }}<div>
+  {% if lock_label == 'LIVE PLACEMENT' %}Placement is not a dry run in this setup. Live placement cannot be started from this page.
+  {% else %}Testing lock is on. Placement is a dry run: each lot's page is opened, re-checked, the amount typed and read back, and a screenshot saved. Nothing is submitted. Live placement cannot be started from this page.{% endif %}
+</div></div>
+{% for g in groups %}
+<section class="card bids-group">
+  <div class="card-head"><h2>{{ g.label }}</h2><span class="end num">Exposure {{ '{:,}'.format(g.exposure_k) }}K</span></div>
+  <div class="table-wrap">
+  <table class="lots wide bids-table">
+    <thead><tr><th>Ref</th><th>Lot</th><th class="num">Start</th><th class="num">Bid</th><th>Eligibility</th><th>Result</th></tr></thead>
+    <tbody>
+    {% for r in g.rows %}{% set p = r.p %}{% set f = p.facts or {} %}
+      <tr>
+        <td><a href="/p/{{ p.id }}">{{ p.ref_no }}</a></td>
+        <td>{{ p.summary }}</td>
+        <td class="num">{% if f.start_price_jpy %}{{ k(f.start_price_jpy) }}{% else %}&ndash;{% endif %}</td>
+        <td class="num"><b>{{ '{:,}'.format(r.amount_k) }}K</b></td>
+        <td>{% if p.eligibility %}{{ p.eligibility.label }}{% else %}&ndash;{% endif %}</td>
+        <td>
+          {% if r.state == 'placed' %}<span class="pill pill--ok">Placed</span>
+          {% elif r.state == 'dry_run' %}<span class="pill pill--info">Dry-run placed</span>
+          {% elif r.state == 'blocked' %}<span class="pill pill--bad">Blocked</span>
+          {% else %}<span class="pill pill--plain">Approved</span>{% endif %}
+          {% if r.message %}<div class="faint">{{ r.message }}</div>{% endif %}
+          {% if r.screenshot %}<a href="{{ r.screenshot }}" target="_blank" rel="noopener">Screenshot</a>{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% else %}
+<section class="card"><div class="card-body"><p class="faint">Nothing approved yet.</p></div></section>
+{% endfor %}
+<details class="card start-card" open>
+  <summary class="card-head"><h2>Dry run</h2>{{ icon('chevron-down', 'icon--sm chev') }}</summary>
+  {{ launcher(commands, only=['place'], open='place') }}
+</details>
+{% endblock %}
+{% block scripts %}
+<script src="/static/vendor/gsap.min.js?v={{ asset_v }}" defer></script>
+<script src="/static/dashboard.js?v={{ asset_v }}" defer></script>
+{% endblock %}

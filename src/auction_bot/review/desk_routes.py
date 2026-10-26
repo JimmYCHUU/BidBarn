@@ -13,7 +13,7 @@ from fastapi.responses import HTMLResponse
 
 from auction_bot.dashboard import status as dashboard_status
 from auction_bot.dashboard.guides import rules_for_code, variant_view
-from auction_bot.review.desk_model import LANES, build_desk, look_items
+from auction_bot.review.desk_model import LANES, bid_sheet, build_desk, look_items
 
 LANE_NAMES = {"look": "Needs a look", "clear": "Card-clear", "wait": "Waiting", "done": "Decided"}
 DECIDED = ("approved", "rejected", "deleted")
@@ -81,6 +81,18 @@ def register(app, templates, cfg, store, page, *, load, sort_key) -> None:
         finally:
             s.close()
         return page(request, "desk.html", "desk", **ctx)
+
+    @app.get("/bids", response_class=HTMLResponse)
+    def bids(request: Request):
+        """The bid sheet: approved lots per auction with exposure and any stored placement result. Read-only;
+        the only control is the dry-run `place` command, started by dashboard.js."""
+        s = store()
+        try:
+            groups = bid_sheet([load(r) for r in s.list_proposals(decision="approved", limit=500)])
+        finally:
+            s.close()
+        commands = request.app.state.jobs.describe()
+        return page(request, "bids.html", "bids", groups=groups, commands=commands, total_k=sum(g.exposure_k for g in groups))
 
     @app.get("/desk/board", response_class=HTMLResponse)
     def desk_board(request: Request, session: str | None = None, lane: str | None = None):
