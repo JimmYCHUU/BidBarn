@@ -135,3 +135,12 @@
 .dl-panel[hidden] { display: none; }
 .dl-panel label { display: grid; gap: 4px; font-size: 12.5px; color: var(--ink-3); }
 .dl-panel label.dl-radio, .dl-panel label.dl-check-row { display: flex; align-items: center; gap: 8px; color: var(--ink-2); }
+
+/* Task 4: the undo window and the look-at flash. */
+.desk-toast.is-on { background: var(--navy); color: #fff; padding: 10px 16px; border-radius: var(--r-md); box-shadow: var(--shadow-pop); font-weight: 600; max-width: min(92vw, 640px); }
+.desk-toast-undo { font: inherit; font-weight: 700; color: var(--blue); background: none; border: 0; padding: 0 2px; cursor: pointer; text-decoration: underline; }
+.desk-toast.is-on .desk-toast-undo { color: #fff; }
+.desk-row--waiting { opacity: .55; }
+.desk-pending { display: block; margin: 4px 2px 0; font-size: 12.5px; font-weight: 600; color: var(--ink-3); }
+.desk-flash { outline: 3px solid var(--blue); outline-offset: 2px; transition: outline-color .3s; }
+@media (prefers-reduced-motion: reduce) { .desk-flash { transition: none; } }

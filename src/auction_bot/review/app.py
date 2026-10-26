@@ -558,7 +558,7 @@ def create_app(cfg: Config, finish_event=None, jobs=None) -> FastAPI:
                     parse_instruction(line)  # a skip line that cannot be read is refused, not stored
                 except InstructionError as exc:
                     raise HTTPException(400, f"standing instruction not understood: {exc}")
-            s.decide(pid, action, reason.strip() or None, amt, bool(make_rule), via=via if via in ("detail", "triage") else "detail")
+            s.decide(pid, action, reason.strip() or None, amt, bool(make_rule), via=via if via in ("detail", "triage", "desk") else "detail")
             if make_rule and line:
                 append_override(cfg, row["model_code"], line)
             record_feedback(s, loaded, action, amt, reason.strip(), feedback_req.strip(), feedback_note.strip())

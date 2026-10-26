@@ -247,3 +247,69 @@ def test_a_lot_of_another_guide_gets_no_grid(cfg):
     assert mini_grid(cfg, p) is None
     client, _ = _client(cfg)
     assert 'class="used"' not in client.get(f"/desk/lot/{pid}").text
+
+
+# -- Task 4: keys, decisions and the undo window ------------------------------------------------------------
+
+from pathlib import Path  # noqa: E402
+
+DESK_JS = Path(__file__).resolve().parent.parent / "src" / "auction_bot" / "review" / "static" / "desk.js"
+JSON = {"Accept": "application/json"}
+
+
+def test_a_desk_decision_is_recorded_as_from_the_desk(cfg):
+    pid = _three(cfg)[0]
+    client, _ = _client(cfg)
+    r = client.post(f"/p/{pid}/decide", data={"action": "approve", "amount": "1000", "via": "desk"}, headers=JSON)
+    assert r.status_code == 200 and r.json()["decision"] == "approved"
+    store = Store(cfg.db_path)
+    try:
+        assert store.conn.execute("SELECT via FROM decisions WHERE proposal_id=?", (pid,)).fetchone()[0] == "desk"
+    finally:
+        store.close()
+
+
+def test_a_decision_on_a_superseded_lot_is_refused(cfg):
+    store = Store(cfg.db_path)
+    old = _seed(store, "S1", "GDH206", "4", 50_000)
+    store.supersede_pending("S1", 1)
+    new = _seed(store, "S1", "GDH206", "4", 50_000)
+    store.close()
+    client, _ = _client(cfg)
+    r = client.post(f"/p/{old}/decide", data={"action": "approve", "amount": "1000", "via": "desk"}, headers=JSON)
+    assert r.status_code == 409
+    store = Store(cfg.db_path)
+    try:
+        assert store.proposal(new)["decision"] == "pending"
+    finally:
+        store.close()
+
+
+def test_desk_js_talks_only_to_existing_routes():
+    src = DESK_JS.read_text(encoding="utf-8")
+    targets = [t.strip() for t in re.findall(r"fetch\(\s*([\w.\[\]\"]+(?:\(\w*\))?)", src)]
+    assert targets
+    # the board, the lot fragment, the three routes the lot view names itself (q.url is its data-decide)
+    allowed = {"boardUrl()", "lotUrl(pid)", "v.dataset.event", 'v.dataset["delete"]', "q.url"}
+    assert set(targets) <= allowed, set(targets) - allowed
+    assert re.search(r"url: v\.dataset\.decide", src)
+    assert set(re.findall(r"dataset\.(decide|event)|dataset\[\"(delete)\"\]", src)) <= {("decide", ""), ("event", ""), ("", "delete")}
+    assert re.findall(r'"(/[a-z][^"]*)"', src) == ["/desk/board?session=", "/desk/lot/"]
+    for banned in ("--live", "/finish", "/auction/bid", "nichibojapan", "/api/runs"):
+        assert banned not in src, banned
+    # attribute names today's review.js binds on every page
+    for name in ("data-confirm", "data-ev=", "data-sheet-zoom", "data-zoom-photo", "data-delete-session"):
+        assert name not in src, name
+    assert "data-zoom" not in src.replace("data-desk-zoom", "")
+
+
+def test_desk_js_keeps_the_undo_window_and_sends_on_leave():
+    src = DESK_JS.read_text(encoding="utf-8")
+    assert "UNDO_MS = 10000" in src and "pagehide" in src and "keepalive: true" in src
+
+
+def test_the_desk_page_loads_desk_js_deferred(cfg):
+    _three(cfg)
+    client, _ = _client(cfg)
+    assert re.search(r'<script[^>]*src="/static/desk\.js[^"]*"[^>]*defer', client.get("/desk").text)
+    assert client.get("/static/desk.js").status_code == 200
