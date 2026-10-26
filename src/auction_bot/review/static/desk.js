@@ -1,6 +1,7 @@
 /* BidBarn desk: selection, keys, decisions with a 10-second undo window, clear and telemetry.
    Every decision is one lot, through the review page's own routes (POST /p/{id}/decide, /delete, /event, named
-   in the lot view's data-decide, data-delete and data-event). Nothing here approves anything by itself: a key or
+   in the lot view's data-decide, data-delete and data-event). Reopen (data-reopen) only returns a decided lot to
+   waiting: it is no decision, has no key and no undo window. Nothing here approves anything by itself: a key or
    a click on one lot makes one decision, and it is sent only when its undo window ends. No library. */
 (function () {
   "use strict";
@@ -21,6 +22,7 @@
   var queue = [];               // decisions waiting out their window, oldest first
   var told = {};                // "pid:event" already posted for this view of the lot
   var clearArmed = null;        // { pid, at } after one D
+  var reopening = {};           // pid -> true while that lot's Reopen is on its way
   var noteTimer = null;
   var shown = null;             // the sheet or photo that Z zooms
   var shownAt = 0;              // when the lot view on screen was swapped in (SETTLE_MS counts from here)
@@ -299,6 +301,7 @@
     var body = new FormData();
     body.append("action", action);
     body.append("via", "desk");
+    if (v.dataset.rev) body.append("rev", v.dataset.rev);   // the judgement Jim saw now; the server refuses a lot that changed since
     if (action === "approve") body.append("amount", String(amount));
     Object.keys(extra || {}).forEach(function (k) { if (extra[k] !== "") body.append(k, extra[k]); });
     var q = {
@@ -357,7 +360,11 @@
     });
   }
   function describeError(r, data, ref) {
-    if (r.status === 409) return ref + ": This lot changed while you decided (decided elsewhere, or replaced by a newer scan). Nothing was recorded from the desk.";
+    var why = data && data.detail && String(data.detail);
+    if (r.status === 409) {     // the server's own sentence says why; the fallback is for an answer without one
+      return why ? ref + ": " + why + " Nothing was recorded from the desk."
+                 : ref + ": This lot changed while you decided (decided elsewhere, or replaced by a newer scan). Nothing was recorded from the desk.";
+    }
     return ref + ": " + ((data && data.detail && String(data.detail)) || "The decision was not accepted (" + r.status + ").");
   }
   function send(q, refresh) {
@@ -369,7 +376,10 @@
     return p.then(function (r) {
       if (r.ok) return refreshBoard().then(showWaiting);
       return r.json().catch(function () { return null; }).then(function (data) {
-        return refreshBoard().then(function () { fail(describeError(r, data, q.ref)); });
+        return refreshBoard().then(function () {
+          fail(describeError(r, data, q.ref));
+          if (r.status === 409 && state.lot === q.pid) loadLot(q.pid);   // that lot is still open: show what changed
+        });
       });
     }).catch(function () {
       refreshBoard().then(function () { fail(q.ref + ": The decision could not be sent. Check the lot's lane before deciding it again."); });
@@ -385,6 +395,29 @@
     renderToast();
     paintBoard();
     select(q.row);
+  }
+  // -- reopen: a decided lot back to waiting. Not a decision (nothing is approved), so no window and no key ------
+  function reopen() {
+    var v = lotView();
+    if (!v || !v.dataset.reopen) return;
+    var pid = v.dataset.lot, ref = refOf(v, pid);
+    if (reopening[pid]) return;
+    reopening[pid] = true;
+    fetch(v.dataset.reopen, { method: "POST", headers: { Accept: "application/json" } })
+      .then(function (r) {
+        return r.json().catch(function () { return null; }).then(function (data) {
+          if (!r.ok) {
+            var why = (data && data.detail && String(data.detail)) || "Error " + r.status + ".";
+            return refreshBoard().then(function () { fail(ref + ": " + why); });
+          }
+          return refreshBoard().then(function () {
+            say("Reopened: back to waiting.");
+            if (state.lot === pid) loadLot(pid);     // the same lot, as it reads now
+          });
+        });
+      })
+      .catch(function () { fail(ref + " could not be reopened: the server did not answer."); })
+      .then(function () { delete reopening[pid]; });
   }
   function sendAllNow() {       // the page is going away: nothing waiting may be lost
     queue.slice().forEach(function (q) { send(q, false); });
@@ -490,6 +523,7 @@
       else if (act === "clear") clearLot();
       else if (act === "amount-submit") approveChosen();
       else if (act === "reject-submit") rejectWithReason();
+      else if (act === "reopen") reopen();
       return;
     }
     var lk = t.closest("button.desk-look");

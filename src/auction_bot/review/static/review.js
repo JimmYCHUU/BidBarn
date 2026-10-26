@@ -244,6 +244,7 @@
     var body = new URLSearchParams();
     body.set("action", act);
     body.set("via", "triage");
+    if (r.dataset.rev) body.set("rev", r.dataset.rev);  // the judgement the row showed: a later pass makes the server refuse
     if (act === "approve") {
       var n = parseInt(form.elements.amount.value, 10);
       if (!(n > 0)) { fail(form, "Enter the amount in K JPY."); form.elements.amount.focus(); return; }

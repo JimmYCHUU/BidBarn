@@ -16,6 +16,7 @@
 </div></div>
 {# The waiting rows are exactly what `bot place` reads (approved_unplaced, oldest proposal first), all of them. #}
 {% if next_n %}<p class="bids-order">Placement takes the approved lots oldest first, at most {{ per_run }} per run. The {{ next_n }} marked <span class="pill pill--info">Next dry run</span> {{ 'is' if next_n == 1 else 'are' }} taken by the next dry run{% if after_n %}; {{ after_n }} more {{ 'waits' if after_n == 1 else 'wait' }} for a later run{% endif %}. # is each lot's place in that order.</p>{% endif %}
+{% if done_n %}<p class="bids-order">{{ done_n }} {{ 'lot was' if done_n == 1 else 'lots were' }} already placed by a dry run and {{ 'is' if done_n == 1 else 'are' }} not typed again.</p>{% endif %}
 {% for g in groups %}
 <section class="card bids-group">
   <div class="card-head"><h2>{{ g.label }}</h2><span class="end num">Exposure {{ '{:,}'.format(g.exposure_k) }}K</span></div>
@@ -34,11 +35,13 @@
         <td>
           {% if r.next_run %}<span class="pill pill--info" title="Taken by the next dry run">Next dry run</span>{% endif %}
           {% if r.state == 'placed' %}<span class="pill pill--ok">Placed</span>
-          {% elif r.state == 'dry_run' %}<span class="pill pill--info">Dry-run placed</span>
+          {% elif r.state == 'live_failed' %}<span class="pill pill--bad">Live attempt failed</span>
+          {% elif r.state == 'dry_run' %}<span class="pill pill--info">Dry run done</span><div class="faint">Dry run done: not typed again. Reopen it to send it again.</div>
           {% elif r.state == 'blocked' %}<span class="pill pill--bad">Blocked</span>
           {% else %}<span class="pill pill--plain">Approved</span>{% endif %}
           {% if r.message %}<div class="faint">{{ r.message }}</div>{% endif %}
           {% if r.screenshot %}<a href="{{ r.screenshot }}" target="_blank" rel="noopener">Screenshot</a>{% endif %}
+          <form method="post" action="/p/{{ p.id }}/reopen" class="bids-reopen"><input type="hidden" name="next" value="/bids"><button type="submit" class="btn--quiet btn--sm" title="Back to waiting; you decide it again">Reopen</button></form>
         </td>
       </tr>
     {% endfor %}
@@ -62,7 +65,7 @@
         <td>{{ p.summary }}</td>
         <td>{% if f.auction_place or f.auction_date %}{{ f.auction_place }} {{ f.auction_date }}{% else %}<span class="muted">not known</span>{% endif %}</td>
         <td class="num">{% if r.amount_k %}<b>{{ '{:,}'.format(r.amount_k) }}K</b>{% else %}<span class="muted">No amount</span>{% endif %}</td>
-        <td><span class="pill pill--ok">Placed</span>{% if p.placed_at %} {{ local_time(p.placed_at) }}{% endif %}
+        <td>{% if r.state == 'live_failed' %}<span class="pill pill--bad">Live attempt failed</span>{% else %}<span class="pill pill--ok">Placed</span>{% endif %}{% if p.placed_at %} {{ local_time(p.placed_at) }}{% endif %}
           {% if r.message %}<div class="faint">{{ r.message }}</div>{% endif %}
           {% if r.screenshot %}<a href="{{ r.screenshot }}" target="_blank" rel="noopener">Screenshot</a>{% endif %}</td>
       </tr>

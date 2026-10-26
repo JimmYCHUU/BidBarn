@@ -163,6 +163,9 @@ class Refused(Exception):
     """A decision the store will not record. `str(exc)` is a full sentence for the page."""
 
 
+CHANGED_LOT = "This lot changed since you opened it: a later pass updated its judgement. Look at it again before deciding."
+
+
 class VehicleClaimed(Refused):
     """Approving a vehicle that another proposal already holds the claim on."""
     def __init__(self, ref_no: str, holder: int):
@@ -362,6 +365,13 @@ class Store:
             return f"A newer scan replaced this lot. Decide the new one (lot {newer['id']})."
         return "A newer scan replaced this lot."
 
+    def decided_since(self, since: str) -> list[sqlite3.Row]:
+        """Proposals approved, rejected or cleared at or after `since` (UTC ISO text as `now()` writes it), newest
+        first. Read-only: the desk's Decided lane."""
+        return self.conn.execute(
+            "SELECT * FROM proposals WHERE decision IN ('approved','rejected','deleted') AND decided_at >= ? "
+            "ORDER BY decided_at DESC, id DESC", (since,)).fetchall()
+
     def reopen(self, pid: int) -> None:
         """Return an approved or rejected lot that was not placed live to waiting, and free its vehicle's claim.
         Never approves anything. The undone decision stays in `decisions` (marked) for the day log."""
@@ -396,8 +406,7 @@ class Store:
         if p is None:
             raise KeyError(pid)
         if seen_rev is not None and seen_rev != p["rev"]:
-            raise Refused("This lot changed since you opened it: a later pass updated its judgement. "
-                          "Look at it again before deciding.")
+            raise Refused(CHANGED_LOT)
         why = self.not_pending_reason(p)
         if why:
             raise Refused(why)
@@ -420,13 +429,16 @@ class Store:
                     raise VehicleClaimed(p["ref_no"], held["proposal_id"] if held else 0)
                 # a claim already in this proposal's own name (a legacy backfill): this approval takes it over
                 self.conn.execute("UPDATE bid_intents SET amount_jpy_k=?, at=? WHERE proposal_id=?", (claim, ts, pid))
+        # the revision rides in the UPDATE too: a judgement another process wrote since the read above must not slip through
+        rev_sql, rev_arg = (" AND rev=?", (seen_rev,)) if seen_rev is not None else ("", ())
         cur = self.conn.execute(
             "UPDATE proposals SET decision=?, decision_reason=?, decided_at=?, approved_bid_jpy_k=? "
-            "WHERE id=? AND decision='pending'",
-            (decision, reason, ts, amount_jpy_k if decision == "approved" else None, pid))
-        if cur.rowcount != 1:  # another tab decided it first
-            self.conn.rollback()
-            raise Refused("This lot is already decided.")
+            f"WHERE id=? AND decision='pending'{rev_sql}",
+            (decision, reason, ts, amount_jpy_k if decision == "approved" else None, pid, *rev_arg))
+        if cur.rowcount != 1:  # another tab decided it first, or a later pass changed the judgement
+            self.conn.rollback()  # undoes the claim above
+            now_row = self.proposal(pid)
+            raise Refused((self.not_pending_reason(now_row) if now_row is not None else None) or CHANGED_LOT)
         self.conn.execute(
             "INSERT INTO decisions(proposal_id, ref_no, model_code, action, reason, amount_jpy_k, make_rule, at, "
             "opened_at, decide_seconds, sheet_zoomed, photos_clicked, nichibo_opened, amount_edited, proposed_jpy_k, via) "
@@ -599,7 +611,8 @@ class Store:
         return cur.rowcount
 
     # A dry run that came back ok is done: `placement_json` says dry_run and ok (NULL or malformed counts as not done).
-    _DRY_DONE = "json_valid(p.placement_json) AND json_extract(p.placement_json,'$.dry_run')=1 AND json_extract(p.placement_json,'$.ok')=1"
+    _DRY_DONE = ("CASE WHEN json_valid(p.placement_json) THEN json_extract(p.placement_json,'$.dry_run')=1 "
+                 "AND json_extract(p.placement_json,'$.ok')=1 ELSE 0 END")  # CASE: AND does not stop json_extract on bad text
 
     def approved_unplaced(self, limit: int, dry_run: bool = False) -> list[sqlite3.Row]:
         """Approved lots not placed live that hold their vehicle's claim, oldest first. A dry run leaves out the

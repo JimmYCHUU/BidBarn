@@ -232,7 +232,7 @@ def build_desk(pending: list[dict], decided: list[dict], sort_key: Callable[[dic
 class BidRow:
     p: dict
     amount_k: int
-    state: str  # approved | dry_run | blocked | placed
+    state: str  # approved | dry_run | blocked | placed | live_failed
     message: str
     screenshot: str | None
     queue: int = 0  # 1-based place in the order `bot place` takes the waiting approvals; 0 for a placed lot
@@ -271,7 +271,7 @@ def bid_amount_k(p: dict) -> int:
 def bid_row(p: dict) -> BidRow:
     pl = p.get("placement") or {}
     if p.get("placed_at"):
-        state = "placed"
+        state = "live_failed" if pl and not pl.get("ok") and not pl.get("dry_run") else "placed"
     elif pl and pl.get("ok") and pl.get("dry_run"):
         state = "dry_run"
     elif pl and not pl.get("ok"):
@@ -289,11 +289,14 @@ def bid_sheet(approved: list[dict], next_run: int = 0) -> list[BidGroup]:
     Each row keeps that place (`queue`), groups keep it inside, and the first `next_run` rows
     (`cfg.max_bids_per_run`) are marked as taken by the next dry run."""
     groups: dict[str, BidGroup] = {}
+    marked = 0
     for i, p in enumerate(approved):
         key, label, date, hall = session_of(p)
         g = groups.setdefault(key, BidGroup(key, label, [], 0, date, hall))
         row = bid_row(p)
-        row.queue, row.next_run = i + 1, i < next_run
+        row.queue = i + 1
+        if row.state != "dry_run" and marked < next_run:
+            row.next_run, marked = True, marked + 1
         g.rows.append(row)
         g.exposure_k += row.amount_k
     return sorted(groups.values(), key=session_order)

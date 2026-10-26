@@ -194,6 +194,7 @@
     <section class="card">
       <div class="card-head"><h2>Your decision</h2><span class="faint push"><kbd>a</kbd> approve <kbd>r</kbd> reason <kbd>o</kbd> Nichibo <kbd>n</kbd> next</span></div>
       <form class="decide card-body" method="post" action="/p/{{ p.id }}/decide">
+        <input type="hidden" name="rev" value="{{ p.rev }}">
         <div class="field field--narrow">
           <label for="d-amount">Bid amount (K JPY)</label>
           <input id="d-amount" type="number" name="amount" value="{{ p.proposed_bid_jpy_k or p.bid_jpy_k or '' }}" min="0" step="10">
@@ -242,6 +243,9 @@
       <div class="card-head"><h2>Decision</h2><span class="pill {{ p.decision }}">{{ p.decision|capitalize }}</span></div>
       <div class="card-body">
         <p>{{ p.decision|capitalize }} at {{ p.decided_at }}{% if p.decision_reason %}: {{ p.decision_reason }}{% endif %}</p>
+        {% if p.decision in ('approved', 'rejected') and not p.placed_at %}
+        <form method="post" action="/p/{{ p.id }}/reopen" class="reopen"><button type="submit" class="btn--quiet">Reopen</button> <span class="faint">Back to waiting, so you can decide it again. A skip line or a note to the model saved with this decision stays.</span></form>
+        {% endif %}
         {% if p.approved_bid_jpy_k %}<p class="num">Approved amount <b>{{ '{:,}'.format(p.approved_bid_jpy_k) }}K</b></p>{% endif %}
         {% if p.telemetry %}<p class="faint num">{% if p.telemetry.decide_seconds is not none %}decided in {{ p.telemetry.decide_seconds|round|int }} s, {% endif %}sheet {{ 'zoomed' if p.telemetry.sheet_zoomed else 'not zoomed' }}{% if p.telemetry.amount_edited %}, amount changed from {{ '{:,}'.format(p.telemetry.proposed_jpy_k or 0) }}K{% endif %}, via {{ p.telemetry.via or 'detail' }}</p>{% endif %}
         {% if p.placement %}

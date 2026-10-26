@@ -1,6 +1,6 @@
 """The desk: today's pending lots grouped into auction sessions and lanes, served beside the old review.
 
-Read-only. It decides nothing; the desk's buttons (Task 3 and 4) post to the review's own routes.
+Read-only. It decides nothing; the desk's buttons post to the review's own routes (decide, delete, reopen).
 `GET /desk` is the full page, `GET /desk/board` the board fragment alone. Both take `session=<key>` and
 `lane=<look|clear|wait|done>`; every session's rows are rendered and the ones outside the chosen session
 and lane carry `hidden`, so the page works without JavaScript."""
@@ -16,7 +16,6 @@ from auction_bot.dashboard.guides import rules_for_code, variant_view
 from auction_bot.review.desk_model import DECIDED_WINDOW, LANES, bid_row, bid_sheet, build_desk, look_items
 
 LANE_NAMES = {"look": "Needs a look", "clear": "Card-clear", "wait": "Waiting", "done": "Decided"}
-DECIDED = ("approved", "rejected", "deleted")
 ALL_WAITING = 100_000  # approved_unplaced's limit for the bid sheet: every waiting approval, not one run's worth
 
 
@@ -66,7 +65,7 @@ def register(app, templates, cfg, store, page, *, load, sort_key) -> None:
         s = store()
         try:
             pending = [load(r) for r in s.list_triage()]
-            decided = [load(r) for d in DECIDED for r in s.list_proposals(decision=d)]
+            decided = [load(r) for r in s.decided_since((datetime.now(timezone.utc) - DECIDED_WINDOW).isoformat(timespec="seconds"))]
         finally:
             s.close()
         sessions = build_desk(pending, decided, sort_key, datetime.now(timezone.utc))
@@ -87,7 +86,7 @@ def register(app, templates, cfg, store, page, *, load, sort_key) -> None:
     def bids(request: Request):
         """The bid sheet: what `bot place` will take, per auction, with exposure and any stored placement result.
         The waiting rows are the ones `run.place_approved` reads (`approved_unplaced`, oldest proposal first), all
-        of them, with the first `max_bids_per_run` marked as the next dry run's; lots placed in the last 24 hours
+        of them, with the first `max_bids_per_run` that a dry run still types marked as the next dry run's; lots placed in the last 24 hours
         are listed apart. Read-only; the only control is the dry-run `place` command, started by dashboard.js."""
         since = (datetime.now(timezone.utc) - DECIDED_WINDOW).isoformat(timespec="seconds")
         s = store()
@@ -98,10 +97,12 @@ def register(app, templates, cfg, store, page, *, load, sort_key) -> None:
             s.close()
         per_run = max(0, int(cfg.max_bids_per_run or 0))
         groups = bid_sheet(waiting, next_run=per_run)
+        rows = [r for g in groups for r in g.rows]
+        typed_n = sum(r.state != "dry_run" for r in rows)  # a dry run does not type a lot it already placed ok
+        next_n = sum(r.next_run for r in rows)
         commands = request.app.state.jobs.describe()
         return page(request, "bids.html", "bids", groups=groups, commands=commands, total_k=sum(g.exposure_k for g in groups),
-                    waiting_n=len(waiting), per_run=per_run, next_n=min(len(waiting), per_run),
-                    after_n=max(0, len(waiting) - per_run), placed=placed, placed_k=sum(r.amount_k for r in placed))
+                    waiting_n=len(waiting), per_run=per_run, next_n=next_n, after_n=typed_n - next_n, done_n=len(waiting) - typed_n, placed=placed, placed_k=sum(r.amount_k for r in placed if r.state == "placed"))
 
     @app.get("/desk/board", response_class=HTMLResponse)
     def desk_board(request: Request, session: str | None = None, lane: str | None = None):

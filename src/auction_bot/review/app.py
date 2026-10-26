@@ -25,7 +25,7 @@ from auction_bot.dashboard import status as dashboard_status
 from auction_bot.insights import propose_skip_lines
 from auction_bot.nichibo.facts import VehicleFacts
 from auction_bot.rules.instructions import InstructionError, is_structured, parse_instruction, suggest_from_reason
-from auction_bot.store import EVENTS, Store
+from auction_bot.store import EVENTS, Refused, Store, VehicleClaimed
 
 TEMPLATES = Path(__file__).parent / "templates"
 STATIC = Path(__file__).parent / "static"
@@ -529,16 +529,16 @@ def create_app(cfg: Config, finish_event=None, jobs=None) -> FastAPI:
     @app.post("/p/{pid}/decide")
     def decide(request: Request, pid: int, action: str = Form(...), reason: str = Form(""), amount: str = Form(""),
                make_rule: str | None = Form(None), rule_text: str = Form(""), via: str = Form("detail"),
-               feedback_req: str = Form(""), feedback_note: str = Form("")):
+               feedback_req: str = Form(""), feedback_note: str = Form(""), rev: str = Form("")):
         if action not in ("approve", "reject"):
             raise HTTPException(400, "bad action")
+        if rev.strip() and not rev.strip().isdigit():
+            raise HTTPException(400, "rev must be a number")
         s = store()
         try:
             row = s.proposal(pid)
             if row is None:
                 raise HTTPException(404)
-            if row["decision"] != "pending":
-                raise HTTPException(409, "already decided")
             loaded = _load(row)
             amt = None
             if action == "approve":
@@ -558,7 +558,17 @@ def create_app(cfg: Config, finish_event=None, jobs=None) -> FastAPI:
                     parse_instruction(line)  # a skip line that cannot be read is refused, not stored
                 except InstructionError as exc:
                     raise HTTPException(400, f"standing instruction not understood: {exc}")
-            s.decide(pid, action, reason.strip() or None, amt, bool(make_rule), via=via if via in ("detail", "triage", "desk") else "detail")
+            try:
+                s.decide(pid, action, reason.strip() or None, amt, bool(make_rule),
+                         via=via if via in ("detail", "triage", "desk") else "detail",
+                         seen_rev=int(rev) if rev.strip() else None)
+            except VehicleClaimed as exc:
+                holder = s.proposal(exc.holder)
+                name = guide_names().get(holder["guide_id"]) or holder["model_code"] if holder else "another guide"
+                raise HTTPException(409, f"This vehicle is already approved under {name} (lot {exc.holder}). "
+                                         "One bid per vehicle, so it is not approved again.")
+            except Refused as exc:
+                raise HTTPException(409, str(exc))
             if make_rule and line:
                 append_override(cfg, row["model_code"], line)
             record_feedback(s, loaded, action, amt, reason.strip(), feedback_req.strip(), feedback_note.strip())
@@ -569,6 +579,27 @@ def create_app(cfg: Config, finish_event=None, jobs=None) -> FastAPI:
         if _wants_json(request):
             return JSONResponse({"ok": True, "decision": decision, "amount": amt, "next_id": nxt})
         return RedirectResponse(f"/p/{nxt}" if nxt else "/review", status_code=303)
+
+    @app.post("/p/{pid}/reopen")
+    def reopen(request: Request, pid: int, next: str = Form("")):
+        """Return an approved or rejected lot that was not placed live to waiting. Not a decision: it approves
+        nothing, and Jim decides the lot again himself. Held back while a run is placing the approved bids."""
+        cur = jobs.current()
+        if cur and (cur.get("progress") or {}).get("stage") == "place":
+            raise HTTPException(409, "The approved bids are being placed: reopen this lot when the run has finished.")
+        s = store()
+        try:
+            try:
+                s.reopen(pid)
+            except KeyError:
+                raise HTTPException(404)
+            except Refused as exc:
+                raise HTTPException(409, str(exc))
+        finally:
+            s.close()
+        if _wants_json(request):
+            return JSONResponse({"ok": True, "decision": "pending"})
+        return RedirectResponse(next if next.startswith("/") and not next.startswith("//") else f"/p/{pid}", status_code=303)
 
     @app.post("/p/{pid}/delete")
     def delete_lot(request: Request, pid: int):

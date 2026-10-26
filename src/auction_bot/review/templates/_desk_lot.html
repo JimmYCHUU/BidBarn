@@ -2,7 +2,7 @@
    (data-confirm, data-ev, data-zoom ...): the desk uses data-desk-* names. #}
 {% from "_desk_macros.html" import k %}
 {% set f = p.facts or {} %}{% set h = p.hard or {} %}{% set s = p.soft or {} %}{% set el = p.eligibility %}
-<article class="desk-lotview" data-lot="{{ p.id }}" data-ref="{{ p.ref_no }}" data-decide="/p/{{ p.id }}/decide" data-delete="/p/{{ p.id }}/delete" data-event="/p/{{ p.id }}/event" data-start="{{ start_k }}"{% if covered %} data-covered="{{ covered }}"{% endif %}>
+<article class="desk-lotview" data-lot="{{ p.id }}" data-rev="{{ p.rev }}" data-ref="{{ p.ref_no }}" data-decide="/p/{{ p.id }}/decide" data-delete="/p/{{ p.id }}/delete" data-event="/p/{{ p.id }}/event" data-start="{{ start_k }}"{% if p.decision in ('approved', 'rejected') and not p.placed_at %} data-reopen="/p/{{ p.id }}/reopen"{% endif %}{% if covered %} data-covered="{{ covered }}"{% endif %}>
   <header class="dl-head">
     <button type="button" class="dl-close btn btn--sm" data-act="close" aria-label="Close the lot">Close</button>
     <div class="dl-title">
@@ -160,6 +160,7 @@
   {% elif p.decision == 'deleted' %}
   <footer class="dl-bar"><p>Cleared, not a decision{% if p.decided_at %} · {{ local_time(p.decided_at) }}{% endif %}.</p></footer>
   {% elif p.decision != 'pending' %}
-  <footer class="dl-bar"><p><span class="pill {{ p.decision }}">{{ p.decision|capitalize }}</span>{% if p.decided_at %} {{ local_time(p.decided_at) }}{% endif %}{% if p.approved_bid_jpy_k %} at <b class="num">{{ '{:,}'.format(p.approved_bid_jpy_k) }}K</b>{% endif %}{% if p.decision_reason %}: {{ p.decision_reason }}{% endif %}</p></footer>
+  <footer class="dl-bar"><p><span class="pill {{ p.decision }}">{{ p.decision|capitalize }}</span>{% if p.decided_at %} {{ local_time(p.decided_at) }}{% endif %}{% if p.approved_bid_jpy_k %} at <b class="num">{{ '{:,}'.format(p.approved_bid_jpy_k) }}K</b>{% endif %}{% if p.decision_reason %}: {{ p.decision_reason }}{% endif %}</p>
+    {% if p.decision in ('approved', 'rejected') and not p.placed_at %}<div class="dl-actions"><button type="button" class="btn--quiet" data-act="reopen" title="Back to waiting. A skip line or a note to the model saved with this decision stays.">Reopen</button></div>{% endif %}</footer>
   {% endif %}
 </article>

@@ -289,8 +289,8 @@ def test_desk_js_talks_only_to_existing_routes():
     src = DESK_JS.read_text(encoding="utf-8")
     targets = [t.strip() for t in re.findall(r"fetch\(\s*([\w.\[\]\"]+(?:\(\w*\))?)", src)]
     assert targets
-    # the board, the lot fragment, the three routes the lot view names itself (q.url is its data-decide)
-    allowed = {"boardUrl()", "lotUrl(pid)", "v.dataset.event", 'v.dataset["delete"]', "q.url"}
+    # the board, the lot fragment, the routes the lot view names itself (q.url is its data-decide, then reopen)
+    allowed = {"boardUrl()", "lotUrl(pid)", "v.dataset.event", 'v.dataset["delete"]', "q.url", "v.dataset.reopen"}
     assert set(targets) <= allowed, set(targets) - allowed
     assert re.search(r"url: v\.dataset\.decide", src)
     assert set(re.findall(r"dataset\.(decide|event)|dataset\[\"(delete)\"\]", src)) <= {("decide", ""), ("event", ""), ("", "delete")}
@@ -394,7 +394,7 @@ def test_the_bid_sheet_shows_a_dry_run_and_a_block(cfg):
     store.record_placement(ids[1], "B2", "GDH206", 1000, ok=False, message="start price changed", screenshot=None, dry_run=True)
     store.close()
     html = client.get("/bids").text
-    assert "Dry-run placed" in html and "start price changed" in html
+    assert "Dry run done" in html and "start price changed" in html
 
 
 def test_the_bid_sheet_cannot_ask_for_a_live_placement(cfg):
@@ -562,3 +562,155 @@ def test_the_bid_sheet_keeps_the_last_day_of_placed_lots_apart(cfg):
     waiting, placed = html.split('aria-label="Placed in the last 24 hours"')
     assert "A1" not in waiting and "B2" not in waiting and "C3" in waiting
     assert "A1" in placed and "B2" not in placed and "C3" not in placed
+
+
+# -- phase 2: refusals in plain words, Reopen, the dry-run state ---------------------------------------------------
+
+REVIEW_JS = DESK_JS.with_name("review.js")
+
+
+def _post(client, pid, **data):
+    return client.post(f"/p/{pid}/decide", data={"action": "approve", "via": "desk", **data}, headers=JSON)
+
+
+def test_a_second_approval_is_refused_with_the_guide_named(cfg):
+    store = Store(cfg.db_path)
+    a = _seed(store, "TW1", "GDH206", "4", 50_000, guide=223)
+    b = _seed(store, "TW1", "GDH206", "4", 50_000, guide=224)
+    store.close()
+    client, _ = _client(cfg)
+    assert _post(client, a, amount="1000").status_code == 200
+    r = _post(client, b, amount="900")
+    assert r.status_code == 409
+    assert "already approved under" in r.json()["detail"] and f"lot {a}" in r.json()["detail"]
+    assert "One bid per vehicle, so it is not approved again." in r.json()["detail"]
+
+
+def test_an_approval_of_a_changed_lot_is_refused(cfg):
+    store = Store(cfg.db_path)
+    a = _seed(store, "TW1", "GDH206", "4", 50_000)
+    store.update_soft(a, {"mode": "judge"})
+    store.close()
+    client, _ = _client(cfg)
+    r = _post(client, a, amount="1000", rev="0")
+    assert r.status_code == 409 and "changed since you opened it" in r.json()["detail"]
+    assert _post(client, a, amount="1000", rev="1").status_code == 200
+    assert _post(client, a, amount="1000", rev="x").status_code == 400
+
+
+def test_a_decision_on_a_replaced_lot_names_the_new_one(cfg):
+    store = Store(cfg.db_path)
+    a = _seed(store, "TW1", "GDH206", "4", 50_000)
+    store.supersede_pending("TW1", 1)
+    n = _seed(store, "TW1", "GDH206", "4", 50_000)
+    store.close()
+    client, _ = _client(cfg)
+    r = _post(client, a, amount="1000")
+    assert r.status_code == 409 and f"lot {n}" in r.json()["detail"]
+
+
+def test_every_decision_form_sends_the_revision(cfg):
+    store = Store(cfg.db_path)
+    a = _seed(store, "TW1", "GDH206", "4", 50_000)
+    store.close()
+    client, _ = _client(cfg)
+    assert 'data-rev="0"' in client.get(f"/desk/lot/{a}").text
+    assert 'name="rev"' in client.get(f"/p/{a}").text
+    assert 'data-rev="0"' in client.get("/review").text
+    assert 'append("rev"' in DESK_JS.read_text(encoding="utf-8")
+    assert '"rev"' in REVIEW_JS.read_text(encoding="utf-8")
+
+
+def test_reopen_returns_a_decision_to_waiting(cfg):
+    store = Store(cfg.db_path)
+    a = _seed(store, "TW1", "GDH206", "4", 50_000)
+    store.close()
+    client, _ = _client(cfg)
+    _approve(client, a)
+    r = client.post(f"/p/{a}/reopen", headers=JSON)
+    assert r.status_code == 200 and r.json() == {"ok": True, "decision": "pending"}
+    assert client.post(f"/p/{a}/reopen", headers=JSON).status_code == 409
+    assert client.post("/p/99999/reopen", headers=JSON).status_code == 404
+    r = client.post(f"/p/{a}/reopen", data={"next": "//evil.example"}, follow_redirects=False)
+    assert r.status_code == 409  # still waiting: nothing to reopen
+
+
+def test_reopen_redirects_only_to_a_local_page(cfg):
+    store = Store(cfg.db_path)
+    a = _seed(store, "TW1", "GDH206", "4", 50_000)
+    b = _seed(store, "TW2", "GDH206", "4", 50_000)
+    store.close()
+    client, _ = _client(cfg)
+    _approve(client, a); _approve(client, b)
+    r = client.post(f"/p/{a}/reopen", data={"next": "/bids"}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/bids"
+    r = client.post(f"/p/{b}/reopen", data={"next": "//evil.example"}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == f"/p/{b}"
+
+
+def test_reopen_waits_while_bids_are_placed(cfg):
+    from tests.test_dashboard_app import FakeJobs
+
+    class Placing(FakeJobs):
+        def current(self):
+            return {"id": 1, "progress": {"stage": "place"}}
+
+    store = Store(cfg.db_path)
+    a = _seed(store, "TW1", "GDH206", "4", 50_000)
+    store.close()
+    client, _ = _client(cfg)
+    _approve(client, a)
+    client = TestClient(create_app(cfg, jobs=Placing(cfg)))
+    r = client.post(f"/p/{a}/reopen", headers=JSON)
+    assert r.status_code == 409 and "being placed" in r.json()["detail"]
+    store = Store(cfg.db_path)
+    assert store.proposal(a)["decision"] == "approved"
+    store.close()
+
+
+def test_a_decided_lot_offers_reopen_until_placed_live(cfg):
+    store = Store(cfg.db_path)
+    a = _seed(store, "TW1", "GDH206", "4", 50_000)
+    store.close()
+    client, _ = _client(cfg)
+    _approve(client, a)
+    t = client.get(f"/desk/lot/{a}").text
+    assert f'data-reopen="/p/{a}/reopen"' in t and 'data-act="reopen"' in t
+    assert f'action="/p/{a}/reopen"' in client.get(f"/p/{a}").text
+    store = Store(cfg.db_path)
+    store.record_placement(a, "TW1", "GDH206", 1000, True, "placed", None, dry_run=False)
+    store.close()
+    assert "/reopen" not in client.get(f"/desk/lot/{a}").text
+    assert "/reopen" not in client.get(f"/p/{a}").text
+
+
+def test_the_bid_sheet_shows_a_dry_run_done_and_skips_it_for_the_next_run(cfg):
+    cfg.max_bids_per_run = 1
+    ids = _three(cfg)[:2]
+    client, _ = _client(cfg)
+    for pid in ids:
+        _approve(client, pid)
+    store = Store(cfg.db_path)
+    store.record_placement(ids[0], "A1", "GDH206", 1000, True, "dry run", None, dry_run=True)
+    store.close()
+    html = client.get("/bids").text
+    rows = re.findall(r"<tr[^>]*data-queue[^>]*>.*?</tr>", html, re.S)
+    first = next(r for r in rows if f'/p/{ids[0]}"' in r)
+    second = next(r for r in rows if f'/p/{ids[1]}"' in r)
+    assert "Dry run done" in first and "data-next-run" not in first
+    assert "data-next-run" in second
+    for pid in ids:
+        assert re.search(rf'<form[^>]*action="/p/{pid}/reopen"[^>]*>.*?name="next" value="/bids"', html, re.S)
+
+
+def test_the_bid_sheet_reads_a_failed_live_attempt_as_failed(cfg):
+    store = Store(cfg.db_path)
+    a = _seed(store, "TW1", "GDH206", "4", 50_000)
+    store.close()
+    client, _ = _client(cfg)
+    _approve(client, a)
+    store = Store(cfg.db_path)
+    store.record_placement(a, "TW1", "GDH206", 1000, False, "error: x", None, dry_run=False)
+    store.close()
+    html = client.get("/bids").text
+    assert "Live attempt failed" in html and "error: x" in html

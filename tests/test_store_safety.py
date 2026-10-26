@@ -213,3 +213,47 @@ def test_a_live_result_is_always_recorded(tmp_path):
     s.record_placement(a, "R1", "GDH206", 1000, True, "ok", None, dry_run=False)
     assert s.proposal(a)["placed_at"] is not None and s.already_bid("R1")
     assert s.conn.execute("SELECT mode FROM placements WHERE proposal_id=?", (a,)).fetchone()["mode"] == "live"
+
+
+def test_decided_since_reads_only_recent_decisions(tmp_path):
+    from datetime import datetime, timedelta, timezone
+    s = Store(tmp_path / "b.sqlite"); a = _add(s); b = _add(s, "R2"); _add(s, "R3")
+    s.decide(a, "approve", None, 1000, False)
+    old = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat(timespec="seconds")
+    s.conn.execute("UPDATE proposals SET decided_at=? WHERE id=?", (old, a)); s.conn.commit()
+    s.decide(b, "reject", "rust", None, False)
+    since = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat(timespec="seconds")
+    assert [r["id"] for r in s.decided_since(since)] == [b]
+
+
+def test_a_judgement_written_between_the_read_and_the_write_is_refused(tmp_path, monkeypatch):
+    path = tmp_path / "b.sqlite"
+    s = Store(path); a = _add(s)
+    real = Store.telemetry
+
+    def late_write(self, pid):  # another process updates the judgement after decide's checks, before its write
+        other = sqlite3.connect(path)
+        other.execute("UPDATE proposals SET rev=rev+1 WHERE id=?", (pid,)); other.commit(); other.close()
+        return real(self, pid)
+
+    monkeypatch.setattr(Store, "telemetry", late_write)
+    with pytest.raises(Refused, match="changed since you opened it"):
+        s.decide(a, "approve", None, 1000, False, seen_rev=0)
+    assert s.proposal(a)["decision"] == "pending" and s.intent_for("R1") is None
+    assert s.conn.execute("SELECT COUNT(*) FROM decisions WHERE proposal_id=?", (a,)).fetchone()[0] == 0
+
+
+def test_a_dry_filter_counts_unreadable_placement_text_as_not_done(tmp_path):
+    s = Store(tmp_path / "b.sqlite"); a = _add(s)
+    s.decide(a, "approve", None, 1000, False)
+    s.conn.execute("UPDATE proposals SET placement_json='not json' WHERE id=?", (a,)); s.conn.commit()
+    assert [r["id"] for r in s.approved_unplaced(10, dry_run=True)] == [a]
+
+
+def test_a_dry_result_written_before_phase_two_counts_as_done(tmp_path):
+    s = Store(tmp_path / "b.sqlite"); a = _add(s)
+    s.decide(a, "approve", None, 1000, False)
+    s.conn.execute("UPDATE proposals SET placement_json=? WHERE id=?", (
+        '{"ok": true, "message": "dry run", "screenshot": null, "dry_run": true, "at": "2026-10-01T00:00:00+00:00"}', a))
+    s.conn.commit()
+    assert s.approved_unplaced(10, dry_run=True) == [] and s.dry_done_count() == 1
