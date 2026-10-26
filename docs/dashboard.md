@@ -14,6 +14,7 @@ builds it: the review routes are defined there, the dashboard routes are registe
 |---|---|---|
 | Review routes | `review/app.py` | Triage, lot detail, the list, `decide`, `event`, `finish`, the skip-rule form. **The only place a lot is decided.** |
 | Dashboard routes | `dashboard/routes.py` | Overview, runs, a run, insights, settings, and the JSON API. The local-only check. Registers the guide pages. |
+| Desk and bid sheet | `review/desk_model.py`, `review/desk_routes.py`, `review/static/desk.js`, `desk.css` | `/desk` and `/bids`. Read the store; decide nothing themselves: `desk.js` posts to the review's own decide, delete and event routes after a 10-second undo window. |
 | Guide pages | `dashboard/guides.py` | `/guides` and `/guides/{code}`: a bidding guide as a page (grid, requirements, chips, standing instructions, playbook, decisions). Reads only; its Add form posts to the review app's skip route. |
 | State of the day | `dashboard/status.py` | Lock, sign-in, guides, model quota, counts, the five steps and which is next, the day log. Reads only. |
 | Commands and runs | `dashboard/jobs.py` | The command table, the job runner, reading runs and logs back. |
@@ -35,6 +36,8 @@ builds it: the review routes are defined there, the dashboard routes are registe
 | `GET /guides`, `GET /guides/{code}` | The guides in the snapshot; one guide as a page |
 | `POST /finish` | The header's Finish button. Under `bot bid` on a console it sets the event the console waits on; under a Bid run started from the page it writes that run's finish file (see Finish). 404 when no review is waiting |
 | `GET /review`, `/list`, `/p/{id}` | The review pages |
+| `GET /desk`, `/desk/board`, `/desk/lot/{id}` | The desk: lots by auction session and lane. Reads only; its decisions go to `POST /p/{id}/decide`, `/delete` and `/event`. See `docs/desk.md` |
+| `GET /bids` | The bid sheet: approved lots per auction, exposure, and a button that starts the dry-run `place` command |
 | `GET /api/status` | The state of the day, as the overview shows it |
 | `GET /api/commands` | The command table, for the forms |
 | `POST /api/runs` | Start a command. Body `{"command": "scan", "options": {...}}`. 201 the run, 400 unknown command or option, 409 something is running |

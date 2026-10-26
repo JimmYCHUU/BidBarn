@@ -33,6 +33,7 @@ the Carbarn dashboard on purpose.
 - [The daily workflow](#the-daily-workflow)
 - [The dashboard](#the-dashboard)
 - [The review page](#the-review-page)
+- [The desk (phase 1)](#the-desk-phase-1)
 - [Rules as Carbarn confirmed them](#rules-as-carbarn-confirmed-them)
 - [The judgement layer](#the-judgement-layer)
 - [Standing instructions](#standing-instructions)
@@ -111,6 +112,7 @@ Every stage writes its result to SQLite with the facts, the rule snapshot and th
 files, so any bid can be explained afterwards. Per lot the scan now spends about 6 seconds
 (one sheet download and one OCR pass) instead of 22; only lots whose guide needs the page
 cost the extra page load, and only lots with something to look at cost a model call. A lot
+that reaches the review costs one more page load, once, for its auction day and hall. A lot
 whose sheet is not published yet waits for the next scan, but it keeps its grid amount from the
 search card, so it can be approved in the meantime.
 
@@ -332,6 +334,20 @@ another website's page, is refused, so no page you visit can start a command or 
 | Auction sheet and photos | The downloaded sheet, full size on click; the photos the model looked at, when the judgement layer fetched them. Otherwise the scan downloads no photos and the full set is on Nichibo in your own browser |
 | Your decision | Amount, reason, "The model was wrong about … because …" for a judged lot, "save as standing instruction" with a suggested `skip:` line filled in from the reason, Approve / Reject. **Delete** takes the lot out of the review without a decision. The lock is stated in the page header. Decided lots show how long the decision took and what was looked at. |
 | All lots (`/list`) | The plain table with filters by decision, status and model |
+
+## The desk (phase 1)
+
+A second review page beside the first one, at `/desk`, with a bid sheet at `/bids`. The old pages
+are unchanged.
+
+- Lots are grouped by auction session (hall and day, in date order) and by lane: Needs a look, Card-clear, Waiting, Decided.
+- Card-clear is strict: with `sheet_check: judge`, most lots whose guide has a text requirement are Needs a look, because the model reads those notes.
+- Keys move, approve, change the amount, reject and clear. A decision waits 10 seconds for an undo and is sent when the window ends or the page is left. It goes through the same `decide` route as the old pages.
+- Clear is never a decision. The bid sheet only starts the dry-run `place` command.
+- The scan opens each lot that reaches the review once more, to read its auction day and hall.
+
+The parity table, the keys, what phase 1 leaves out, the check list and how to try it before the
+merge are in [docs/desk.md](docs/desk.md).
 
 ## Rules as Carbarn confirmed them
 
