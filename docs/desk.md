@@ -152,8 +152,8 @@ The program reads `data/` and `rules/` from the folder of the code that is impor
 worktree's `src`. Never link or move the originals: copy. `<worktree>` is the desk branch's worktree.
 
 1. Close the real dashboard first. The copy must be the only dashboard running: `config.yaml` uses port 8765, and if the real one is up the command just opens a tab on it.
-2. Copy `D:\Jim\Auction Automation\dataot.sqlite` to `<worktree>\dataot.sqlite`.
-3. Copy the newest `*.json` in `D:\Jim\Auction Automationules\snapshots\` to `<worktree>ules\snapshots\`.
+2. Copy `D:\Jim\Auction Automation\data\bot.sqlite` to `<worktree>\data\bot.sqlite`.
+3. Copy the newest `*.json` in `D:\Jim\Auction Automation\rules\snapshots\` to `<worktree>\rules\snapshots\`.
 4. For each lot you want to see on the desk, copy its folder `D:\Jim\Auction Automation\data\evidence\<ref>\` to `<worktree>\data\evidence\<ref>\`. Copy only those folders.
 5. Open a fresh PowerShell window and go to the worktree:
 
