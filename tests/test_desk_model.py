@@ -297,3 +297,10 @@ def test_an_unread_seat_count_needs_a_look():
     look = look_items(p)
     assert look == [LookItem("Seats: the sheet's seat count was not read", "unclear", "sheet")]
     assert lane_of(p, look) == "look"
+
+
+def test_the_auto_skip_line_as_the_pipeline_writes_it_is_not_a_look_item():
+    # pipeline.manual_soft writes "Auto-skip rule in force (did not fire): <line>" (capital A)
+    p = _p(1, "A", soft={"mode": "manual", "checklist": ["Dark Color Seats Only",
+                                                         "Auto-skip rule in force (did not fire): skip: km > 120000"]})
+    assert [i.text for i in look_items(p)] == ["Dark Color Seats Only"]

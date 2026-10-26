@@ -122,7 +122,9 @@ def look_items(p: dict) -> list[LookItem]:
         kind = "fail" if b.get("cls") == "bad" else "unclear" if b.get("mark") == "?" or unjudged else "check"
         items.append(LookItem(text, kind, where, photo_no))
     if not judged:
-        items += [LookItem(c, "check", "page") for c in soft.get("checklist") or [] if "auto-skip rule in force" not in c]
+        # pipeline.manual_soft writes "Auto-skip rule in force (did not fire): ..."; the match ignores case.
+        items += [LookItem(c, "check", "page") for c in soft.get("checklist") or []
+                  if "auto-skip rule in force" not in str(c).lower()]
     flags = [f for f in soft.get("flags") or [] if isinstance(f, str)]
     items += [LookItem(f, "check", "grid") for f in flags]
     # A modifier the rules could not decide (judge mode already names it in a flag; manual mode does not).
