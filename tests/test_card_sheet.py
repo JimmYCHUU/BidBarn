@@ -68,7 +68,7 @@ def test_needs_detail_only_for_chassis_variants_or_colour():
 
 # -- the scan ---------------------------------------------------------------------
 
-def test_card_sheet_scan_opens_no_detail_pages(cfg, monkeypatch):
+def test_card_sheet_scan_judges_without_a_detail_page_and_reads_only_the_day(cfg, monkeypatch):
     import auction_bot.pipeline as pl
     from auction_bot.nichibo.sheet_ocr import SheetRead
     _default_variant_snapshot(cfg)
@@ -95,7 +95,7 @@ def test_card_sheet_scan_opens_no_detail_pages(cfg, monkeypatch):
     # A rescan does not touch the network for lots already pending.
     before = len(browser.visited)
     stats2 = scan(cfg, browser, store, ["GDH206"], limit_per_model=3)
-    assert stats2.reused >= 3 and stats2.opened == 3 and len(browser.visited) == before + 3  # Jim, 2026-10-26: only the 3 new review lots open their page (the day); the pending ones cost nothing
+    assert stats2.reused >= 3 and stats2.opened == 3 and stats2.day_pages == 3 and len(browser.visited) == before + 3  # Jim, 2026-10-26: only the 3 new review lots open their page (the day); the pending ones cost nothing
     store.close()
 
 

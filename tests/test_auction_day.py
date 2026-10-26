@@ -55,6 +55,7 @@ def test_a_waiting_lot_gets_its_day_on_the_next_scan(cfg, monkeypatch):
     row = store.list_proposals(decision="pending", status="NEEDS_REVIEW")[0]
     facts = json.loads(row["facts_json"])
     facts["auction_date"] = facts["auction_place"] = ""  # a proposal stored before the scan read days
+    facts.pop("auction_day_read", None)
     store.update_soft(row["id"], json.loads(row["soft_json"]), facts=facts)
     before = store.conn.execute("SELECT COUNT(*) FROM proposals WHERE ref_no=?", (row["ref_no"],)).fetchone()[0]
     soft_before = store.proposal(row["id"])["soft_json"]
@@ -99,3 +100,68 @@ def test_the_page_is_read_once(cfg, monkeypatch):
     scan(cfg, second, store2, ["GDH206"], limit_per_model=2)
     assert _lot_visits(second) == []
     store.close(); store2.close()
+
+
+def test_a_waiting_lot_that_has_its_day_is_not_read_again_even_with_a_cold_cache(cfg, monkeypatch):
+    _card_only(cfg, monkeypatch)
+    store = Store(cfg.db_path)
+    scan(cfg, FakeBrowser(), store, ["GDH206"], limit_per_model=2)
+    again = FakeBrowser()
+    stats = scan(cfg, again, store, ["GDH206"], limit_per_model=0, fresh=True)  # no new lot, cold cache
+    assert stats.reused >= 2 and stats.day_pages == 0 and _lot_visits(again) == []
+    store.close()
+
+
+def test_a_stored_day_is_carried_forward_to_a_re_evaluated_lot(cfg, monkeypatch):
+    from tests.test_pipeline_offline import PLACEHOLDER_GIF
+    _card_only(cfg, monkeypatch)
+    store = Store(cfg.db_path)
+    scan(cfg, FakeBrowser(PLACEHOLDER_GIF), store, ["GDH206"], limit_per_model=2)  # parked, day read
+    parked = {r["ref_no"] for r in store.list_proposals(decision="pending", status="NEEDS_REVIEW")}
+    assert len(parked) == 2
+    again = FakeBrowser()
+    stats = scan(cfg, again, store, ["GDH206"], limit_per_model=2, fresh=True)  # images arrive, cold cache
+    assert stats.pending == 0 and stats.day_pages == 0 and _lot_visits(again) == []
+    new = [r for r in store.list_proposals(decision="pending", status="NEEDS_REVIEW") if r["ref_no"] in parked]
+    assert len(new) == 2
+    for r in new:
+        f = json.loads(r["facts_json"])
+        assert f["auction_date"] == "20260915" and f["auction_place"] == "CAA Gifu"
+    store.close()
+
+
+def test_a_page_with_no_date_is_read_once_and_flagged(cfg, monkeypatch, caplog):
+    _card_only(cfg, monkeypatch)
+
+    class NoDate(FakeBrowser):
+        def __init__(self):
+            super().__init__()
+            self.detail_html = self.detail_html.replace("AuctionDate: '20260915'", "AuctionDate: ''")
+
+    store = Store(cfg.db_path)
+    with caplog.at_level("WARNING", logger="auction_bot.scan"):
+        first = NoDate()
+        scan(cfg, first, store, ["GDH206"], limit_per_model=2)
+    assert len(_lot_visits(first)) == 2 and "no auction date" in caplog.text
+    for r in store.list_proposals(decision="pending", status="NEEDS_REVIEW"):
+        f = json.loads(r["facts_json"])
+        assert f["auction_date"] == "" and f["auction_day_read"] is True
+    second = NoDate()
+    stats = scan(cfg, second, store, ["GDH206"], limit_per_model=0, fresh=True)
+    assert stats.day_pages == 0 and _lot_visits(second) == []
+    store.close()
+
+
+def test_a_stop_during_the_day_read_keeps_the_judged_lot(cfg, monkeypatch):
+    from auction_bot.progress import Cancelled
+    _card_only(cfg, monkeypatch)
+    import auction_bot.pipeline as pl
+    monkeypatch.setattr(pl, "auction_day", lambda *a, **k: (_ for _ in ()).throw(Cancelled("stopped")))
+    store = Store(cfg.db_path)
+    try:
+        scan(cfg, FakeBrowser(), store, ["GDH206"], limit_per_model=2)
+    except Cancelled:
+        pass
+    rows = store.list_proposals(decision="pending", status="NEEDS_REVIEW")
+    assert len(rows) == 1 and json.loads(rows[0]["facts_json"]).get("auction_date", "") == ""
+    store.close()

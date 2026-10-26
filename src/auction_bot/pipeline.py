@@ -178,9 +178,23 @@ def _read_day(browser: Browser, cfg: Config, ref_no: str, cache, stats: ScanStat
     return day
 
 
+def _day_known(facts) -> bool:
+    return isinstance(facts, dict) and bool(facts.get("auction_date") or facts.get("auction_day_read"))
+
+
+def _read_day_into(store: Store, pid: int, ref_no: str, browser: Browser, cfg: Config, cache, stats: ScanStats) -> None:
+    """Read the lot's page once for its auction day and add it to that stored row (Jim, 2026-10-26)."""
+    day = _read_day(browser, cfg, ref_no, cache, stats)
+    if day is None:
+        return  # failed: left unread, the next scan tries again
+    if not day[0]:
+        log.warning("   %s: the lot page has no auction date", ref_no)
+    store.set_auction_day(pid, day[0], day[1])
+
+
 def _fill_waiting_day(store: Store, browser: Browser, cfg: Config, ref_no: str, rule: ModelRule, cache,
                       stats: ScanStats) -> None:
-    """A lot already waiting for review that has no auction day yet: read it and add it to that row, nothing else."""
+    """A lot already waiting for review whose day was never read: read it and add it to that row, nothing else."""
     prev = store.latest_proposal(ref_no, rule.guide_id)
     if prev is None or prev["decision"] != "pending" or prev["status"] not in ("BID", "NEEDS_REVIEW"):
         return
@@ -188,21 +202,23 @@ def _fill_waiting_day(store: Store, browser: Browser, cfg: Config, ref_no: str, 
         facts = json.loads(prev["facts_json"] or "{}")
     except json.JSONDecodeError:
         return
-    if not isinstance(facts, dict) or facts.get("auction_date"):
+    if not isinstance(facts, dict) or _day_known(facts):
         return
-    day = _read_day(browser, cfg, ref_no, cache, stats)
-    if day and day[0]:
-        store.set_auction_day(prev["id"], day[0], day[1])
+    _read_day_into(store, prev["id"], ref_no, browser, cfg, cache, stats)
 
 
-def _with_day(proposal: dict, browser: Browser, cfg: Config, ref_no: str, cache, stats: ScanStats) -> None:
-    """A new proposal for review without an auction day: read it from the lot's page before it is stored."""
+def _carry_day(store: Store, proposal: dict) -> bool:
+    """Carry the day an earlier row of this vehicle holds into a new proposal for review: no page. True when it needs a read."""
     facts = proposal.get("facts_json")
-    if proposal.get("status") not in ("BID", NEEDS_REVIEW) or not isinstance(facts, dict) or facts.get("auction_date"):
-        return
-    day = _read_day(browser, cfg, ref_no, cache, stats)
-    if day:
-        facts["auction_date"], facts["auction_place"] = day
+    if proposal.get("status") not in ("BID", NEEDS_REVIEW) or not isinstance(facts, dict):
+        return False
+    if _day_known(facts):
+        return False
+    known = store.known_day(proposal["ref_no"])
+    if known:
+        facts.update(known)
+        return False
+    return True
 
 
 def _deleted_soft(store: Store, ref_no: str, guide_id: int | None) -> dict | None:
@@ -308,9 +324,11 @@ def scan(cfg: Config, browser: Browser, store: Store, model_codes: list[str] | N
                 if evidence.get("images_pending"):
                     stats.pending += 1
                     parked = pending_images_proposal(rule, card, evidence, cfg)
-                    _with_day(parked, browser, cfg, card.ref_no, cache, stats)
+                    want_day = _carry_day(store, parked)
                     store.supersede_pending(card.ref_no, rule.guide_id)
-                    store.add_proposal(snapshot=snap_path.name, rule_updated_at=rule.updated_at, run_id=run, **parked)
+                    pid = store.add_proposal(snapshot=snap_path.name, rule_updated_at=rule.updated_at, run_id=run, **parked)
+                    if want_day:
+                        _read_day_into(store, pid, card.ref_no, browser, cfg, cache, stats)
                     stats.review += 1
                     log.info("   %s -> images not published yet | sheet %.1fs, no page opened", summary_line(card), t_sheet)
                     report()
@@ -349,9 +367,11 @@ def scan(cfg: Config, browser: Browser, store: Store, model_codes: list[str] | N
                     stats=stats, judge_client=judge_client, store=store, photo_loader=load_photos,
                     previous_soft=_deleted_soft(store, card.ref_no, rule.guide_id), catalog_client=catalog_client,
                 )
-                _with_day(proposal, browser, cfg, card.ref_no, cache, stats)
+                want_day = _carry_day(store, proposal)
                 store.supersede_pending(card.ref_no, rule.guide_id)
-                store.add_proposal(snapshot=snap_path.name, rule_updated_at=rule.updated_at, run_id=run, **proposal)
+                pid = store.add_proposal(snapshot=snap_path.name, rule_updated_at=rule.updated_at, run_id=run, **proposal)
+                if want_day:  # after the row is stored, so a stop or sign-out here loses no finished judgement
+                    _read_day_into(store, pid, card.ref_no, browser, cfg, cache, stats)
                 _count(stats, proposal["status"])
                 ocr_s = float((facts.sheet_ocr or {}).get("seconds") or 0)
                 bid_txt = f"{proposal['bid_jpy_k']:,}K" if proposal.get("bid_jpy_k") else ""

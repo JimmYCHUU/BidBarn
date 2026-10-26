@@ -409,7 +409,7 @@ class Store:
         self.conn.commit()
 
     def set_auction_day(self, pid: int, date: str, hall: str) -> None:
-        """Add the auction day and hall to one proposal's stored facts; no other key, column or row changes."""
+        """Add the auction day and hall (and `auction_day_read`) to one proposal's stored facts; nothing else changes."""
         row = self.conn.execute("SELECT facts_json FROM proposals WHERE id=?", (pid,)).fetchone()
         if row is None:
             return
@@ -419,10 +419,22 @@ class Store:
             return
         if not isinstance(facts, dict):
             return
-        facts["auction_date"], facts["auction_place"] = date, hall
+        facts["auction_date"], facts["auction_place"], facts["auction_day_read"] = date, hall, True
         self.conn.execute("UPDATE proposals SET facts_json=? WHERE id=?",
                           (json.dumps(facts, ensure_ascii=False, default=str), pid))
         self.conn.commit()
+
+    def known_day(self, ref_no: str) -> dict | None:
+        """The auction day an earlier proposal for this vehicle (any guide) already holds: date, place, read flag."""
+        for r in self.conn.execute("SELECT facts_json FROM proposals WHERE ref_no=? ORDER BY id DESC", (ref_no,)):
+            try:
+                f = json.loads(r["facts_json"] or "{}")
+            except json.JSONDecodeError:
+                continue
+            if isinstance(f, dict) and (f.get("auction_date") or f.get("auction_day_read")):
+                return {"auction_date": f.get("auction_date") or "", "auction_place": f.get("auction_place") or "",
+                        "auction_day_read": True}
+        return None
 
     def supersede_pending(self, ref_no: str, guide_id: int | None) -> int:
         """Retire earlier pending proposals for this vehicle+guide before a fresh evaluation is stored."""
