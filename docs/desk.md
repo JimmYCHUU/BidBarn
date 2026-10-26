@@ -1,4 +1,4 @@
-# The desk (phase 1)
+# The desk (phases 1 and 2)
 
 The desk is a second review page, beside today's. `/`, `/review`, `/list` and `/p/<n>` work as
 before. The desk is at `/desk` (nav item **Desk**) and the bid sheet is at `/bids` (nav item
@@ -73,8 +73,8 @@ A band states the testing lock. **Place as dry run** starts today's `place` comm
 the dashboard's single step: each lot's page is opened, re-checked, the amount typed and read back,
 and a screenshot saved. Nothing is submitted. Live placement cannot be started from this page, and
 while `project_status` is `testing` every placement is a dry run anyway. Results and screenshots
-are read from the stored placement. A dry run leaves a lot approved and waiting, so the next run
-takes it again.
+are read from the stored placement. A lot placed as a dry run is done: the next dry run does not
+type it again (see phase 2 below).
 
 ### The scan change
 
@@ -88,6 +88,52 @@ like any other.
 `day_pages` (pages read only for the day) is in the scan's own summary line and in the run's stored
 summary. It is not on the dashboard run page yet. That is a small follow-up after the pending
 dashboard edits are committed.
+
+## Phase 2: the safer store
+
+Phase 2 changes what the store accepts, so a click that would record the wrong thing is refused.
+Every refusal records nothing.
+
+What you see:
+
+- **One vehicle, one approval.** Approving a vehicle under its second guide is refused at once. The
+  message names the guide and the lot that already hold it. One bid per vehicle stays as before.
+- **A lot that changed under you.** An approval names the version of the lot the page showed. If a
+  later pass changed the lot after you opened it (photos arrived, the model judged it), if a newer
+  scan replaced it, or if another tab decided or cleared it, the approval is refused. The message
+  says which, and the desk loads the lot again. This also covers a decision waiting in its
+  10-second window.
+- **Reopen.** An approved or rejected lot goes back to waiting, until it is placed live. The button
+  is in the lot view of the Decided lane, on the lot's own page (`/p/<n>`) and on the bid sheet.
+  Reopen is not a decision and approves nothing. It is refused while the bids are being placed, for a
+  lot placed live, and for a lot a newer scan replaced (the message names the new lot).
+- **A dry run is done.** A lot placed as a dry run is not typed again by the next dry run. The bid
+  sheet says "Dry run done: not typed again. Reopen it to send it again.", and the next-run marker
+  skips it. A blocked dry run is tried again. A live run, when the lock is lifted one day, still
+  places every approved lot.
+- **A failed live attempt** reads "Live attempt failed" on the bid sheet, not "Placed". It stays out
+  of the queue, because it may have half-happened on Nichibo.
+
+What stays:
+
+- A skip line or a note to the model saved with a decision stays when you reopen it.
+- The reopened decision is kept in the records, but it is no longer learned from: not by insights,
+  not in the past decisions given to the model, not in the overview's recent decisions. The Today
+  log still shows that it happened.
+- Every placement attempt is now kept as history. The `bids` table and its one row per vehicle are
+  unchanged.
+- Evidence: each guide's evaluation files (`rule.json`, `hard.json`, `judge.json`, `soft.json`) now go
+  to `data/evidence/<lot>/guide_<id>/`, so two guides no longer overwrite each other. The sheet, the
+  photos, `facts.json`, `ocr.json` and `catalog.json` stay in the lot folder. Old files stay where they
+  are.
+
+### Choices made in phase 2, to confirm
+
+- The other guide's lot is not closed automatically when one guide is approved. It stays on the desk
+  marked "Covered by the approval of #n under ...", and an approval of it is refused.
+- The check that the lot has not changed runs when the page sends it. All three pages send it. A page
+  left open from before the upgrade approves once without it.
+- A failed live attempt stays out of the queue, as above.
 
 ## The keys
 
@@ -116,11 +162,10 @@ amount below the start price rounded down to thousands: "The amount is below the
 yen, say) waits out the 10 seconds, then the desk shows the route's refusal and nothing is recorded.
 
 
-## What phase 1 leaves out
+## What phases 1 and 2 leave out
 
 - The Rulebook.
 - Scan now on the desk. The Runs page still starts scans.
-- Reopening a sent decision. A decision is final once sent, as on today's pages.
 - Search across sessions.
 - Ctrl+K.
 
@@ -135,16 +180,17 @@ Every action on `/review` and `/p/<n>`, and where it is on the desk.
 | Reject with a reason | `R` or Reject: reason field, sent with the undo window |
 | Standing instruction ("save as standing instruction", `skip:` line suggested from the reason) | The same checkbox and text in the reject panel |
 | "The model was wrong about ... because ..." | The same select in the reject panel, for every lot, with "(nothing to correct)" as the default |
-| Delete (a lot, without a decision) | Clear, `D` twice. **Delete session** stays on `/review` (phase 2) |
+| Delete (a lot, without a decision) | Clear, `D` twice. **Delete session** stays on `/review` |
 | Open on Nichibo | Open on Nichibo in the lot header, `O` |
 | Sheet full size | `S` and `Z`, or a click on the sheet |
 | Photos | Numbered photos, `1` to `9`, `Z`; look-at chips jump to a photo |
 | `x2 guides` | One row marked "2 guides" with a guide switch |
-| Decided state (how long, what was looked at) | The Decided lane; the lot view shows the decision. Timings stay on `/p/<n>` (phase 2) |
+| Decided state (how long, what was looked at) | The Decided lane; the lot view shows the decision. Timings stay on `/p/<n>` |
 | Telemetry (open, sheet zoom, photos click, Nichibo click, amount edit) | Posted to today's event route |
-| Triage order and model heads | The same order. The head links to the guide stay on `/review` (phase 2) |
+| Triage order and model heads | The same order. The head links to the guide stay on `/review` |
 | Next lot after a decision | The next row in the lane is selected |
-| Delete session, Finish, Pause, Resume | Stay on the old pages and the overview (phase 2) |
+| Delete session, Finish, Pause, Resume | Stay on the old pages and the overview |
+| Reopen (phase 2) | **Reopen** in the lot view of the Decided lane, on `/p/<n>` and on the bid sheet |
 | All lots table with filters | Stays at `/list` |
 
 ## Check list for your hands-on check
@@ -164,6 +210,10 @@ Do these on the copy (see below). Each line is one action and what you should se
 - [ ] Open `/`, `/review`, `/list` and `/p/<n>`. They look and behave as before.
 - [ ] Open `/bids`. The lock band says the testing lock is on and placement is a dry run. The lots are numbered in the order placement takes them, the first ones (up to 25) are marked Next dry run, and the line above the sessions says how many wait for a later run.
 - [ ] Optional, after the merge (or only if you sign in to Nichibo in the copy): on `/bids`, click Place as dry run. A run starts; each approved lot gets a screenshot and "Dry-run placed", and nothing is submitted. The lock keeps it a dry run. This opens Nichibo lot pages with the bot's browser profile, which is empty in the worktree, so it needs a sign-in and real Nichibo traffic. Skip it otherwise.
+
+- [ ] Phase 2: approve a vehicle under one guide, then try to approve it under its other guide. It is refused at once, and the message names the first guide and lot.
+- [ ] Phase 2: approve a lot, then press Reopen in its lot view (Decided lane). It returns to waiting, and `/p/<n>` shows no decision. The same button is on `/p/<n>` and on `/bids`.
+- [ ] Phase 2: on `/bids`, click Place as dry run twice (needs the sign-in, as above). The second run does not type the lot again, and the bid sheet says "Dry run done: not typed again. Reopen it to send it again."
 
 ## How to try it before the merge
 

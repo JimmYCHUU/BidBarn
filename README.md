@@ -1,7 +1,7 @@
 # BidBarn 🚗
 
 ![Python 3.12](https://img.shields.io/badge/python-3.12-blue)
-![Tests](https://img.shields.io/badge/tests-611%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-693%20passing-brightgreen)
 ![Playwright](https://img.shields.io/badge/browser-Playwright%20Chromium-45ba4b)
 ![No paid AI](https://img.shields.io/badge/AI%20APIs-none%20required-lightgrey)
 ![Testing lock](https://img.shields.io/badge/placement-testing%20lock%20on-orange)
@@ -33,7 +33,7 @@ the Carbarn dashboard on purpose.
 - [The daily workflow](#the-daily-workflow)
 - [The dashboard](#the-dashboard)
 - [The review page](#the-review-page)
-- [The desk (phase 1)](#the-desk-phase-1)
+- [The desk](#the-desk)
 - [Rules as Carbarn confirmed them](#rules-as-carbarn-confirmed-them)
 - [The judgement layer](#the-judgement-layer)
 - [Standing instructions](#standing-instructions)
@@ -335,7 +335,7 @@ another website's page, is refused, so no page you visit can start a command or 
 | Your decision | Amount, reason, "The model was wrong about … because …" for a judged lot, "save as standing instruction" with a suggested `skip:` line filled in from the reason, Approve / Reject. **Delete** takes the lot out of the review without a decision. The lock is stated in the page header. Decided lots show how long the decision took and what was looked at. |
 | All lots (`/list`) | The plain table with filters by decision, status and model |
 
-## The desk (phase 1)
+## The desk
 
 A second review page beside the first one, at `/desk`, with a bid sheet at `/bids`. The old pages
 are unchanged.
@@ -346,7 +346,12 @@ are unchanged.
 - Clear is never a decision. The bid sheet only starts the dry-run `place` command.
 - The scan opens each lot that reaches the review once more, to read its auction day and hall.
 
-The parity table, the keys, what phase 1 leaves out, the check list and how to try it before the
+Phase 2 made the store safer: an approval claims its vehicle, so a second approval under the other
+guide is refused at once; an approval of a lot that changed or was replaced since the page showed it
+is refused; an approved or rejected lot can be reopened until it is placed live; and a lot placed as
+a dry run is not typed again until reopened.
+
+The parity table, the keys, what the desk leaves out, the check list and how to try it before the
 merge are in [docs/desk.md](docs/desk.md).
 
 ## Rules as Carbarn confirmed them
@@ -555,7 +560,7 @@ Everything the bot downloads stays on the office PC. Git never sees any of it.
 .venv\Scripts\python -m pytest -q
 ```
 
-611 tests: the golden cases from the manual walkthrough against the real GDH206 guide, variant
+693 tests: the golden cases from the manual walkthrough against the real GDH206 guide, variant
 resolution on captured Alphard and E-Class guides, the seat rule, OCR parsing on three real sheets
 plus the header-band crop and its fallback, an offline end-to-end scan against captured Nichibo
 pages, the card-and-sheet path that opens no page, the placeholder path that parks a lot

@@ -37,7 +37,7 @@ builds it: the review routes are defined there, the dashboard routes are registe
 | `POST /finish` | The header's Finish button. Under `bot bid` on a console it sets the event the console waits on; under a Bid run started from the page it writes that run's finish file (see Finish). 404 when no review is waiting |
 | `GET /review`, `/list`, `/p/{id}` | The review pages |
 | `GET /desk`, `/desk/board`, `/desk/lot/{id}` | The desk: lots by auction session and lane. Reads only; its decisions go to `POST /p/{id}/decide`, `/delete` and `/event`. See `docs/desk.md` |
-| `GET /bids` | The bid sheet: the approved lots `bot place` will take, in its order, per auction, the next dry run's lots marked, exposure, the last day's placed lots, and a button that starts the dry-run `place` command |
+| `GET /bids` | The bid sheet: the approved lots `bot place` will take, in its order, per auction, the next dry run's lots marked (a lot already placed as a dry run is done and skipped until reopened), exposure, the last day's placed lots, and a button that starts the dry-run `place` command |
 | `GET /api/status` | The state of the day, as the overview shows it |
 | `GET /api/commands` | The command table, for the forms |
 | `POST /api/runs` | Start a command. Body `{"command": "scan", "options": {...}}`. 201 the run, 400 unknown command or option, 409 something is running |
@@ -47,6 +47,7 @@ builds it: the review routes are defined there, the dashboard routes are registe
 | `POST /api/runs/{id}/cancel` | Stop. 202, or 409 when it is not running |
 | `POST /api/runs/{id}/pause` | Pause a Bid run while it signs in, fetches the guides, scans or judges. 202, or 409 when it is not running or not at one of those stages |
 | `POST /api/sessions/{id}/resume` | Resume the paused session: Bid mode again, in the same session. 201 the run; 409 when that session is not the paused one, or something is running |
+| `POST /p/{id}/reopen` | Return an approved or rejected lot to waiting, until it is placed live. Not a decision. 409 while the bids are being placed, for a lot placed live, and for a lot a newer scan replaced |
 | `POST /p/{id}/delete` | Delete one lot that waits for review, without a decision. JSON `{"ok", "decision", "next_id"}` or a 303 to the next lot; 409 unless it waits |
 | `POST /sessions/{id}/delete`, `/sessions/earlier/delete` | Delete session: its waiting lots leave the review; a running session is stopped first. 409 while it places bids |
 
