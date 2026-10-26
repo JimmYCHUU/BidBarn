@@ -440,3 +440,42 @@ def test_desk_js_a_double_click_decides_one_lot():
     for fn in ("approve", "approveChosen", "rejectWithReason", "clearLot"):
         assert "if (settling()) return;" in _js_fn(src, fn), fn
     assert "now - clearArmed.at < CLEAR_GAP_MS" in _js_fn(src, "clearLot")
+
+
+def _rules_review(cfg, ref, hard, bid):
+    """A lot stored the way the pipeline stores a hard NEEDS_REVIEW: stage hard, the HardResult, no soft_json."""
+    import json
+    store = Store(cfg.db_path)
+    pid = _seed(store, ref, "GDH206", "4", 50_000, bid=bid)
+    store.conn.execute("UPDATE proposals SET hard_json=?, soft_json=NULL, stage='hard' WHERE id=?", (json.dumps(hard), pid))
+    store.conn.commit()
+    store.close()
+    return pid
+
+
+HARD_START = {"status": "NEEDS_REVIEW", "checks": [{"name": "cell", "ok": True, "detail": "2020 / 40K-60K -> 1,000K", "review": False},
+                                                    {"name": "start", "ok": False, "detail": "start price unknown", "review": True}],
+              "variant_name": "Van", "year": 2020, "band_label": "40K-60K", "base_jpy_k": 1000, "bid_jpy_k": 1000,
+              "modifiers_applied": [], "deferred_modifiers": [], "toggles": [], "variant_how": "default", "candidate_bids": {}}
+HARD_AMBIGUOUS = {"status": "NEEDS_REVIEW", "checks": [{"name": "variant", "ok": False, "detail": "two variants fit", "review": True}],
+                  "variant_name": None, "year": None, "band_label": None, "base_jpy_k": None, "bid_jpy_k": None,
+                  "modifiers_applied": [], "deferred_modifiers": [], "toggles": [], "variant_how": "ambiguous",
+                  "candidate_bids": {"Van DX": 1200, "Van GL": None}}
+
+
+def test_a_lot_the_rules_sent_to_review_is_in_needs_a_look(cfg):
+    pid = _rules_review(cfg, "HS1", HARD_START, 1000)
+    client, _ = _client(cfg)
+    board = client.get("/desk/board").text
+    assert re.search(rf'data-pid="{pid}"[^>]*data-lane="look"', board)
+    t = client.get(f"/desk/lot/{pid}").text
+    assert "Card-clear" not in t and "start: start price unknown" in t
+
+
+def test_the_lot_view_shows_the_rules_reasons_and_the_per_variant_amounts(cfg):
+    pid = _rules_review(cfg, "HV1", HARD_AMBIGUOUS, None)
+    client, _ = _client(cfg)
+    t = client.get(f"/desk/lot/{pid}").text
+    amount = t.split('aria-label="Amount"')[1].split("</section>")[0]
+    assert "two variants fit" in amount
+    assert "Van DX" in amount and "1,200K" in amount and "Van GL" in amount and "no bid" in amount

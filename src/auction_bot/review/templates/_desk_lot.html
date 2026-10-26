@@ -80,6 +80,14 @@
     {% if h.base_jpy_k %}<p class="num muted">Grid cell {{ h.year }} / {{ h.band_label }} = {{ '{:,}'.format(h.base_jpy_k) }}K{% if h.variant_name %} · {{ h.variant_name }}{% endif %}</p>{% endif %}
     {% if h.modifiers_applied %}<p class="muted">Modifiers: {{ h.modifiers_applied|join(', ') }}</p>{% endif %}
     {% if h.deferred_modifiers %}<p class="dl-warn">Modifier you must judge yourself: {{ h.deferred_modifiers|join('; ') }}</p>{% endif %}
+    {% set failed = (h.checks or [])|rejectattr('ok')|list %}
+    {% if failed %}
+    <p class="muted">The rules could not settle this lot:</p>
+    <ul class="dl-checks">
+      {% for c in failed %}<li class="dl-check dl-check--{{ 'unclear' if c.review else 'fail' }}"><b>{{ c.name }}</b> {{ c.detail }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    {% if h.candidate_bids %}<p class="num">Per variant: {% for name, amt in h.candidate_bids.items() %}<b>{{ name }}</b> {% if amt %}{{ '{:,}'.format(amt) }}K{% else %}no bid{% endif %}{% if not loop.last %}; {% endif %}{% endfor %}</p>{% endif %}
     {% if s.candidates %}<p class="num muted">Candidates: {% for c in s.candidates %}{{ '{:,}'.format(c.amount_k) }}K ({{ c.label }}){% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
   </section>
 

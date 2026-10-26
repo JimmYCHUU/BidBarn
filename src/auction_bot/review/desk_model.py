@@ -65,28 +65,51 @@ def _photo_no(p: dict, req_id: str) -> int | None:
     return None
 
 
+SEATS_NOT_READ = "Seats: the sheet's seat count was not read"
+
+
+def hard_reasons(hard: dict | None) -> list[str]:
+    """The hard checks that failed or could not be decided, as `HardResult.reasons` words them ("start: start
+    price unknown"). Read from the stored `HardResult.to_dict()`; anything unreadable is skipped."""
+    out = []
+    for c in (hard or {}).get("checks") or []:
+        if isinstance(c, dict) and not c.get("ok"):
+            name, detail = c.get("name") or "rule", c.get("detail") or ""
+            out.append(f"{name}: {detail}" if detail else name)
+    return out
+
+
 def look_items(p: dict) -> list[LookItem]:
     """What Jim should look at before this lot can be approved. Strict card-clear: anything the model
-    observed, anything unclear or failing, an odd-case flag, an eligibility verdict other than eligible
-    or a missing amount is an item."""
+    observed, anything unclear or failing (the hard rules' own review reasons and deferred modifiers too),
+    an odd-case flag, an eligibility verdict other than eligible, an unread seat count or a missing amount
+    is an item. A lot the rules sent to review with no judgement stored is never card-clear."""
     soft = p.get("soft") or {}
+    hard = p.get("hard") if isinstance(p.get("hard"), dict) else {}
     items: list[LookItem] = []
     if soft.get("images_pending"):
         items.append(LookItem("The sheet and photos are not published yet. The amount comes from the card.", "wait", "page"))
     if soft.get("judge_pending"):
         items.append(LookItem("Waiting for the model (free quota used up).", "wait", "page"))
+    items += [LookItem(r, "unclear", "grid") for r in hard_reasons(hard)]
     judged = soft.get("mode") == "judge"
     badges = p.get("badges") or []
+    seats_read = (p.get("facts") or {}).get("seats") is not None
     for i, r in enumerate(soft.get("requirements") or []):
         try:
             req = _requirement(r)
-            skip = r.get("source") == "card" or r.get("kind") == "eligibility" or machine_decided(req)
+            seat_rule = machine_decided(req)
+            skip = r.get("source") == "card" or r.get("kind") == "eligibility" or (seat_rule and seats_read)
         except (TypeError, KeyError, AttributeError):
             # A stored requirement we cannot read is uncertainty, never a reason to read card-clear or to fail the page.
             said = r.get("text") if isinstance(r, dict) else None
             items.append(LookItem(said if isinstance(said, str) and said else "A requirement could not be read", "unclear", "page"))
             continue
         if skip:
+            continue
+        if seat_rule:
+            # The hard seat check is skipped while the count is unknown, so the rule is answered by nobody yet.
+            items.append(LookItem(SEATS_NOT_READ, "unclear", "sheet"))
             continue
         photo_no = _photo_no(p, r["id"])
         where = "photo" if photo_no else {"photos": "photo", "any": "photo", "sheet": "sheet"}.get(r.get("source"), "page")
@@ -100,7 +123,11 @@ def look_items(p: dict) -> list[LookItem]:
         items.append(LookItem(text, kind, where, photo_no))
     if not judged:
         items += [LookItem(c, "check", "page") for c in soft.get("checklist") or [] if "auto-skip rule in force" not in c]
-    items += [LookItem(f, "check", "grid") for f in soft.get("flags") or []]
+    flags = [f for f in soft.get("flags") or [] if isinstance(f, str)]
+    items += [LookItem(f, "check", "grid") for f in flags]
+    # A modifier the rules could not decide (judge mode already names it in a flag; manual mode does not).
+    items += [LookItem(f"Modifier you must judge yourself: {m}", "unclear", "grid")
+              for m in hard.get("deferred_modifiers") or [] if not any(str(m) in f for f in flags)]
     items += [LookItem(h.get("message", ""), "check", "sheet") for h in soft.get("hints") or [] if h.get("level") != "info"]
     elig = p.get("eligibility") or {}
     if elig.get("verdict") == "cannot_import":
@@ -113,6 +140,10 @@ def look_items(p: dict) -> list[LookItem]:
         items.append(LookItem("No amount from the grid. Type one with E.", "check", "grid"))
     if p.get("recommendation") == "skip" and not any(i.kind == "fail" for i in items):
         items.append(LookItem("The model recommends skip.", "check", "page"))
+    if not items and p.get("status") == "NEEDS_REVIEW" and not p.get("soft"):
+        # The pipeline stores a hard NEEDS_REVIEW without soft_json: nothing judged it, so it is never card-clear.
+        first = next(iter(hard_reasons(hard) + [r for r in hard.get("reasons") or [] if isinstance(r, str)]), "no reason was stored")
+        items.append(LookItem(f"The rules sent this lot to review: {first}", "unclear", "grid"))
     return items
 
 

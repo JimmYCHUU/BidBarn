@@ -29,7 +29,8 @@ def _p(pid, ref, **over):
 def test_a_routine_lot_with_a_seat_rule_is_card_clear():
     r = _req("r0", "8 seats", "sheet")
     assert machine_decided(Requirement(**r))
-    p = _p(1, "A", soft={"requirements": [r]}, badges=[{"mark": "·", "cls": "unk", "text": "8 seats", "evidence": ""}])
+    p = _p(1, "A", soft={"requirements": [r]}, facts={"seats": 8},  # the OCR read the seat count
+           badges=[{"mark": "·", "cls": "unk", "text": "8 seats", "evidence": ""}])
     look = look_items(p)
     assert look == [] and lane_of(p, look) == "clear"
 
@@ -208,3 +209,91 @@ def test_bid_sheet_screenshot_url_stays_inside_evidence():
     r = bid_sheet([_a(1, "A", 1000, placement={"ok": True, "dry_run": True, "screenshot": shot},
                       evidence={"dir": "C:/x/evidence/lotdir"})])[0].rows[0]
     assert r.screenshot == "/evidence/lotdir/shot.png"
+
+
+# -- Final review fixes: lots the rules sent to review, unread seat counts (I1), the auto-skip line (M1) ----
+
+import json  # noqa: E402
+
+from auction_bot.nichibo.facts import VehicleFacts  # noqa: E402
+from auction_bot.pipeline import load_rules, scan  # noqa: E402
+from auction_bot.review.app import _load  # noqa: E402
+from auction_bot.rules.hard import evaluate_hard  # noqa: E402
+from auction_bot.store import Store  # noqa: E402
+from tests.test_pipeline_offline import FakeBrowser, cfg  # noqa: E402,F401  (fixture)
+
+
+def _hard(status="NEEDS_REVIEW", checks=(), **over):
+    """A hard result as HardResult.to_dict() stores it."""
+    h = {"status": status, "checks": [{"name": n, "ok": ok, "detail": d, "review": rv} for n, ok, d, rv in checks],
+         "variant_name": None, "year": None, "band_label": None, "base_jpy_k": None, "bid_jpy_k": None,
+         "modifiers_applied": [], "deferred_modifiers": [], "toggles": [], "variant_how": None, "candidate_bids": {}}
+    h.update(over)
+    return h
+
+
+def _rules_review_row(cfg, mutate):
+    """A real scanned lot whose facts `mutate` changes, re-judged by the real hard rules and stored the way the
+    pipeline stores a hard NEEDS_REVIEW: no soft_json. Returns (the _load row, the HardResult)."""
+    store = Store(cfg.db_path)
+    try:
+        scan(cfg, FakeBrowser(), store, ["GDH206"], limit_per_model=1)
+        row = store.list_proposals(decision="pending")[0]
+        facts = VehicleFacts.from_dict(json.loads(row["facts_json"]))
+        mutate(facts)
+        rule = next(r for r in load_rules(cfg, None, ["GDH206"])[0] if r.guide_id == row["guide_id"])
+        hard = evaluate_hard(facts, rule)
+        pid = store.add_proposal(ref_no="HR1", guide_id=rule.guide_id, model_code=rule.model_code, snapshot="s",
+                                 rule_updated_at="u", status=hard.status, stage="hard", bid_jpy_k=hard.bid_jpy_k,
+                                 base_jpy_k=hard.base_jpy_k, summary="hard review", facts_json=facts.to_dict(),
+                                 hard_json=hard.to_dict())
+        return _load(store.proposal(pid)), hard
+    finally:
+        store.close()
+
+
+def test_start_price_unknown_is_not_card_clear(cfg):
+    p, hard = _rules_review_row(cfg, lambda f: setattr(f, "start_price_jpy", None))
+    assert hard.status == "NEEDS_REVIEW" and hard.bid_jpy_k and hard.reasons == ["start: start price unknown"]
+    assert p["soft"] is None and p["proposed_bid_jpy_k"]  # it has an amount, so nothing else would hold it back
+    items = look_items(p)
+    assert LookItem("start: start price unknown", "unclear", "grid") in items
+    assert lane_of(p, items) == "look"
+
+
+def test_an_ambiguous_variant_from_the_rules_needs_a_look():
+    p = _p(1, "A", proposed_bid_jpy_k=None, hard=_hard(
+        checks=[("variant", False, "two variants fit (Van DX: 1,200K; Van GL: no bid)", True)],
+        candidate_bids={"Van DX": 1200, "Van GL": None}))
+    p["soft"] = None
+    items = look_items(p)
+    assert items[0] == LookItem("variant: two variants fit (Van DX: 1,200K; Van GL: no bid)", "unclear", "grid")
+    assert lane_of(p, items) == "look"
+
+
+def test_a_rules_review_row_without_soft_is_never_card_clear():
+    p = _p(1, "A", hard=_hard(checks=[("grade", True, "grade 4 >= min 3.5", False)]))
+    p["soft"] = None
+    assert look_items(p) == [LookItem("The rules sent this lot to review: no reason was stored", "unclear", "grid")]
+
+
+def test_a_deferred_modifier_needs_a_look_once():
+    m = "+50K if SEATS = 10"
+    manual = _p(1, "A", soft={"mode": "manual"}, hard=_hard(status="PASS", deferred_modifiers=[m]))
+    assert LookItem(f"Modifier you must judge yourself: {m}", "unclear", "grid") in look_items(manual)
+    judged = _p(2, "B", soft={"flags": [f"modifier needs judgement: {m}"]}, hard=_hard(status="PASS", deferred_modifiers=[m]))
+    assert [i.text for i in look_items(judged)] == [f"modifier needs judgement: {m}"]  # the flag already names it
+
+
+def test_a_passing_hard_result_adds_nothing():
+    p = _p(1, "A", hard=_hard(status="PASS", checks=[("variant", True, "chassis", False), ("start", True, "ok", False)]))
+    assert look_items(p) == []
+
+
+def test_an_unread_seat_count_needs_a_look():
+    r = _req("r0", "8 seats", "sheet")
+    p = _p(1, "A", soft={"requirements": [r]}, badges=[{"mark": "·", "cls": "unk", "text": "8 seats", "evidence": ""}])
+    assert p["facts"].get("seats") is None
+    look = look_items(p)
+    assert look == [LookItem("Seats: the sheet's seat count was not read", "unclear", "sheet")]
+    assert lane_of(p, look) == "look"
