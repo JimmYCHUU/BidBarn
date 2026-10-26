@@ -304,3 +304,56 @@ def bid_sheet(approved: list[dict], next_run: int = 0) -> list[BidGroup]:
         g.rows.append(row)
         g.exposure_k += row.amount_k
     return sorted(groups.values(), key=session_order)
+
+
+# -- the scan bar --------------------------------------------------------------------------------
+
+@dataclass
+class ScanState:
+    """What the desk's scan bar shows and offers. `kind`: idle, running, signin, busy or failed."""
+    kind: str
+    text: str
+    run_id: int | None
+    can_start: bool
+    can_stop: bool
+    poll_seconds: int
+
+
+def _hhmm(stamp: str | None) -> str:
+    from auction_bot.dashboard.status import parse_time
+    t = parse_time(stamp)
+    return t.astimezone().strftime("%H:%M") if t else ""
+
+
+def scan_state(status: dict) -> ScanState:
+    """The scan bar from `gather_status`'s dict. Pure: it starts and stops nothing."""
+    current = status.get("current")
+    if current and current.get("command") == "scan-now":
+        prog = current.get("progress") or {}
+        rid = current.get("id")
+        if prog.get("stage") == "signin" and prog.get("waiting"):
+            text = ("Nichibo signed out during the scan. Sign in in the bot's window; the scan carries on after that."
+                    if prog.get("expired") else "Sign in to Nichibo in the bot's window. The scan carries on after that.")
+            return ScanState("signin", text, rid, False, True, 5)
+        if prog.get("stage") == "scan" and prog.get("guides"):
+            new = int(prog.get("review") or 0) + int(prog.get("bid") or 0)
+            text = f"Scanning: guide {prog.get('guide') or 0} of {prog['guides']}, {new} new for the desk so far."
+        else:
+            text = "Scanning: checking the sign-in and the guides."
+        return ScanState("running", text, rid, False, True, 5)
+    if current:
+        label = current.get("label") or current.get("command") or "Another run"
+        return ScanState("busy", f"{label} is running. Scan now waits until it has finished.", current.get("id"), False, False, 15)
+    last = status.get("last_runs") or {}
+    runs = [r for r in (last.get(c) for c in ("scan-now", "scan", "bid"))
+            if r and r.get("status") in ("ok", "failed", "stopped")]
+    newest = max(runs, key=lambda r: r.get("finished_at") or r.get("started_at") or "", default=None)
+    if newest is None:
+        return ScanState("idle", "No scan yet.", None, True, False, 60)
+    if newest["status"] != "ok":
+        return ScanState("failed", f"The last scan stopped at {_hhmm(newest.get('finished_at') or newest.get('started_at'))}: "
+                         f"{newest.get('error') or 'stopped'}", None, True, False, 60)
+    summary = newest.get("summary") or {}
+    n = int(summary.get("review") or 0) + int(summary.get("bid") or 0)
+    return ScanState("idle", f"Last scan {_hhmm(newest.get('finished_at') or newest.get('started_at'))}, {n} new for the desk.",
+                     None, True, False, 60)

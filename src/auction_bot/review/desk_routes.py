@@ -13,7 +13,7 @@ from fastapi.responses import HTMLResponse
 
 from auction_bot.dashboard import status as dashboard_status
 from auction_bot.dashboard.guides import rules_for_code, variant_view
-from auction_bot.review.desk_model import DECIDED_WINDOW, LANES, bid_row, bid_sheet, build_desk, look_items
+from auction_bot.review.desk_model import DECIDED_WINDOW, LANES, bid_row, bid_sheet, build_desk, look_items, scan_state
 
 LANE_NAMES = {"look": "Needs a look", "clear": "Card-clear", "wait": "Waiting", "done": "Decided"}
 ALL_WAITING = 100_000  # approved_unplaced's limit for the bid sheet: every waiting approval, not one run's worth
@@ -81,7 +81,18 @@ def register(app, templates, cfg, store, page, *, load, sort_key) -> None:
             ctx["pulse"] = dashboard_status.gather_status(cfg, s, request.app.state.jobs)
         finally:
             s.close()
+        ctx["scan"] = scan_state(ctx["pulse"])
         return page(request, "desk.html", "desk", **ctx)
+
+    @app.get("/desk/scan", response_class=HTMLResponse)
+    def desk_scan(request: Request):
+        """The scan bar fragment. Reads the status only; desk_scan.js starts and stops through /api/runs."""
+        s = store()
+        try:
+            status = dashboard_status.gather_status(cfg, s, request.app.state.jobs)
+        finally:
+            s.close()
+        return templates.TemplateResponse(request, "_desk_scan.html", {"scan": scan_state(status)})
 
     @app.get("/bids", response_class=HTMLResponse)
     def bids(request: Request):

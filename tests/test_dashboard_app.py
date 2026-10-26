@@ -679,3 +679,14 @@ def test_a_last_event_id_that_is_not_a_number_starts_from_the_top(cfg):
 def test_dashboard_js_scan_counters_show_the_day_pages():
     src = (Path(__file__).resolve().parent.parent / "src" / "auction_bot" / "review" / "static" / "dashboard.js").read_text(encoding="utf-8")
     assert '["day_pages", p.day_pages, "Lot pages read for the auction day"]' in src
+
+
+def test_a_finished_scan_now_run_marks_the_scanned_step_done(cfg):
+    from auction_bot.dashboard.status import gather_status
+    _run(cfg, "scan-now", summary={"review": 1})
+    s = Store(cfg.db_path)
+    try:
+        st = gather_status(cfg, s, FakeJobs(cfg))
+    finally:
+        s.close()
+    assert next(x for x in st["steps"] if x["key"] == "scan")["state"] == "done"

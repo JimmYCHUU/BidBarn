@@ -840,3 +840,44 @@ def test_a_bad_session_key_is_no_session(cfg):
 def test_review_js_a_refused_decision_says_to_reload():
     src = (DESK_JS.parent / "review.js").read_text(encoding="utf-8")
     assert '" Reload the page to see the lot as it is now."' in src and "x.status === 409" in src
+
+
+def test_the_desk_has_a_scan_bar(cfg):
+    client, _ = _client(cfg)
+    r = client.get("/desk")
+    assert "data-desk-scan" in r.text and "Scan now" in r.text and "/static/desk_scan.js" in r.text
+
+
+def test_the_scan_fragment_is_its_own_route(cfg):
+    client, _ = _client(cfg)
+    r = client.get("/desk/scan")
+    assert r.status_code == 200 and "data-desk-scan" in r.text and "<html" not in r.text
+    assert 'data-desk-scan-act="start"' in r.text
+    assert client.get("/desk/scan", headers={"Host": "evil.example"}).status_code == 403
+
+
+def test_a_running_scan_offers_stop(cfg):
+    from tests.test_dashboard_app import FakeJobs
+
+    class Scanning(FakeJobs):
+        def current(self):
+            return {"id": 9, "command": "scan-now", "args": [], "started_at": "2026-10-26T01:00:00+00:00",
+                    "progress": {"stage": "scan", "guide": 3, "guides": 12, "review": 1, "bid": 0},
+                    "cancel_requested": False, "pause_requested": False, "session_id": None}
+
+    client, _ = _client(cfg, Scanning(cfg))
+    t = client.get("/desk/scan").text
+    assert 'data-desk-scan-act="stop"' in t and 'data-desk-scan-act="start"' not in t
+    assert 'data-run="9"' in t and 'data-kind="running"' in t and 'data-poll="5"' in t
+
+
+def test_desk_scan_js_starts_only_a_scan():
+    from pathlib import Path
+    import auction_bot.review as rv
+    body = (Path(rv.__file__).parent / "static" / "desk_scan.js").read_text(encoding="utf-8")
+    assert re.findall(r'command:\s*"([^"]+)"', body) == ["scan-now"]
+    # fetch goes to the poll address or to the one `send` helper, which is called with two addresses only
+    assert sorted(t.strip() for t in re.findall(r'fetch\(([^,)]+)', body)) == ['"/desk/scan"', "url"]
+    assert re.findall(r'send\(("[^"]+"(?: \+ run \+ "/cancel")?)', body) == ['"/api/runs"', '"/api/runs/" + run + "/cancel"']
+    for banned in ("--live", "place", "bid", "learn", "/finish", "/auction/bid", "nichibojapan"):
+        assert banned not in body.lower(), banned

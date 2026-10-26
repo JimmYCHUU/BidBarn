@@ -584,6 +584,9 @@
     if (narrow.matches && state.lot && !lotPane.contains(t) && !t.closest("#desk-toast, .desk-row, .desk-pending, .desk-sess, .desk-lane")) closeLot();
   });
   window.addEventListener("pagehide", sendAllNow);
+  // The scan bar (desk_scan.js) asks for a fresh board while a scan runs. refreshBoard keeps the open lot (state.lot
+  // is not touched) and the queue (decisions in their window are never dropped by a repaint).
+  document.addEventListener("desk:refresh", function () { refreshBoard(); });
 
   readBoardState();
   paintBoard();

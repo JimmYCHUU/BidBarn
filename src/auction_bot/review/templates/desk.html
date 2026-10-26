@@ -11,10 +11,11 @@
     <span class="pill pill--lock {{ 'pill--bad' if pulse.lock.label == 'LIVE PLACEMENT' else ('pill--info' if pulse.lock.label == 'DRY RUN' else 'pill--warn') }}">{{ pulse.lock.label }}</span>
   </div>
 </div>
+<div class="desk-scanbar" id="desk-scan">{% include "_desk_scan.html" %}</div>
 <div class="desk" id="desk">
   <section class="desk-board" id="desk-board" aria-label="Lots">{% include "_desk_board.html" %}</section>
   <aside class="desk-lot" id="desk-lot" aria-label="Lot"></aside>
 </div>
 <div id="desk-toast" class="desk-toast" role="status" aria-live="polite"></div>
 {% endblock %}
-{% block scripts %}<script src="/static/desk.js?v={{ asset_v }}" defer></script>{% endblock %}
+{% block scripts %}<script src="/static/desk.js?v={{ asset_v }}" defer></script><script src="/static/desk_scan.js?v={{ asset_v }}" defer></script>{% endblock %}

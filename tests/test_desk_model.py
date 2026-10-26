@@ -322,3 +322,42 @@ def test_bid_sheet_amount_falls_back_to_the_grid_amount_as_placement_does():
     # run.place_approved types approved_bid_jpy_k or bid_jpy_k
     g = bid_sheet([_p(1, "A", decision="approved", approved_bid_jpy_k=None, bid_jpy_k=1100), _a(2, "B", 1000)])[0]
     assert [r.amount_k for r in g.rows] == [1100, 1000] and g.exposure_k == 2100
+
+
+def _status(current=None, **last):
+    return {"current": current, "last_runs": last}
+
+
+def _run_row(command, status, finished, summary=None, error=None):
+    return {"id": 7, "command": command, "status": status, "started_at": finished, "finished_at": finished,
+            "summary": summary or {}, "error": error}
+
+
+def test_scan_state_reads_each_kind():
+    from auction_bot.review.desk_model import scan_state
+    none = scan_state(_status())
+    assert (none.kind, none.text, none.can_start, none.can_stop, none.poll_seconds) == ("idle", "No scan yet.", True, False, 60)
+    ok = scan_state(_status(**{"scan-now": _run_row("scan-now", "ok", "2026-10-26T01:00:00+00:00", {"review": 3, "bid": 2})}))
+    assert ok.kind == "idle" and ok.text.endswith(", 5 new for the desk.") and ok.text.startswith("Last scan ")
+    running = scan_state(_status({"id": 4, "command": "scan-now", "label": "Scan now",
+                                  "progress": {"stage": "scan", "guide": 3, "guides": 12, "review": 3, "bid": 2}}))
+    assert running.kind == "running" and "guide 3 of 12" in running.text and "5 new" in running.text
+    assert (running.run_id, running.can_start, running.can_stop, running.poll_seconds) == (4, False, True, 5)
+    early = scan_state(_status({"id": 4, "command": "scan-now", "label": "Scan now", "progress": {"stage": "guides"}}))
+    assert early.kind == "running" and early.text == "Scanning: checking the sign-in and the guides."
+    sign = scan_state(_status({"id": 4, "command": "scan-now", "label": "Scan now", "progress": {"stage": "signin", "waiting": True}}))
+    assert sign.kind == "signin" and sign.text == "Sign in to Nichibo in the bot's window. The scan carries on after that."
+    assert sign.can_stop and not sign.can_start and sign.poll_seconds == 5
+    out = scan_state(_status({"id": 4, "command": "scan-now", "label": "Scan now",
+                              "progress": {"stage": "signin", "waiting": True, "expired": True}}))
+    assert out.kind == "signin" and out.text.startswith("Nichibo signed out during the scan.")
+    busy = scan_state(_status({"id": 5, "command": "place", "label": "Place", "progress": {}}))
+    assert busy.kind == "busy" and busy.text == "Place is running. Scan now waits until it has finished."
+    assert (busy.can_start, busy.can_stop, busy.poll_seconds) == (False, False, 15)
+    failed = scan_state(_status(**{"scan-now": _run_row("scan-now", "failed", "2026-10-26T01:00:00+00:00", error="boom"),
+                                   "scan": _run_row("scan", "ok", "2026-10-25T01:00:00+00:00", {"review": 9})}))
+    assert failed.kind == "failed" and failed.text.startswith("The last scan stopped at ") and failed.text.endswith(": boom")
+    assert failed.can_start and not failed.can_stop and failed.poll_seconds == 60
+    newer_ok = scan_state(_status(**{"scan-now": _run_row("scan-now", "failed", "2026-10-25T01:00:00+00:00", error="x"),
+                                     "bid": _run_row("bid", "ok", "2026-10-26T01:00:00+00:00", {"review": 1})}))
+    assert newer_ok.kind == "idle" and "1 new" in newer_ok.text

@@ -1,0 +1,5 @@
+<div class="desk-scan desk-scan--{{ scan.kind }}" data-desk-scan data-kind="{{ scan.kind }}" data-run="{{ scan.run_id if scan.run_id is not none else '' }}" data-poll="{{ scan.poll_seconds }}">
+  <span class="desk-scan-text" role="status">{{ scan.text }}</span>
+  {% if scan.can_start %}<button type="button" class="btn btn--sm" data-desk-scan-act="start">Scan now</button>{% endif %}
+  {% if scan.can_stop %}<button type="button" class="btn btn--sm" data-desk-scan-act="stop">Stop</button>{% endif %}
+</div>

@@ -159,3 +159,11 @@
 /* Final review: the rows the next dry run takes. */
 .bids-order { margin: 0 0 12px; color: var(--ink-2); }
 .bids-next td:first-child { box-shadow: inset 3px 0 0 var(--blue); }
+
+/* The scan bar: one sentence and the Scan now / Stop button. Amber for sign-in and a stopped scan, quiet otherwise. */
+.desk-scanbar { margin: 0 0 12px; }
+.desk-scan { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 6px 12px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); color: var(--ink-2); font-size: 13px; }
+.desk-scan-text { flex: 1 1 auto; min-width: 0; }
+.desk-scan--idle, .desk-scan--busy { color: var(--ink-3); background: var(--surface-2); }
+.desk-scan--running { border-color: var(--line-strong); color: var(--ink); }
+.desk-scan--signin, .desk-scan--failed { border-color: var(--warn-line); background: var(--warn-bg); color: var(--warn-ink); }

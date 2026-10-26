@@ -328,7 +328,9 @@ def day_steps(s: dict, cache_hours: float) -> list[dict]:
         b = step("guides", "Guides are fresh", "done", f"{rules['active_guides']} active guides, fetched {ago(rules['fetched_at'])}.",
                  command="fetch-rules")
 
-    scan = last.get("scan")
+    # The day's scan is the newest finished one of the two scanning commands (a Bid run is not counted here, as before).
+    scan = max((r for r in (last.get("scan"), last.get("scan-now")) if r),
+               key=lambda r: r.get("finished_at") or r.get("started_at") or "", default=None)
     scan_age = age_hours(scan["finished_at"]) if scan and scan["status"] == "ok" else None
     if scan_age is not None and scan_age <= cache_hours:
         c = step("scan", "Scanned", "done", f"Finished {ago(scan['finished_at'])}.", command="scan")
