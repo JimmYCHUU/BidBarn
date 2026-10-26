@@ -8,8 +8,11 @@
   <span class="page-sub">{{ groups|sum(attribute='rows', start=[])|length }} approved{% if groups %}, exposure {{ '{:,}'.format(total_k) }}K{% endif %}</span>
 </div>
 <div class="banner banner--warn bids-lock">{{ icon('lock') }}<div>
-  {% if lock_label == 'LIVE PLACEMENT' %}Placement is not a dry run in this setup. Live placement cannot be started from this page.
-  {% else %}Testing lock is on. Placement is a dry run: each lot's page is opened, re-checked, the amount typed and read back, and a screenshot saved. Nothing is submitted. Live placement cannot be started from this page.{% endif %}
+  {# lock_state reads "dry" for a finished project with dry_run false (no live flag), so the label tells live apart #}
+  {% if lock_label == 'LIVE PLACEMENT' %}Placement from this page is still a dry run. Live placement is started only by hand, outside this page.
+  {% elif lock_state != 'testing' %}Placement is a dry run (dry_run in config.yaml): each lot's page is opened, re-checked, the amount typed and read back, and a screenshot saved. Nothing is submitted. Live placement cannot be started from this page.
+  {% else %}Testing lock is on. Placement is a dry run: each lot's page is opened, re-checked, the amount typed and read back, and a screenshot saved. Nothing is submitted. Live placement cannot be started from this page.
+  {% endif %}
 </div></div>
 {% for g in groups %}
 <section class="card bids-group">

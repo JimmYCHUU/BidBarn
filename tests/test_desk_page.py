@@ -382,7 +382,7 @@ def test_the_bid_sheet_page_lists_approved_lots(cfg):
     client, _ = _approve_two(cfg)
     html = client.get("/bids").text
     assert "A1" in html and "B2" in html and "C3" not in html and "Exposure" in html
-    assert "Testing lock is on." in html
+    assert "Testing lock is on. Placement is a dry run: each lot's page is opened, re-checked, the amount typed and read back, and a screenshot saved. Nothing is submitted. Live placement cannot be started from this page." in html
 
 
 def test_the_bid_sheet_shows_a_dry_run_and_a_block(cfg):
@@ -401,3 +401,22 @@ def test_the_bid_sheet_cannot_ask_for_a_live_placement(cfg):
     assert "--" + "live" not in html
     assert 'data-run-command="place"' in html
     assert 'data-run-command="scan"' not in html
+
+
+def test_the_bid_sheet_lock_band_in_the_dry_state(cfg):
+    cfg.project_status = "The project is finished"
+    cfg.dry_run = True
+    client, _ = _approve_two(cfg)
+    html = client.get("/bids").text
+    assert "Placement is a dry run (dry_run in config.yaml)" in html
+    assert "Testing lock is on" not in html and "--" + "live" not in html
+
+
+def test_the_bid_sheet_lock_band_in_the_live_state(cfg):
+    cfg.project_status = "The project is finished"
+    cfg.dry_run = False
+    client, _ = _approve_two(cfg)
+    html = client.get("/bids").text
+    assert "Placement from this page is still a dry run. Live placement is started only by hand, outside this page." in html
+    assert "Testing lock is on" not in html and "--" + "live" not in html
+    assert 'data-run-command="place"' in html
