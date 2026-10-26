@@ -244,10 +244,12 @@ def place_approved(cfg: Config, echo: Callable[[str], None] = print, headless: b
     lines: list[str] = []
     store = Store(cfg.db_path)
     try:
-        rows = store.approved_unplaced(cfg.max_bids_per_run)
+        rows = store.approved_unplaced(cfg.max_bids_per_run, dry_run=dry)
         progress.emit(stage="place", i=0, total=len(rows), dry_run=dry)
         if not rows:
-            echo("No approved bids waiting.")
+            done = store.dry_done_count() if dry else 0
+            echo(f"No approved bids waiting: {done} already placed as a dry run. Reopen one to type it again."
+                 if done else "No approved bids waiting.")
             return lines
         echo(f"{'DRY RUN' if dry else 'LIVE'} ({why}): {len(rows)} approved bid(s)")
         factory = browser_factory or (lambda: Browser(cfg, headless=headless))
@@ -259,6 +261,12 @@ def place_approved(cfg: Config, echo: Callable[[str], None] = print, headless: b
                     echo("  " + lines[-1])
                     progress.emit(stage="place", i=i, total=len(rows), ref_no=row["ref_no"], ok=False, skipped=True,
                                   message="already bid", screenshot=None, dry_run=dry)
+                    continue
+                if not store.still_approved(row["id"]):  # reopened (or replaced) since the run started
+                    lines.append(f"skip {row['ref_no']}: reopened since the run started")
+                    echo("  " + lines[-1])
+                    progress.emit(stage="place", i=i, total=len(rows), ref_no=row["ref_no"], ok=False, skipped=True,
+                                  message="reopened", screenshot=None, dry_run=dry)
                     continue
                 facts = VehicleFacts.from_dict(json.loads(row["facts_json"]))
                 amount = int(row["approved_bid_jpy_k"] or row["bid_jpy_k"])

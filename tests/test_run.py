@@ -12,7 +12,8 @@ from fastapi.testclient import TestClient
 from auction_bot import lock
 from auction_bot.pipeline import scan
 from auction_bot.review.app import create_app
-from auction_bot.run import place_approved, run, wait_for_review
+from auction_bot.nichibo.bid import PlacementResult
+from auction_bot.run import place_approved, run, wait_for_review
 from auction_bot.store import Store
 from tests.test_card_sheet import _BidBrowser
 from tests.test_pipeline_offline import FakeBrowser, cfg  # noqa: F401  (fixture)
@@ -803,4 +804,63 @@ def test_place_approved_stops_between_lots_never_inside_one(cfg, monkeypatch, tm
         place_approved(cfg, echo=lines.append, browser_factory=lambda: nullcontext(StoppedAtThePageLoad(1240)))
     store = Store(cfg.db_path)
     assert store.proposal(second)["placement_json"] is None and len(lines) == 3  # only the DRY RUN heading was added
+    store.close()
+
+
+def _two_approved(cfg):
+    store = Store(cfg.db_path)
+    scan(cfg, FakeBrowser(), store, ["GDH206"], limit_per_model=2)
+    a, b = [r["id"] for r in store.list_proposals(decision="pending", status="NEEDS_REVIEW")]
+    store.decide(a, "approve", None, 1240, False)
+    store.decide(b, "approve", None, 1240, False)
+    return store, a, b
+
+
+def test_place_approved_leaves_out_lots_already_placed_as_a_dry_run(cfg, monkeypatch):
+    store, a, b = _two_approved(cfg)
+    store.record_placement(a, store.proposal(a)["ref_no"], "GDH206", 1240, True, "dry ok", None, dry_run=True)
+    store.close()
+    seen = []
+
+    def fake_place_bid(browser, cfg_, ref_no, amount, facts, dry_run=True):
+        seen.append(ref_no)
+        return PlacementResult(True, "dry run", None, dry_run)
+
+    monkeypatch.setattr("auction_bot.nichibo.bid.place_bid", fake_place_bid)
+    out = place_approved(cfg, echo=lambda s: None, browser_factory=lambda: nullcontext(object()))
+    store = Store(cfg.db_path)
+    assert seen == [store.proposal(b)["ref_no"]] and len(out) == 1
+    store.close()
+
+
+def test_place_approved_says_why_nothing_is_typed(cfg):
+    store = Store(cfg.db_path)
+    scan(cfg, FakeBrowser(), store, ["GDH206"], limit_per_model=1)
+    a = store.list_proposals(decision="pending")[0]["id"]
+    store.decide(a, "approve", None, 1240, False)
+    store.record_placement(a, store.proposal(a)["ref_no"], "GDH206", 1240, True, "dry ok", None, dry_run=True)
+    store.close()
+    lines = []
+    out = place_approved(cfg, echo=lines.append, browser_factory=lambda: nullcontext(object()))
+    assert out == [] and any("already placed as a dry run" in ln and "Reopen" in ln for ln in lines)
+
+
+def test_place_approved_skips_a_lot_reopened_during_the_run(cfg, monkeypatch):
+    store, a, b = _two_approved(cfg)
+    last = max(a, b)  # placement takes the older lot first; the newer is reopened while it runs
+    store.close()
+    seen = []
+
+    def fake_place_bid(browser, cfg_, ref_no, amount, facts, dry_run=True):
+        seen.append(ref_no)
+        other = Store(cfg.db_path)
+        other.reopen(last)
+        other.close()
+        return PlacementResult(True, "dry run", None, dry_run)
+
+    monkeypatch.setattr("auction_bot.nichibo.bid.place_bid", fake_place_bid)
+    out = place_approved(cfg, echo=lambda s: None, browser_factory=lambda: nullcontext(object()))
+    store = Store(cfg.db_path)
+    assert len(seen) == 1
+    assert f"skip {store.proposal(last)['ref_no']}: reopened since the run started" in out
     store.close()

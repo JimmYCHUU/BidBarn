@@ -61,6 +61,17 @@ CREATE TABLE IF NOT EXISTS bids (
   message TEXT,
   screenshot TEXT
 );
+CREATE TABLE IF NOT EXISTS placements (  -- every placement attempt, dry or live; `bids` stays the one-bid-per-vehicle guard
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  proposal_id INTEGER NOT NULL,
+  ref_no TEXT NOT NULL,
+  mode TEXT NOT NULL,              -- dry | live
+  ok INTEGER NOT NULL,
+  message TEXT,
+  screenshot TEXT,
+  at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_placements_proposal ON placements(proposal_id);
 CREATE TABLE IF NOT EXISTS bid_intents (
   ref_no TEXT PRIMARY KEY,         -- one claim per vehicle: the proposal approved for it
   proposal_id INTEGER NOT NULL UNIQUE,
@@ -173,7 +184,8 @@ class Store:
         except sqlite3.Error:
             pass
         self.conn.executescript(SCHEMA)
-        self._ensure_columns("proposals", {"guide_id": "INTEGER", "run_id": "INTEGER"})  # databases created before these
+        self._ensure_columns("proposals", {"guide_id": "INTEGER", "run_id": "INTEGER",
+                                           "rev": "INTEGER NOT NULL DEFAULT 0"})  # databases created before these
         self._ensure_columns("runs", RUN_COLUMNS)
         self.conn.execute("CREATE INDEX IF NOT EXISTS ix_proposals_run ON proposals(run_id)")  # after the column exists
         self.conn.commit()
@@ -363,9 +375,12 @@ class Store:
         newer = self._newer_than(p)
         if newer is not None:
             raise Refused(f"A newer scan replaced this lot. Decide the new one (lot {newer['id']}).")
-        self.conn.execute(
+        cur = self.conn.execute(
             "UPDATE proposals SET decision='pending', decision_reason=NULL, decided_at=NULL, approved_bid_jpy_k=NULL, "
-            "placement_json=NULL WHERE id=?", (pid,))
+            "placement_json=NULL WHERE id=? AND decision IN ('approved','rejected') AND placed_at IS NULL", (pid,))
+        if cur.rowcount != 1:  # a live placement in another process finished since the check above
+            self.conn.rollback()
+            raise Refused("This lot was placed live, so it cannot be reopened.")
         self.conn.execute("DELETE FROM bid_intents WHERE proposal_id=?", (pid,))
         self.conn.execute(
             "UPDATE decisions SET undone_at=? WHERE id=(SELECT MAX(id) FROM decisions WHERE proposal_id=? AND undone_at IS NULL)",
@@ -373,12 +388,16 @@ class Store:
         self.conn.commit()
 
     def decide(self, pid: int, action: str, reason: str | None, amount_jpy_k: int | None, make_rule: bool,
-               via: str = "detail") -> None:
+               via: str = "detail", seen_rev: int | None = None) -> None:
         """Record the human decision. The only caller is the review page (CLAUDE.md, rule 1). Refuses a lot that is
-        no longer pending, and an approval of a vehicle another proposal already holds the claim on."""
+        no longer pending, a lot whose judgement changed since the page that asked (`seen_rev`), and an approval of
+        a vehicle another proposal already holds the claim on."""
         p = self.proposal(pid)
         if p is None:
             raise KeyError(pid)
+        if seen_rev is not None and seen_rev != p["rev"]:
+            raise Refused("This lot changed since you opened it: a later pass updated its judgement. "
+                          "Look at it again before deciding.")
         why = self.not_pending_reason(p)
         if why:
             raise Refused(why)
@@ -491,7 +510,7 @@ class Store:
 
     def update_soft(self, pid: int, soft: dict, facts: dict | None = None, evidence: dict | None = None) -> None:
         """Store a (new) judgement on an existing pending proposal without superseding it."""
-        sets, args = ["soft_json=?"], [json.dumps(soft, ensure_ascii=False, default=str)]
+        sets, args = ["soft_json=?", "rev=rev+1"], [json.dumps(soft, ensure_ascii=False, default=str)]
         if facts is not None:
             sets.append("facts_json=?"); args.append(json.dumps(facts, ensure_ascii=False, default=str))
         if evidence is not None:
@@ -579,9 +598,28 @@ class Store:
         self.conn.commit()
         return cur.rowcount
 
-    def approved_unplaced(self, limit: int) -> list[sqlite3.Row]:
+    # A dry run that came back ok is done: `placement_json` says dry_run and ok (NULL or malformed counts as not done).
+    _DRY_DONE = "json_valid(p.placement_json) AND json_extract(p.placement_json,'$.dry_run')=1 AND json_extract(p.placement_json,'$.ok')=1"
+
+    def approved_unplaced(self, limit: int, dry_run: bool = False) -> list[sqlite3.Row]:
+        """Approved lots not placed live that hold their vehicle's claim, oldest first. A dry run leaves out the
+        lots an earlier dry run already placed ok (reopen one to type it again)."""
+        skip = f" AND NOT COALESCE({self._DRY_DONE}, 0)" if dry_run else ""
         return self.conn.execute(
-            "SELECT * FROM proposals WHERE decision='approved' AND placed_at IS NULL ORDER BY id LIMIT ?", (limit,)).fetchall()
+            "SELECT p.* FROM proposals p JOIN bid_intents i ON i.proposal_id=p.id "
+            f"WHERE p.decision='approved' AND p.placed_at IS NULL{skip} ORDER BY p.id LIMIT ?", (limit,)).fetchall()
+
+    def dry_done_count(self) -> int:
+        """How many approved lots a dry run leaves out because an earlier dry run placed them ok."""
+        return self.conn.execute(
+            "SELECT COUNT(*) FROM proposals p JOIN bid_intents i ON i.proposal_id=p.id "
+            f"WHERE p.decision='approved' AND p.placed_at IS NULL AND COALESCE({self._DRY_DONE}, 0)").fetchone()[0]
+
+    def still_approved(self, pid: int) -> bool:
+        """True while the lot is approved, not placed, and holds its vehicle's claim (not reopened since a run began)."""
+        return self.conn.execute(
+            "SELECT 1 FROM proposals p JOIN bid_intents i ON i.proposal_id=p.id "
+            "WHERE p.id=? AND p.decision='approved' AND p.placed_at IS NULL", (pid,)).fetchone() is not None
 
     def placed_since(self, since: str) -> list[sqlite3.Row]:
         """Proposals placed live at or after `since` (UTC ISO text as `now()` writes it), newest first. Read-only:
@@ -594,8 +632,11 @@ class Store:
                          message: str, screenshot: str | None, dry_run: bool) -> None:
         ts = now()
         payload = json.dumps({"ok": ok, "message": message, "screenshot": screenshot, "dry_run": dry_run, "at": ts})
-        if dry_run:
-            self.conn.execute("UPDATE proposals SET placement_json=? WHERE id=?", (payload, pid))
+        self.conn.execute(
+            "INSERT INTO placements(proposal_id, ref_no, mode, ok, message, screenshot, at) VALUES(?,?,?,?,?,?,?)",
+            (pid, ref_no, "dry" if dry_run else "live", int(ok), message, screenshot, ts))
+        if dry_run:  # only while the lot is still approved: a reopened lot must not keep a stale dry result
+            self.conn.execute("UPDATE proposals SET placement_json=? WHERE id=? AND decision='approved'", (payload, pid))
         else:
             self.conn.execute("UPDATE proposals SET placed_at=?, placement_json=? WHERE id=?", (ts, payload, pid))
             if ok:

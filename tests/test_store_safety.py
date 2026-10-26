@@ -1,4 +1,6 @@
 """The store's own safety: one claim per vehicle, a pending check inside decide, and Reopen."""
+import sqlite3
+
 import pytest
 
 from auction_bot.dashboard.status import day_log
@@ -109,3 +111,105 @@ def test_an_old_database_gets_its_approvals_claimed_once(tmp_path):
     s.close()
     s = Store(path)
     assert s.conn.execute("SELECT COUNT(*) FROM bid_intents").fetchone()[0] == 1
+
+
+def test_a_live_placement_that_lands_during_reopen_is_not_undone(tmp_path, monkeypatch):
+    path = tmp_path / "b.sqlite"
+    s = Store(path); a = _add(s)
+    s.decide(a, "approve", None, 1000, False)
+
+    def placed_meanwhile(ref_no):  # reopen's check passes, then another process places the lot live
+        other = sqlite3.connect(str(path))
+        other.execute("UPDATE proposals SET placed_at='2026-10-26T00:00:00+00:00' WHERE id=?", (a,))
+        other.commit(); other.close()
+        return False
+
+    monkeypatch.setattr(s, "already_bid", placed_meanwhile)
+    with pytest.raises(Refused, match="placed live"):
+        s.reopen(a)
+    row = s.proposal(a)
+    assert row["decision"] == "approved" and row["placed_at"]
+    assert s.intent_for("R1")["proposal_id"] == a
+    assert s.conn.execute("SELECT undone_at FROM decisions WHERE proposal_id=?", (a,)).fetchone()["undone_at"] is None
+
+
+def test_a_later_judgement_bumps_the_revision(tmp_path):
+    s = Store(tmp_path / "b.sqlite"); a = _add(s)
+    assert s.proposal(a)["rev"] == 0
+    s.update_soft(a, {"mode": "judge"})
+    assert s.proposal(a)["rev"] == 1
+
+
+def test_an_approval_of_an_older_revision_is_refused(tmp_path):
+    s = Store(tmp_path / "b.sqlite"); a = _add(s); b = _add(s, "R2")
+    s.update_soft(a, {"mode": "judge"})
+    with pytest.raises(Refused, match="changed since you opened it"):
+        s.decide(a, "approve", None, 1000, False, seen_rev=0)
+    assert s.proposal(a)["decision"] == "pending" and s.intent_for("R1") is None
+    s.decide(a, "approve", None, 1000, False, seen_rev=1)
+    s.decide(b, "approve", None, 1000, False, seen_rev=None)
+    assert s.proposal(a)["decision"] == "approved" and s.proposal(b)["decision"] == "approved"
+
+
+def test_every_placement_attempt_is_kept(tmp_path):
+    s = Store(tmp_path / "b.sqlite"); a = _add(s)
+    s.decide(a, "approve", None, 1000, False)
+    s.record_placement(a, "R1", "GDH206", 1000, True, "dry ok", None, dry_run=True)
+    s.record_placement(a, "R1", "GDH206", 1000, False, "blocked", None, dry_run=True)
+    rows = s.conn.execute("SELECT mode, ok FROM placements WHERE proposal_id=? ORDER BY id", (a,)).fetchall()
+    assert [(r["mode"], r["ok"]) for r in rows] == [("dry", 1), ("dry", 0)]
+
+
+def test_a_lot_placed_as_a_dry_run_is_not_typed_again(tmp_path):
+    s = Store(tmp_path / "b.sqlite"); a = _add(s); b = _add(s, "R2")
+    s.decide(a, "approve", None, 1000, False); s.decide(b, "approve", None, 1000, False)
+    s.record_placement(a, "R1", "GDH206", 1000, True, "dry ok", None, dry_run=True)
+    assert [r["id"] for r in s.approved_unplaced(10, dry_run=True)] == [b]
+    assert [r["id"] for r in s.approved_unplaced(10)] == [a, b]  # a live run still takes both
+    assert s.dry_done_count() == 1
+
+
+def test_a_blocked_dry_run_is_tried_again(tmp_path):
+    s = Store(tmp_path / "b.sqlite"); a = _add(s)
+    s.decide(a, "approve", None, 1000, False)
+    s.record_placement(a, "R1", "GDH206", 1000, False, "blocked", None, dry_run=True)
+    assert [r["id"] for r in s.approved_unplaced(10, dry_run=True)] == [a]
+    assert s.dry_done_count() == 0
+
+
+def test_reopened_and_approved_again_is_typed_again(tmp_path):
+    s = Store(tmp_path / "b.sqlite"); a = _add(s)
+    s.decide(a, "approve", None, 1000, False)
+    s.record_placement(a, "R1", "GDH206", 1000, True, "dry ok", None, dry_run=True)
+    s.reopen(a)
+    s.decide(a, "approve", None, 1000, False)
+    assert [r["id"] for r in s.approved_unplaced(10, dry_run=True)] == [a]
+
+
+def test_only_the_claim_holder_is_placed(tmp_path):
+    path = tmp_path / "b.sqlite"
+    s = Store(path); a = _add(s, guide=223); b = _add(s, guide=224)
+    s.conn.execute("UPDATE proposals SET decision='approved', approved_bid_jpy_k=bid_jpy_k, decided_at=?", ("2026-10-01T00:00:00+00:00",))
+    s.conn.execute("DELETE FROM bid_intents")
+    s.conn.commit(); s.close()
+    s = Store(path)  # the backfill gives the claim to the oldest
+    assert [r["id"] for r in s.approved_unplaced(10)] == [a]
+    assert s.still_approved(a) and not s.still_approved(b)
+
+
+def test_a_dry_result_does_not_land_on_a_reopened_lot(tmp_path):
+    s = Store(tmp_path / "b.sqlite"); a = _add(s)
+    s.decide(a, "approve", None, 1000, False)
+    s.reopen(a)
+    s.record_placement(a, "R1", "GDH206", 1000, True, "dry ok", None, dry_run=True)
+    assert s.proposal(a)["placement_json"] is None
+    assert s.conn.execute("SELECT COUNT(*) FROM placements WHERE proposal_id=?", (a,)).fetchone()[0] == 1
+
+
+def test_a_live_result_is_always_recorded(tmp_path):
+    s = Store(tmp_path / "b.sqlite"); a = _add(s)
+    s.decide(a, "approve", None, 1000, False)
+    s.reopen(a)
+    s.record_placement(a, "R1", "GDH206", 1000, True, "ok", None, dry_run=False)
+    assert s.proposal(a)["placed_at"] is not None and s.already_bid("R1")
+    assert s.conn.execute("SELECT mode FROM placements WHERE proposal_id=?", (a,)).fetchone()["mode"] == "live"
