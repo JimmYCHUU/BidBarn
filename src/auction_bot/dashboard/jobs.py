@@ -142,6 +142,10 @@ COMMANDS: dict[str, Cmd] = {
         "Learn mode", True, {}, lambda v: ["learn"],
         help="Opens the bot's browser for you: bid as usual and type why in the blue box. The bot only watches, "
              "then scans what you searched and reports lot by lot."),
+    "scan-now": Cmd(
+        "Scan now", True, {}, lambda v: ["scan-now"],
+        help="Checks the sign-in, fetches the guides and scans Nichibo for every active guide. It does not wait for "
+             "you and places nothing: new lots appear on the desk as they are stored."),
     "scan": Cmd(
         "Scan Nichibo", True,
         {"model": _MODEL, "headless": _HIDDEN,

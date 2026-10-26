@@ -300,7 +300,7 @@ def _evidence_rel(cfg: Config, path: str | None) -> str | None:
 
 # -- the whole day -----------------------------------------------------------------------------
 
-SCAN_KEYS = ("cards", "opened", "review", "bid", "skip", "reused", "pending", "model_calls")
+SCAN_KEYS = ("cards", "opened", "review", "bid", "skip", "reused", "pending", "day_pages", "model_calls")
 
 
 def bid_summary(cfg: Config, out: RunSummary) -> dict:
@@ -363,6 +363,64 @@ def run(cfg: Config, echo: Callable[[str], None] = print, skip_scan: bool = Fals
     echo("")
     echo("Done. " + (f"{out.approved} approved bid(s) handled." if out.approved else "Nothing was placed."))
     progress.summary(bid_summary(cfg, out))
+    return out
+
+
+def scan_now_summary(cfg: Config, out: RunSummary, signed_in_again: bool) -> dict:
+    """The closing numbers of a Scan now run: a Bid run's without the review and placement keys."""
+    d = bid_summary(cfg, out)
+    for key in ("approved", "dry_run", "lines"):
+        del d[key]
+    d["signed_in_again"] = signed_in_again
+    return d
+
+
+def scan_now(cfg: Config, echo: Callable[[str], None] = print, headed: bool = False,
+             steps: dict | None = None) -> RunSummary:
+    """Sign in if needed, fetch the guides and scan: no review wait and no placement, so nothing waits on a person.
+
+    If Nichibo signs out during the scan, the sign-in step runs once more (it opens a window for Jim) and the scan
+    carries on; a second sign-out stops the run. `steps` lets tests swap the step functions, as `run()` does."""
+    from auction_bot.nichibo.browser import NotLoggedIn
+
+    s = steps or {}
+    sign_in = s.get("ensure_signed_in", ensure_signed_in)
+    guides = s.get("fetch_guides", fetch_guides)
+    scan = s.get("scan_all", scan_all)
+    out = RunSummary()
+    total = 3
+    n = 0
+    again = False
+
+    def step(title: str, key: str) -> None:
+        nonlocal n
+        n += 1
+        echo(f"\n[{n}/{total}] {title}")
+        out.steps.append(title)
+        progress.emit(stage=key, step=n, steps=total)
+
+    echo("BidBarn scan now (nothing is reviewed or placed)")
+    lock.acquire(cfg, lock.command_name())
+    try:
+        step("Checking the sign-in", "signin")
+        sign_in(cfg, echo)
+        step("Fetching the bidding guides", "guides")
+        out.guides, _ = guides(cfg, echo)
+        step("Scanning Nichibo", "scan")
+        try:
+            out.scan = scan(cfg, echo, headless=not headed)
+        except NotLoggedIn:
+            again = True
+            progress.emit(stage="signin", expired=True, waiting=True)
+            echo("Nichibo signed out during the scan. A browser window is opening: sign in there and the scan carries on.")
+            sign_in(cfg, echo)
+            progress.emit(stage="scan", step=n, steps=total)
+            out.scan = scan(cfg, echo, headless=not headed)
+    finally:
+        lock.release(cfg)
+    echo("")
+    echo("Done. Nothing was reviewed or placed.")
+    progress.summary(scan_now_summary(cfg, out, again))
     return out
 
 

@@ -639,12 +639,12 @@ def combinations(cmd: Cmd):
 
 
 def test_the_table_is_the_daily_set():
-    assert list(COMMANDS) == ["bid", "learn", "scan", "fetch-rules", "judge", "replay", "sheet-trial", "place", "insights", "login",
+    assert list(COMMANDS) == ["bid", "learn", "scan-now", "scan", "fetch-rules", "judge", "replay", "sheet-trial", "place", "insights", "login",
                               "check-login"]
-    assert {n for n, c in COMMANDS.items() if c.needs_profile} == {"bid", "learn", "scan", "fetch-rules", "judge", "sheet-trial",
+    assert {n for n, c in COMMANDS.items() if c.needs_profile} == {"bid", "learn", "scan-now", "scan", "fetch-rules", "judge", "sheet-trial",
                                                                    "place", "login", "check-login"}
     assert {n: sorted(c.options) for n, c in COMMANDS.items()} == {
-        "bid": [], "learn": [],  # the two modes take no options from the page
+        "bid": [], "learn": [], "scan-now": [],  # the modes take no options from the page
         "scan": ["fresh", "headless", "limit", "model", "rescan"], "fetch-rules": ["model"], "judge": ["limit", "model"],
         "replay": ["apply", "model"], "sheet-trial": ["count", "model"], "place": ["headless"],
         "insights": ["days", "min_support", "model"], "login": [], "check-login": []}
@@ -766,6 +766,13 @@ def test_a_table_that_asks_for_live_placement_is_refused():
     cmds = {"place": Cmd("Place", True, {}, lambda v: ["place", "--live"])}
     with pytest.raises(BadRequest, match="dry run only"):
         build_argv("place", {}, cmds)
+
+
+def test_scan_now_is_a_command_the_pages_can_start():
+    assert build_argv("scan-now") == ["scan-now"]
+    assert "scan-now" in [c["name"] for c in describe()]
+    with pytest.raises(BadRequest):
+        build_argv("scan-now", {"live": True})
 
 
 def test_describe_is_plain_data_for_the_page(cfg):

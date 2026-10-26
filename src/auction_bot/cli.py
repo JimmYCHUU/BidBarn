@@ -282,6 +282,17 @@ def bid(skip_scan: bool = typer.Option(False, help="Do not scan; review and plac
     run_all(cfg, echo=typer.echo, skip_scan=skip_scan, no_place=no_place, headed=headed, open_browser=not no_browser)
 
 
+@app.command("scan-now")
+@friendly
+def scan_now(headed: bool = typer.Option(False, help="Show the browser during the scan")) -> None:
+    """Scan now: sign in if needed, fetch the guides and scan. No review wait, nothing placed."""
+    _log()
+    cfg = load_config()
+    from auction_bot.run import scan_now as scan_all_now
+
+    scan_all_now(cfg, echo=typer.echo, headed=headed)
+
+
 @app.command()
 @friendly
 def replay(model: list[str] = typer.Option(None, "--model", "-m", help="Only these model codes"),

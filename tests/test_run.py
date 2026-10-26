@@ -13,7 +13,8 @@ from auction_bot import lock
 from auction_bot.pipeline import scan
 from auction_bot.review.app import create_app
 from auction_bot.nichibo.bid import PlacementResult
-from auction_bot.run import place_approved, run, wait_for_review
+from auction_bot.nichibo.browser import NotLoggedIn
+from auction_bot.run import place_approved, run, scan_now, wait_for_review
 from auction_bot.store import Store
 from tests.test_card_sheet import _BidBrowser
 from tests.test_pipeline_offline import FakeBrowser, cfg  # noqa: F401  (fixture)
@@ -51,6 +52,73 @@ def test_run_calls_the_steps_in_order(cfg):
     order.clear()
     out = run(cfg, echo=lines.append, steps=steps, skip_scan=True, no_place=True, headed=True)
     assert [n for n, _ in order] == ["login", "guides", "review"] and out.placed == [] and len(out.steps) == 3
+
+
+def _scan_now_steps(calls, scan_result=None, scan_raises=None, guides_raises=None):
+    def signin(c, echo):
+        calls.append("signin")
+
+    def guides(c, echo):
+        calls.append("guides")
+        if guides_raises:
+            raise guides_raises
+        return 7, None
+
+    def scan_stub(c, echo, **kw):
+        calls.append("scan")
+        if scan_raises and scan_raises(calls):
+            raise NotLoggedIn("signed out")
+        return scan_result if scan_result is not None else {"cards": 3, "review": 2, "day_pages": 1, "errors": []}
+
+    return {"ensure_signed_in": signin, "fetch_guides": guides, "scan_all": scan_stub}
+
+
+def test_scan_now_signs_in_fetches_and_scans_and_nothing_else(cfg, monkeypatch):
+    import auction_bot.run as runmod
+    from auction_bot import progress
+
+    def boom(*a, **k):
+        raise AssertionError("scan_now must not review or place")
+
+    for name in ("wait_for_review", "serve_review", "place_approved"):
+        monkeypatch.setattr(runmod, name, boom)
+    summaries = []
+    monkeypatch.setattr(progress, "summary", summaries.append)
+    calls, lines = [], []
+    out = scan_now(cfg, echo=lines.append, steps=_scan_now_steps(calls))
+    assert calls == ["signin", "guides", "scan"]
+    assert len(out.steps) == 3 and out.guides == 7
+    d = summaries[0]
+    assert d["signed_in_again"] is False and len(d["steps"]) == 3 and d["day_pages"] == 1
+    assert "approved" not in d and "lines" not in d and "dry_run" not in d
+    assert lock.holder(cfg) is None
+
+
+def test_scan_now_signs_in_again_once_when_nichibo_signs_out(cfg, monkeypatch):
+    from auction_bot import progress
+
+    summaries = []
+    monkeypatch.setattr(progress, "summary", summaries.append)
+    calls, lines = [], []
+    steps = _scan_now_steps(calls, scan_raises=lambda c: c.count("scan") == 1)
+    scan_now(cfg, echo=lines.append, steps=steps)
+    assert calls == ["signin", "guides", "scan", "signin", "scan"]
+    assert summaries[0]["signed_in_again"] is True
+    assert any("signed out during the scan" in ln for ln in lines)
+
+
+def test_scan_now_stops_on_a_second_sign_out(cfg):
+    calls = []
+    with pytest.raises(NotLoggedIn):
+        scan_now(cfg, echo=lambda s: None, steps=_scan_now_steps(calls, scan_raises=lambda c: True))
+    assert calls == ["signin", "guides", "scan", "signin", "scan"]
+    assert lock.holder(cfg) is None
+
+
+def test_scan_now_gives_the_profile_back_when_a_step_fails(cfg):
+    with pytest.raises(RuntimeError):
+        scan_now(cfg, echo=lambda s: None, steps=_scan_now_steps([], guides_raises=RuntimeError("x")))
+    assert lock.holder(cfg) is None
 
 
 def test_place_approved_uses_place_bid_and_records(cfg):
