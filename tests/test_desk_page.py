@@ -714,3 +714,37 @@ def test_the_bid_sheet_reads_a_failed_live_attempt_as_failed(cfg):
     store.close()
     html = client.get("/bids").text
     assert "Live attempt failed" in html and "error: x" in html
+
+
+def _lane_of(html, pid):
+    m = re.search(r'<[^>]*class="[^"]*desk-row[^"]*"[^>]*data-pid="%d"[^>]*>' % pid, html)
+    assert m, "no row"
+    return re.search(r'data-lane="(\w+)"', m.group(0)).group(1)
+
+
+def test_a_covered_lot_stays_covered_however_old_the_approval(cfg):
+    from datetime import datetime, timedelta, timezone
+    store = Store(cfg.db_path)
+    a = _seed(store, "TW1", "GDH206", "4", 50_000, guide=223)
+    b = _seed(store, "TW1", "GDH206", "4", 50_000, guide=224)
+    c = _seed(store, "TW2", "GDH206", "4", 50_000, guide=223)
+    d = _seed(store, "TW2", "GDH206", "4", 50_000, guide=224)
+    store.close()
+    client, _ = _client(cfg)
+    _approve(client, a); _approve(client, c)
+    old = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat(timespec="seconds")
+    store = Store(cfg.db_path)
+    store.record_placement(c, "TW2", "GDH206", 1000, True, "placed", None, dry_run=False)  # c: placed live
+    store.conn.execute("UPDATE proposals SET decided_at=?, placed_at=COALESCE(placed_at, ?) WHERE id IN (?,?)", (old, old, a, c))
+    store.conn.commit(); store.close()
+    html = client.get("/desk/board").text
+    assert _lane_of(html, b) == "done" and _lane_of(html, d) == "done"
+    # covered lots are not work: the sessions' undecided counts see none of them
+    from auction_bot.review.desk_model import build_desk
+    from auction_bot.review.app import _load
+    store = Store(cfg.db_path)
+    pending = [_load(r) for r in store.list_triage()]
+    covering = [_load(r) for r in store.covering_proposals()]
+    store.close()
+    sessions = build_desk(pending, [], lambda p: (p["id"],), datetime.now(timezone.utc), covering=covering)
+    assert sum(s.undecided() for s in sessions) == 0

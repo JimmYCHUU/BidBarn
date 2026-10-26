@@ -65,10 +65,11 @@ def register(app, templates, cfg, store, page, *, load, sort_key) -> None:
         s = store()
         try:
             pending = [load(r) for r in s.list_triage()]
+            covering = [load(r) for r in s.covering_proposals()]
             decided = [load(r) for r in s.decided_since((datetime.now(timezone.utc) - DECIDED_WINDOW).isoformat(timespec="seconds"))]
         finally:
             s.close()
-        sessions = build_desk(pending, decided, sort_key, datetime.now(timezone.utc))
+        sessions = build_desk(pending, decided, sort_key, datetime.now(timezone.utc), covering=covering)
         key, current_lane = _choose(sessions, session, lane)
         return {"sessions": sessions, "current": key, "lane": current_lane, "lanes": LANES, "lane_names": LANE_NAMES}
 

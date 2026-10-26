@@ -372,6 +372,13 @@ class Store:
             "SELECT * FROM proposals WHERE decision IN ('approved','rejected','deleted') AND decided_at >= ? "
             "ORDER BY decided_at DESC, id DESC", (since,)).fetchall()
 
+    def covering_proposals(self) -> list[sqlite3.Row]:
+        """Approved proposals that hold their vehicle's claim, or that were placed live, however old the approval.
+        They cover the same vehicle's other proposals on the desk. Bounded by the live claims and placed lots."""
+        return self.conn.execute(
+            "SELECT p.* FROM proposals p WHERE p.decision='approved' AND (p.placed_at IS NOT NULL "
+            "OR p.id IN (SELECT proposal_id FROM bid_intents)) ORDER BY p.id").fetchall()
+
     def reopen(self, pid: int) -> None:
         """Return an approved or rejected lot that was not placed live to waiting, and free its vehicle's claim.
         Never approves anything. The undone decision stays in `decisions` (marked) for the day log."""

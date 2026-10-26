@@ -188,16 +188,20 @@ def _when(p: dict) -> datetime | None:
         return None
 
 
-def build_desk(pending: list[dict], decided: list[dict], sort_key: Callable[[dict], tuple], now: datetime) -> list[Session]:
+def build_desk(pending: list[dict], decided: list[dict], sort_key: Callable[[dict], tuple], now: datetime,
+               covering: list[dict] | None = None) -> list[Session]:
     """Sessions from the pending rows (one lot per vehicle, even when two guides propose it) and the last
     24 hours of decisions. A vehicle approved under one guide shows the other guide's proposal as done
     (covered), never as work and never decided for Jim.
 
     The store writes `decided_at` as UTC ISO text. Both it and `now` are compared as aware UTC; a naive
-    value (a test's fixed `now`, say) is taken to be UTC."""
+    value (a test's fixed `now`, say) is taken to be UTC.
+
+    `covering` is every approval that still holds its vehicle or was placed (no time window); a pending lot of
+    such a vehicle is covered however old the approval is. It adds to the approvals found in `decided`."""
     now = _utc(now)
     approved: dict[str, int] = {}
-    for d in sorted(decided, key=lambda r: _when(r) or _MIN):
+    for d in sorted(list(covering or []) + decided, key=lambda r: _when(r) or _MIN):
         if d.get("decision") == "approved":
             approved[d["ref_no"]] = d["id"]
     lots: list[DeskLot] = []
