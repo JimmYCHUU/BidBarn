@@ -106,11 +106,13 @@ What you see:
 - **Reopen.** An approved or rejected lot goes back to waiting, until it is placed live. The button
   is in the lot view of the Decided lane, on the lot's own page (`/p/<n>`) and on the bid sheet.
   Reopen is not a decision and approves nothing. It is refused while the bids are being placed, for a
-  lot placed live, and for a lot a newer scan replaced (the message names the new lot).
+  lot placed live, and for a lot whose live attempt failed. A lot a newer scan replaced (`bot scan
+  --rescan`) does not go back to waiting: Reopen retires it, frees the vehicle, and the message names
+  the new lot to decide. The desk opens that lot.
 - **A dry run is done.** A lot placed as a dry run is not typed again by the next dry run. The bid
   sheet says "Dry run done: not typed again. Reopen it to send it again.", and the next-run marker
   skips it. A blocked dry run is tried again. A live run, when the lock is lifted one day, still
-  places every approved lot.
+  places every approved lot that holds its vehicle, one per vehicle.
 - **A failed live attempt** reads "Live attempt failed" on the bid sheet, not "Placed". It stays out
   of the queue, because it may have half-happened on Nichibo.
 
@@ -134,6 +136,8 @@ What stays:
 - The check that the lot has not changed runs when the page sends it. All three pages send it. A page
   left open from before the upgrade approves once without it.
 - A failed live attempt stays out of the queue, as above.
+- Reopen on a lot a newer scan replaced retires the old lot and points at the new one, instead of
+  refusing. The old approval is undone, and the new lot is decided as any other.
 
 ## The keys
 
@@ -209,7 +213,7 @@ Do these on the copy (see below). Each line is one action and what you should se
 - [ ] Click in the reject reason field and type `a`, `r`, `d`, `j`. The letters appear in the field and nothing is approved, rejected or cleared. `Esc` closes the panel.
 - [ ] Open `/`, `/review`, `/list` and `/p/<n>`. They look and behave as before.
 - [ ] Open `/bids`. The lock band says the testing lock is on and placement is a dry run. The lots are numbered in the order placement takes them, the first ones (up to 25) are marked Next dry run, and the line above the sessions says how many wait for a later run.
-- [ ] Optional, after the merge (or only if you sign in to Nichibo in the copy): on `/bids`, click Place as dry run. A run starts; each approved lot gets a screenshot and "Dry-run placed", and nothing is submitted. The lock keeps it a dry run. This opens Nichibo lot pages with the bot's browser profile, which is empty in the worktree, so it needs a sign-in and real Nichibo traffic. Skip it otherwise.
+- [ ] Optional, after the merge (or only if you sign in to Nichibo in the copy): on `/bids`, click Place as dry run. A run starts; each approved lot gets a screenshot and the bid sheet marks it "Dry run done", and nothing is submitted. The lock keeps it a dry run. This opens Nichibo lot pages with the bot's browser profile, which is empty in the worktree, so it needs a sign-in and real Nichibo traffic. Skip it otherwise.
 
 - [ ] Phase 2: approve a vehicle under one guide, then try to approve it under its other guide. It is refused at once, and the message names the first guide and lot.
 - [ ] Phase 2: approve a lot, then press Reopen in its lot view (Decided lane). It returns to waiting, and `/p/<n>` shows no decision. The same button is on `/p/<n>` and on `/bids`.

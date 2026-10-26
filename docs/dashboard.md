@@ -47,7 +47,7 @@ builds it: the review routes are defined there, the dashboard routes are registe
 | `POST /api/runs/{id}/cancel` | Stop. 202, or 409 when it is not running |
 | `POST /api/runs/{id}/pause` | Pause a Bid run while it signs in, fetches the guides, scans or judges. 202, or 409 when it is not running or not at one of those stages |
 | `POST /api/sessions/{id}/resume` | Resume the paused session: Bid mode again, in the same session. 201 the run; 409 when that session is not the paused one, or something is running |
-| `POST /p/{id}/reopen` | Return an approved or rejected lot to waiting, until it is placed live. Not a decision. 409 while the bids are being placed, for a lot placed live, and for a lot a newer scan replaced |
+| `POST /p/{id}/reopen` | Return an approved or rejected lot to waiting, until it is placed live. Not a decision. JSON `{"ok", "decision": "pending"}` or a 303 to `next` or the lot. A lot a newer scan replaced is retired instead: `{"ok", "decision": "superseded", "newer"}` names the newer lot, and a form post goes to it. 409 while the bids are being placed, and for a lot placed live or whose live attempt failed |
 | `POST /p/{id}/delete` | Delete one lot that waits for review, without a decision. JSON `{"ok", "decision", "next_id"}` or a 303 to the next lot; 409 unless it waits |
 | `POST /sessions/{id}/delete`, `/sessions/earlier/delete` | Delete session: its waiting lots leave the review; a running session is stopped first. 409 while it places bids |
 

@@ -173,7 +173,8 @@ COMMANDS: dict[str, Cmd] = {
              "afterwards."),
     "place": Cmd(
         "Place approved bids (dry run)", True, {"headless": _HIDDEN}, _place,
-        help="Types every approved bid into Nichibo's form and takes a screenshot. Nothing is submitted."),
+        help="Types each approved bid into Nichibo's form and takes a screenshot. A lot already placed as a dry run is "
+             "not typed again. Nothing is submitted."),
     "insights": Cmd(
         "Insights", False,
         {"model": _MODEL,
