@@ -486,6 +486,13 @@ class Store:
         return self.conn.execute(
             "SELECT * FROM proposals WHERE decision='approved' AND placed_at IS NULL ORDER BY id LIMIT ?", (limit,)).fetchall()
 
+    def placed_since(self, since: str) -> list[sqlite3.Row]:
+        """Proposals placed live at or after `since` (UTC ISO text as `now()` writes it), newest first. Read-only:
+        the bid sheet's "Placed" section."""
+        return self.conn.execute(
+            "SELECT * FROM proposals WHERE placed_at IS NOT NULL AND placed_at >= ? ORDER BY placed_at DESC, id DESC",
+            (since,)).fetchall()
+
     def record_placement(self, pid: int, ref_no: str, model_code: str, bid_jpy_k: int, ok: bool,
                          message: str, screenshot: str | None, dry_run: bool) -> None:
         ts = now()

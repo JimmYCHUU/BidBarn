@@ -505,3 +505,58 @@ def test_desk_js_does_not_queue_an_approve_for_a_covered_lot():
     assert 'action === "approve" && v.dataset.covered' in _js_fn(src, "queueDecision")
     key_e = src[src.index('else if (k === "e")'):]
     assert "dataset.covered" in key_e[:key_e.index("\n")]
+
+
+def _approve(client, pid, amount=None):
+    data = {"action": "approve", "via": "desk"} | ({"amount": str(amount)} if amount else {})
+    r = client.post(f"/p/{pid}/decide", data=data, headers=JSON)
+    assert r.status_code == 200, r.text
+
+
+def test_the_bid_sheet_follows_the_placement_order_and_marks_the_next_dry_run(cfg):
+    """I3: the sheet lists what `bot place` will take, in its order, and marks the first max_bids_per_run."""
+    cfg.max_bids_per_run = 2
+    ids = _three(cfg)
+    client, _ = _client(cfg)
+    for pid in reversed(ids):  # approved newest first: placement still takes the oldest proposal first
+        _approve(client, pid)
+    html = client.get("/bids").text
+    listed = [int(x) for x in re.findall(r'<tr[^>]*data-queue="\d+"[^>]*>\s*<td[^>]*>[^<]*</td>\s*<td><a href="/p/(\d+)"', html)]
+    assert listed == ids
+    marked = [int(x) for x in re.findall(r'<tr[^>]*data-next-run[^>]*>\s*<td[^>]*>[^<]*</td>\s*<td><a href="/p/(\d+)"', html)]
+    store = Store(cfg.db_path)
+    try:
+        assert marked == [r["id"] for r in store.approved_unplaced(cfg.max_bids_per_run)] == ids[:2]
+    finally:
+        store.close()
+    assert "taken by the next dry run" in html and "1 more waits for a later run" in html
+
+
+def test_the_bid_sheet_uses_the_amount_placement_types(cfg):
+    ids = _three(cfg)
+    client, _ = _client(cfg)
+    _approve(client, ids[0])
+    store = Store(cfg.db_path)
+    store.conn.execute("UPDATE proposals SET approved_bid_jpy_k=NULL WHERE id=?", (ids[0],))  # an older approval
+    store.conn.commit()
+    store.close()
+    html = client.get("/bids").text
+    assert "<b>1,000K</b>" in html and "Exposure 1,000K" in html and "<b>0K</b>" not in html
+
+
+def test_the_bid_sheet_keeps_the_last_day_of_placed_lots_apart(cfg):
+    from datetime import datetime, timedelta, timezone
+    ids = _three(cfg)
+    client, _ = _client(cfg)
+    for pid in ids:
+        _approve(client, pid)
+    now = datetime.now(timezone.utc)
+    store = Store(cfg.db_path)
+    store.conn.execute("UPDATE proposals SET placed_at=? WHERE id=?", ((now - timedelta(hours=1)).isoformat(timespec="seconds"), ids[0]))
+    store.conn.execute("UPDATE proposals SET placed_at=? WHERE id=?", ((now - timedelta(hours=30)).isoformat(timespec="seconds"), ids[1]))
+    store.conn.commit()
+    store.close()
+    html = client.get("/bids").text
+    waiting, placed = html.split('aria-label="Placed in the last 24 hours"')
+    assert "A1" not in waiting and "B2" not in waiting and "C3" in waiting
+    assert "A1" in placed and "B2" not in placed and "C3" not in placed

@@ -156,3 +156,6 @@
 .bids-lock { margin-bottom: 16px; }
 .bids-group { margin-bottom: 16px; }
 .bids-table td .faint { margin-top: 2px; max-width: 36ch; }
+/* Final review: the rows the next dry run takes. */
+.bids-order { margin: 0 0 12px; color: var(--ink-2); }
+.bids-next td:first-child { box-shadow: inset 3px 0 0 var(--blue); }

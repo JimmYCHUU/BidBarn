@@ -5,7 +5,7 @@
 {% block head %}<link rel="stylesheet" href="/static/desk.css?v={{ asset_v }}">{% endblock %}
 {% block body %}
 <div class="page-head"><h1>Bid sheet</h1>
-  <span class="page-sub">{{ groups|sum(attribute='rows', start=[])|length }} approved{% if groups %}, exposure {{ '{:,}'.format(total_k) }}K{% endif %}</span>
+  <span class="page-sub">{{ waiting_n }} approved{% if groups %}, exposure {{ '{:,}'.format(total_k) }}K{% endif %}</span>
 </div>
 <div class="banner banner--warn bids-lock">{{ icon('lock') }}<div>
   {# lock_state reads "dry" for a finished project with dry_run false (no live flag), so the label tells live apart #}
@@ -14,21 +14,25 @@
   {% else %}Testing lock is on. Placement is a dry run: each lot's page is opened, re-checked, the amount typed and read back, and a screenshot saved. Nothing is submitted. Live placement cannot be started from this page.
   {% endif %}
 </div></div>
+{# The waiting rows are exactly what `bot place` reads (approved_unplaced, oldest proposal first), all of them. #}
+{% if next_n %}<p class="bids-order">Placement takes the approved lots oldest first, at most {{ per_run }} per run. The {{ next_n }} marked <span class="pill pill--info">Next dry run</span> {{ 'is' if next_n == 1 else 'are' }} taken by the next dry run{% if after_n %}; {{ after_n }} more {{ 'waits' if after_n == 1 else 'wait' }} for a later run{% endif %}. # is each lot's place in that order.</p>{% endif %}
 {% for g in groups %}
 <section class="card bids-group">
   <div class="card-head"><h2>{{ g.label }}</h2><span class="end num">Exposure {{ '{:,}'.format(g.exposure_k) }}K</span></div>
   <div class="table-wrap">
   <table class="lots wide bids-table">
-    <thead><tr><th>Ref</th><th>Lot</th><th class="num">Start</th><th class="num">Bid</th><th>Eligibility</th><th>Result</th></tr></thead>
+    <thead><tr><th class="num">#</th><th>Ref</th><th>Lot</th><th class="num">Start</th><th class="num">Bid</th><th>Eligibility</th><th>Result</th></tr></thead>
     <tbody>
     {% for r in g.rows %}{% set p = r.p %}{% set f = p.facts or {} %}
-      <tr>
+      <tr data-queue="{{ r.queue }}"{% if r.next_run %} data-next-run class="bids-next"{% endif %}>
+        <td class="num">{{ r.queue }}</td>
         <td><a href="/p/{{ p.id }}">{{ p.ref_no }}</a></td>
         <td>{{ p.summary }}</td>
         <td class="num">{% if f.start_price_jpy %}{{ k(f.start_price_jpy) }}{% else %}&ndash;{% endif %}</td>
-        <td class="num"><b>{{ '{:,}'.format(r.amount_k) }}K</b></td>
+        <td class="num">{% if r.amount_k %}<b>{{ '{:,}'.format(r.amount_k) }}K</b>{% else %}<span class="muted">No amount</span>{% endif %}</td>
         <td>{% if p.eligibility %}{{ p.eligibility.label }}{% else %}&ndash;{% endif %}</td>
         <td>
+          {% if r.next_run %}<span class="pill pill--info" title="Taken by the next dry run">Next dry run</span>{% endif %}
           {% if r.state == 'placed' %}<span class="pill pill--ok">Placed</span>
           {% elif r.state == 'dry_run' %}<span class="pill pill--info">Dry-run placed</span>
           {% elif r.state == 'blocked' %}<span class="pill pill--bad">Blocked</span>
@@ -43,8 +47,31 @@
   </div>
 </section>
 {% else %}
-<section class="card"><div class="card-body"><p class="faint">Nothing approved yet.</p></div></section>
+<section class="card"><div class="card-body"><p class="faint">{{ 'No approved lot waits to be placed.' if placed else 'Nothing approved yet.' }}</p></div></section>
 {% endfor %}
+{% if placed %}
+<section class="card bids-group" aria-label="Placed in the last 24 hours">
+  <div class="card-head"><h2>Placed in the last 24 hours</h2><span class="end num">Placed {{ '{:,}'.format(placed_k) }}K</span></div>
+  <div class="table-wrap">
+  <table class="lots wide bids-table">
+    <thead><tr><th>Ref</th><th>Lot</th><th>Auction</th><th class="num">Bid</th><th>Result</th></tr></thead>
+    <tbody>
+    {% for r in placed %}{% set p = r.p %}{% set f = p.facts or {} %}
+      <tr>
+        <td><a href="/p/{{ p.id }}">{{ p.ref_no }}</a></td>
+        <td>{{ p.summary }}</td>
+        <td>{% if f.auction_place or f.auction_date %}{{ f.auction_place }} {{ f.auction_date }}{% else %}<span class="muted">not known</span>{% endif %}</td>
+        <td class="num">{% if r.amount_k %}<b>{{ '{:,}'.format(r.amount_k) }}K</b>{% else %}<span class="muted">No amount</span>{% endif %}</td>
+        <td><span class="pill pill--ok">Placed</span>{% if p.placed_at %} {{ local_time(p.placed_at) }}{% endif %}
+          {% if r.message %}<div class="faint">{{ r.message }}</div>{% endif %}
+          {% if r.screenshot %}<a href="{{ r.screenshot }}" target="_blank" rel="noopener">Screenshot</a>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
 <details class="card start-card" open>
   <summary class="card-head"><h2>Dry run</h2>{{ icon('chevron-down', 'icon--sm chev') }}</summary>
   {{ launcher(commands, only=['place'], open='place') }}

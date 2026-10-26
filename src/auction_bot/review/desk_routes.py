@@ -13,10 +13,11 @@ from fastapi.responses import HTMLResponse
 
 from auction_bot.dashboard import status as dashboard_status
 from auction_bot.dashboard.guides import rules_for_code, variant_view
-from auction_bot.review.desk_model import LANES, bid_sheet, build_desk, look_items
+from auction_bot.review.desk_model import DECIDED_WINDOW, LANES, bid_row, bid_sheet, build_desk, look_items
 
 LANE_NAMES = {"look": "Needs a look", "clear": "Card-clear", "wait": "Waiting", "done": "Decided"}
 DECIDED = ("approved", "rejected", "deleted")
+ALL_WAITING = 100_000  # approved_unplaced's limit for the bid sheet: every waiting approval, not one run's worth
 
 
 def _choose(sessions, session: str | None, lane: str | None) -> tuple[str, str]:
@@ -84,15 +85,23 @@ def register(app, templates, cfg, store, page, *, load, sort_key) -> None:
 
     @app.get("/bids", response_class=HTMLResponse)
     def bids(request: Request):
-        """The bid sheet: approved lots per auction with exposure and any stored placement result. Read-only;
-        the only control is the dry-run `place` command, started by dashboard.js."""
+        """The bid sheet: what `bot place` will take, per auction, with exposure and any stored placement result.
+        The waiting rows are the ones `run.place_approved` reads (`approved_unplaced`, oldest proposal first), all
+        of them, with the first `max_bids_per_run` marked as the next dry run's; lots placed in the last 24 hours
+        are listed apart. Read-only; the only control is the dry-run `place` command, started by dashboard.js."""
+        since = (datetime.now(timezone.utc) - DECIDED_WINDOW).isoformat(timespec="seconds")
         s = store()
         try:
-            groups = bid_sheet([load(r) for r in s.list_proposals(decision="approved", limit=500)])
+            waiting = [load(r) for r in s.approved_unplaced(ALL_WAITING)]
+            placed = [bid_row(load(r)) for r in s.placed_since(since)]
         finally:
             s.close()
+        per_run = max(0, int(cfg.max_bids_per_run or 0))
+        groups = bid_sheet(waiting, next_run=per_run)
         commands = request.app.state.jobs.describe()
-        return page(request, "bids.html", "bids", groups=groups, commands=commands, total_k=sum(g.exposure_k for g in groups))
+        return page(request, "bids.html", "bids", groups=groups, commands=commands, total_k=sum(g.exposure_k for g in groups),
+                    waiting_n=len(waiting), per_run=per_run, next_n=min(len(waiting), per_run),
+                    after_n=max(0, len(waiting) - per_run), placed=placed, placed_k=sum(r.amount_k for r in placed))
 
     @app.get("/desk/board", response_class=HTMLResponse)
     def desk_board(request: Request, session: str | None = None, lane: str | None = None):

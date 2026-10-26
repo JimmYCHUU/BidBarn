@@ -304,3 +304,21 @@ def test_the_auto_skip_line_as_the_pipeline_writes_it_is_not_a_look_item():
     p = _p(1, "A", soft={"mode": "manual", "checklist": ["Dark Color Seats Only",
                                                          "Auto-skip rule in force (did not fire): skip: km > 120000"]})
     assert [i.text for i in look_items(p)] == ["Dark Color Seats Only"]
+
+
+# -- Final review fix I3: the bid sheet is what the next dry run will type ----------------------------------
+
+def test_bid_sheet_marks_what_the_next_dry_run_takes_in_placement_order():
+    # rows arrive in Store.approved_unplaced's order (oldest proposal first), as run.place_approved takes them
+    rows = [_a(5, "E", 900, "20261030", "USS Tokyo"), _a(7, "F", 800), _a(9, "G", 700, "20261030", "USS Tokyo")]
+    groups = bid_sheet(rows, next_run=2)
+    flat = sorted((r for g in groups for r in g.rows), key=lambda r: r.queue)
+    assert [(r.p["id"], r.queue, r.next_run) for r in flat] == [(5, 1, True), (7, 2, True), (9, 3, False)]
+    tokyo = next(g for g in groups if g.key == "20261030|USS Tokyo")
+    assert [r.p["id"] for r in tokyo.rows] == [5, 9]  # placement order inside the session too
+
+
+def test_bid_sheet_amount_falls_back_to_the_grid_amount_as_placement_does():
+    # run.place_approved types approved_bid_jpy_k or bid_jpy_k
+    g = bid_sheet([_p(1, "A", decision="approved", approved_bid_jpy_k=None, bid_jpy_k=1100), _a(2, "B", 1000)])[0]
+    assert [r.amount_k for r in g.rows] == [1100, 1000] and g.exposure_k == 2100

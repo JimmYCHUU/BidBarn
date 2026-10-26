@@ -235,6 +235,8 @@ class BidRow:
     state: str  # approved | dry_run | blocked | placed
     message: str
     screenshot: str | None
+    queue: int = 0  # 1-based place in the order `bot place` takes the waiting approvals; 0 for a placed lot
+    next_run: bool = False  # among the first `max_bids_per_run`: taken by the next dry run
 
 
 @dataclass
@@ -261,6 +263,11 @@ def _screenshot_url(p: dict, shot: str | None) -> str | None:
     return f"/evidence/{folder}/{name}"
 
 
+def bid_amount_k(p: dict) -> int:
+    """The amount placement types: `run.place_approved` uses `approved_bid_jpy_k or bid_jpy_k`."""
+    return int(p.get("approved_bid_jpy_k") or p.get("bid_jpy_k") or 0)
+
+
 def bid_row(p: dict) -> BidRow:
     pl = p.get("placement") or {}
     if p.get("placed_at"):
@@ -271,17 +278,22 @@ def bid_row(p: dict) -> BidRow:
         state = "blocked"
     else:
         state = "approved"
-    return BidRow(p, int(p.get("approved_bid_jpy_k") or 0), state, pl.get("message") or "", _screenshot_url(p, pl.get("screenshot")))
+    return BidRow(p, bid_amount_k(p), state, pl.get("message") or "", _screenshot_url(p, pl.get("screenshot")))
 
 
-def bid_sheet(approved: list[dict]) -> list[BidGroup]:
+def bid_sheet(approved: list[dict], next_run: int = 0) -> list[BidGroup]:
     """Approved lots per auction session, in the desk's session order, with each session's exposure
-    (the sum of its amounts; shown, never capped)."""
+    (the sum of its amounts; shown, never capped).
+
+    `approved` comes in the order placement takes it (`Store.approved_unplaced`: oldest proposal first).
+    Each row keeps that place (`queue`), groups keep it inside, and the first `next_run` rows
+    (`cfg.max_bids_per_run`) are marked as taken by the next dry run."""
     groups: dict[str, BidGroup] = {}
-    for p in approved:
+    for i, p in enumerate(approved):
         key, label, date, hall = session_of(p)
         g = groups.setdefault(key, BidGroup(key, label, [], 0, date, hall))
         row = bid_row(p)
+        row.queue, row.next_run = i + 1, i < next_run
         g.rows.append(row)
         g.exposure_k += row.amount_k
     return sorted(groups.values(), key=session_order)
