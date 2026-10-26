@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from auction_bot.judge.requirements import machine_decided, Requirement
 from auction_bot.review.app import triage_sort_key
@@ -121,3 +121,58 @@ def test_lane_order_follows_the_sort_key():
             _p(3, "C", facts={"grade": 4, "km": 10000})]
     s = build_desk(rows, [], triage_sort_key, NOW)[0]
     assert [l.p["id"] for l in s.lanes["clear"]] == [2, 3, 1]
+
+
+def test_decided_window_compares_in_utc():
+    now = datetime(2026, 10, 26, 12, 0, tzinfo=timezone.utc)
+    d = [_p(1, "A", decision="approved", decided_at="2026-10-26T11:00:00+00:00"),
+         _p(2, "B", decision="approved", decided_at="2026-10-25T11:59:00+00:00"),
+         _p(3, "C", decision="approved", decided_at="2026-10-25T12:30:00+00:00")]
+    s = build_desk([], d, triage_sort_key, now)[0]
+    assert [l.p["id"] for l in s.lanes["done"]] == [1, 3]
+    # a naive now is read as UTC too
+    s = build_desk([], d, triage_sort_key, datetime(2026, 10, 26, 12, 0))[0]
+    assert [l.p["id"] for l in s.lanes["done"]] == [1, 3]
+
+
+def test_a_requirement_without_a_badge_needs_a_look():
+    r = _req("r0", "Dark seats only", "sheet")
+    p = _p(1, "A", soft={"requirements": [r]}, badges=[])
+    assert look_items(p) == [LookItem("Dark seats only", "unclear", "sheet")]
+
+
+def test_an_unreadable_requirement_needs_a_look_and_does_not_raise():
+    p = _p(1, "A", soft={"requirements": [{"text": "Odd one", "bogus": 1}, {"nothing": 1}, "junk"]})
+    items = look_items(p)
+    assert [i.kind for i in items] == ["unclear"] * 3
+    assert [i.text for i in items] == ["Odd one", "A requirement could not be read", "A requirement could not be read"]
+    assert lane_of(p, items) == "look"
+
+
+def test_judge_mode_without_a_verdict_is_unclear_but_pending_judge_is_not():
+    r = _req("r0", "Dark seats only", "sheet")
+    b = [{"mark": "·", "cls": "unk", "text": "Dark seats only", "evidence": ""}]
+    assert look_items(_p(1, "A", soft={"requirements": [r]}, badges=b))[0].kind == "unclear"
+    items = look_items(_p(2, "B", soft={"requirements": [r], "judge_pending": True}, badges=b))
+    assert [i.kind for i in items] == ["check", "wait"] or {i.kind for i in items} == {"check", "wait"}
+
+
+def test_a_skip_recommendation_is_a_look_unless_something_already_fails():
+    assert look_items(_p(1, "A", recommendation="skip")) == [LookItem("The model recommends skip.", "check", "page")]
+    p = _p(2, "B", recommendation="skip", eligibility={"verdict": "cannot_import", "label": "x", "checks": []}, why_line="cannot import: r")
+    assert [i.kind for i in look_items(p)] == ["fail"]
+
+
+def test_photo_number_falls_back_to_the_soft_ladders():
+    r = _req("r0", "Cruise control", "ladder", topic="cruise_control")
+    ladder = {"id": "r0", "steps": [{"step": "photo", "decided": True, "photo_no": 3}]}
+    p = _p(1, "A", soft={"requirements": [r], "judgement": {"x": 1}, "ladders": [ladder]},
+           badges=[{"mark": "✓", "cls": "ok", "text": "Cruise control", "evidence": ""}])
+    assert look_items(p)[0].photo_no == 3
+
+
+def test_the_sibling_choice_follows_the_sort_key():
+    a = _p(1, "X", guide_id=1, facts={"grade": 3, "km": 90000})
+    b = _p(2, "X", guide_id=2, facts={"grade": 4.5, "km": 10000})
+    lot = build_desk([a, b], [], triage_sort_key, NOW)[0].lanes["clear"][0]
+    assert lot.p["id"] == 2 and lot.siblings == [1]

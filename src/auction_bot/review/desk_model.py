@@ -5,13 +5,14 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field, fields
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from auction_bot.judge.requirements import Requirement, machine_decided
 
 LANES = ("look", "clear", "wait", "done")
 DECIDED_WINDOW = timedelta(hours=24)
 UNKNOWN_KEY = "unknown"
+_MIN = datetime.min.replace(tzinfo=timezone.utc)
 
 
 @dataclass(frozen=True)
@@ -77,17 +78,25 @@ def look_items(p: dict) -> list[LookItem]:
     judged = soft.get("mode") == "judge"
     badges = p.get("badges") or []
     for i, r in enumerate(soft.get("requirements") or []):
-        if r.get("source") == "card" or r.get("kind") == "eligibility" or machine_decided(_requirement(r)) or i >= len(badges):
+        try:
+            req = _requirement(r)
+            skip = r.get("source") == "card" or r.get("kind") == "eligibility" or machine_decided(req)
+        except (TypeError, KeyError, AttributeError):
+            # A stored requirement we cannot read is uncertainty, never a reason to read card-clear or to fail the page.
+            said = r.get("text") if isinstance(r, dict) else None
+            items.append(LookItem(said if isinstance(said, str) and said else "A requirement could not be read", "unclear", "page"))
+            continue
+        if skip:
+            continue
+        photo_no = _photo_no(p, r["id"])
+        where = "photo" if photo_no else {"photos": "photo", "any": "photo", "sheet": "sheet"}.get(r.get("source"), "page")
+        if i >= len(badges):
+            items.append(LookItem(r["text"], "unclear", where, photo_no))
             continue
         b = badges[i]
         text = f"{b.get('text', '')}: {b['evidence']}" if b.get("evidence") else b.get("text", "")
         unjudged = judged and not soft.get("judgement") and not soft.get("judge_pending")
         kind = "fail" if b.get("cls") == "bad" else "unclear" if b.get("mark") == "?" or unjudged else "check"
-        photo_no = _photo_no(p, r["id"])
-        if photo_no:
-            where = "photo"
-        else:
-            where = {"photos": "photo", "any": "photo", "sheet": "sheet"}.get(r.get("source"), "page")
         items.append(LookItem(text, kind, where, photo_no))
     if not judged:
         items += [LookItem(c, "check", "page") for c in soft.get("checklist") or [] if "auto-skip rule in force" not in c]
@@ -129,20 +138,28 @@ def session_of(p: dict) -> tuple[str, str, str, str]:
     return (f"{date}|{hall}", label, date, hall)
 
 
+def _utc(d: datetime) -> datetime:
+    """Aware UTC; a naive value is taken to be UTC already."""
+    return d.replace(tzinfo=timezone.utc) if d.tzinfo is None else d.astimezone(timezone.utc)
+
+
 def _when(p: dict) -> datetime | None:
     try:
-        d = datetime.fromisoformat(p.get("decided_at") or "")
+        return _utc(datetime.fromisoformat(p.get("decided_at") or ""))
     except ValueError:
         return None
-    return d.replace(tzinfo=None)
 
 
 def build_desk(pending: list[dict], decided: list[dict], sort_key: Callable[[dict], tuple], now: datetime) -> list[Session]:
     """Sessions from the pending rows (one lot per vehicle, even when two guides propose it) and the last
     24 hours of decisions. A vehicle approved under one guide shows the other guide's proposal as done
-    (covered), never as work and never decided for Jim."""
+    (covered), never as work and never decided for Jim.
+
+    The store writes `decided_at` as UTC ISO text. Both it and `now` are compared as aware UTC; a naive
+    value (a test's fixed `now`, say) is taken to be UTC."""
+    now = _utc(now)
     approved: dict[str, int] = {}
-    for d in sorted(decided, key=lambda r: _when(r) or datetime.min):
+    for d in sorted(decided, key=lambda r: _when(r) or _MIN):
         if d.get("decision") == "approved":
             approved[d["ref_no"]] = d["id"]
     lots: list[DeskLot] = []
@@ -168,6 +185,6 @@ def build_desk(pending: list[dict], decided: list[dict], sort_key: Callable[[dic
         s.lanes[lot.lane].append(lot)
     for s in sessions.values():
         for lane in ("look", "clear", "wait"):
-            s.lanes[lane].sort(key=lambda l: sort_key(l.p))
-        s.lanes["done"].sort(key=lambda l: _when(l.p) or datetime.min, reverse=True)
+            s.lanes[lane].sort(key=lambda lot: sort_key(lot.p))
+        s.lanes["done"].sort(key=lambda lot: _when(lot.p) or _MIN, reverse=True)
     return sorted(sessions.values(), key=lambda s: (s.key != UNKNOWN_KEY, s.date, s.hall))
