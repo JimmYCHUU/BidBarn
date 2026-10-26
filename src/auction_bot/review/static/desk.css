@@ -167,3 +167,4 @@
 .desk-scan--idle, .desk-scan--busy { color: var(--ink-3); background: var(--surface-2); }
 .desk-scan--running { border-color: var(--line-strong); color: var(--ink); }
 .desk-scan--signin, .desk-scan--failed { border-color: var(--warn-line); background: var(--warn-bg); color: var(--warn-ink); }
+.desk-scan-msg { flex: 1 1 100%; font-weight: 600; color: var(--warn-ink); }

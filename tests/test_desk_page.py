@@ -881,3 +881,25 @@ def test_desk_scan_js_starts_only_a_scan():
     assert re.findall(r'send\(("[^"]+"(?: \+ run \+ "/cancel")?)', body) == ['"/api/runs"', '"/api/runs/" + run + "/cancel"']
     for banned in ("--live", "place", "bid", "learn", "/finish", "/auction/bid", "nichibojapan"):
         assert banned not in body.lower(), banned
+
+
+def _scan_js():
+    from pathlib import Path
+    import auction_bot.review as rv
+    return (Path(rv.__file__).parent / "static" / "desk_scan.js").read_text(encoding="utf-8")
+
+
+def test_a_scan_click_during_a_poll_is_chained_not_dropped():
+    body = _scan_js()
+    send = body[body.index("function send("):body.index("host.addEventListener")]
+    assert "busy.then(" in send                  # the action waits for the request in flight
+    assert "return Promise.resolve();" not in send and "if (inFlight) return" not in send   # no early return that drops it
+
+
+def test_a_refusal_survives_a_same_kind_reload():
+    body = _scan_js()
+    assert "data-desk-scan-msg" in body
+    note = body[body.index("function note()"):body.index("function reload()")]
+    assert "msgKind === kind()" in note          # kept while the kind is the same
+    assert 'msg = ""' in note                    # dropped when the kind changes
+    assert body.index("host.innerHTML = html;\n        note();") > 0   # every redraw puts it back

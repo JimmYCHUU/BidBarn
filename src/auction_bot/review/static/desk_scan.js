@@ -23,45 +23,62 @@
     if (document.hidden) return;
     timer = setTimeout(reload, pollMs());
   }
+  var msg = "", msgKind = "";   // a refusal's words stay in the bar until its state changes or the next action works
+  var busy = Promise.resolve(); // the request in flight, so an action waits for it instead of being dropped
+
   function show(text) {
     var t = host.querySelector(".desk-scan-text");
     if (t) t.textContent = text;
   }
+  function note() {             // put a kept message back after the bar was redrawn
+    var b = bar();
+    if (!b) return;
+    if (msg && msgKind === kind()) {
+      var line = document.createElement("span");
+      line.className = "desk-scan-msg"; line.setAttribute("data-desk-scan-msg", ""); line.textContent = msg;
+      b.insertBefore(line, b.querySelector("button"));
+    } else { msg = ""; msgKind = ""; }
+  }
   function reload() {
     clearTimeout(timer); timer = null;
-    if (inFlight) { schedule(); return Promise.resolve(); }
+    if (inFlight) { schedule(); return busy; }
     inFlight = true;
     var before = kind();
-    return fetch("/desk/scan", { headers: { Accept: "text/html" } })
+    busy = fetch("/desk/scan", { headers: { Accept: "text/html" } })
       .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
       .then(function (html) {
         host.innerHTML = html;
+        note();
         var now = kind();
         if (active(before) && !active(now)) askBoard();
         else if (now === "running" && Date.now() - lastBoard >= BOARD_EVERY_MS) askBoard();
       })
       .catch(function () { show("The scan bar could not be refreshed."); })
       .then(function () { inFlight = false; schedule(); });
+    return busy;
   }
 
   function send(url, body) {
-    if (inFlight) return Promise.resolve();
-    inFlight = true;
     clearTimeout(timer); timer = null;
-    var opts = { method: "POST", headers: { Accept: "application/json" } };
-    if (body) { opts.headers["Content-Type"] = "application/json"; opts.body = body; }
-    return fetch(url, opts)
-      .then(function (r) {
-        if (r.ok) return null;
-        return r.json().catch(function () { return null; }).then(function (data) {
-          return (data && data.detail && String(data.detail)) || "The request was refused (error " + r.status + ").";
+    return busy.then(function () {          // after the poll in flight, never instead of it
+      inFlight = true;
+      var opts = { method: "POST", headers: { Accept: "application/json" } };
+      if (body) { opts.headers["Content-Type"] = "application/json"; opts.body = body; }
+      busy = fetch(url, opts)
+        .then(function (r) {
+          if (r.ok) return "";
+          return r.json().catch(function () { return null; }).then(function (data) {
+            return (data && data.detail && String(data.detail)) || "The request was refused (error " + r.status + ").";
+          });
+        })
+        .catch(function () { return "The server did not answer."; })
+        .then(function (problem) {
+          inFlight = false;
+          msg = ""; msgKind = "";
+          return reload().then(function () { if (problem) { msg = problem; msgKind = kind(); note(); } });
         });
-      })
-      .catch(function () { return "The server did not answer."; })
-      .then(function (problem) {
-        inFlight = false;
-        return reload().then(function () { if (problem) show(problem); });
-      });
+      return busy;
+    });
   }
 
   host.addEventListener("click", function (e) {

@@ -300,7 +300,7 @@ def day_steps(s: dict, cache_hours: float) -> list[dict]:
     last = s["last_runs"]
 
     def step(key, label, state, detail, command=None, href=None, options=None):
-        going = bool(command and running == command) or key == bid_step  # what is true of a step at rest is not true while it runs
+        going = bool(command and running == command) or key == bid_step or (key == "scan" and running == "scan-now")  # what is true of a step at rest is not true while it runs
         if going:
             detail = "Waiting for your review." if key == "review" and waiting else "Running now."
         return {"key": key, "label": label, "state": "running" if going else state,
@@ -329,7 +329,7 @@ def day_steps(s: dict, cache_hours: float) -> list[dict]:
                  command="fetch-rules")
 
     # The day's scan is the newest finished one of the two scanning commands (a Bid run is not counted here, as before).
-    scan = max((r for r in (last.get("scan"), last.get("scan-now")) if r),
+    scan = max((r for r in (last.get("scan"), last.get("scan-now")) if r and r.get("status") in ("ok", "failed", "stopped")),
                key=lambda r: r.get("finished_at") or r.get("started_at") or "", default=None)
     scan_age = age_hours(scan["finished_at"]) if scan and scan["status"] == "ok" else None
     if scan_age is not None and scan_age <= cache_hours:

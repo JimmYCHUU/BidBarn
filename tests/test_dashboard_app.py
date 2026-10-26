@@ -690,3 +690,20 @@ def test_a_finished_scan_now_run_marks_the_scanned_step_done(cfg):
     finally:
         s.close()
     assert next(x for x in st["steps"] if x["key"] == "scan")["state"] == "done"
+
+
+def test_a_running_scan_now_does_not_unmark_an_earlier_scan(cfg):
+    from datetime import datetime, timedelta, timezone
+    from auction_bot.dashboard.status import day_steps
+    hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat(timespec="seconds")
+    ok = {"id": 1, "command": "scan", "status": "ok", "started_at": hour_ago, "finished_at": hour_ago, "summary": {}, "error": None}
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    running = {"id": 2, "command": "scan-now", "status": "running", "started_at": now, "finished_at": None, "summary": {}, "error": None}
+    base = {"signin": {"known": True, "ok": True, "fresh": True, "checked_at": now, "nichibo": True, "carbarn": True, "doubt": ""},
+            "rules": {"snapshot": "x", "stale": False, "fetched_at": now, "active_guides": 1, "max_age_hours": 24},
+            "counts": {"to_review": 0, "approved": 0}, "lock": {"label": "DRY RUN", "dry": True}}
+    idle = day_steps({**base, "current": None, "last_runs": {"scan": ok, "scan-now": running}}, 12)
+    assert next(x for x in idle if x["key"] == "scan")["state"] == "done"
+    going = day_steps({**base, "current": {"command": "scan-now", "progress": {}}, "last_runs": {"scan": ok, "scan-now": running}}, 12)
+    step = next(x for x in going if x["key"] == "scan")
+    assert step["state"] == "running" and step["next"]
