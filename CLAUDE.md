@@ -99,8 +99,9 @@ hard constraints. Do not weaken them, work around them, or "temporarily" disable
 
 ## 3. No paid model APIs; the free judgement layer is a pre-fill
 
-- `sheet_check: judge` (Jim, 2026-09-28) uses free-tier vision providers chosen by Jim, today
-  Gemini Flash-Lite first and Groq Llama 4 Scout as fallback, through their OpenAI-compatible
+- `sheet_check: judge` (Jim, 2026-09-28) uses free-tier providers chosen by Jim, today Gemini
+  3.5 Flash-Lite first, then Gemini 3.1 Flash-Lite, then Groq's text-only `openai/gpt-oss-120b` for
+  lots that need no photos (names in `config.yaml`), through their OpenAI-compatible
   endpoints (`judge/client.py`, keys in `.env`). Never add Anthropic/Claude API calls. The
   OpenAI path stays opt-in (`sheet_check: openai`, `OPENAI_API_KEY`). `sheet_check: none`
   means Jim judges the sheet and photos himself.
