@@ -648,6 +648,62 @@ def test_reopen_redirects_only_to_a_local_page(cfg):
     assert r.status_code == 303 and r.headers["location"] == f"/p/{b}"
 
 
+def test_reopen_of_a_lot_a_newer_scan_replaced_points_at_the_new_one(cfg):
+    store = Store(cfg.db_path)
+    a = _seed(store, "TW1", "GDH206", "4", 50_000)
+    b = _seed(store, "TW2", "GDH206", "4", 50_000)
+    store.close()
+    client, _ = _client(cfg)
+    _approve(client, a); _approve(client, b)
+    store = Store(cfg.db_path)  # bot scan --rescan stored a newer lot of each vehicle under the same guide
+    n = _seed(store, "TW1", "GDH206", "4", 50_000)
+    m = _seed(store, "TW2", "GDH206", "4", 50_000)
+    store.close()
+    r = client.post(f"/p/{a}/reopen", headers=JSON)
+    assert r.status_code == 200 and r.json() == {"ok": True, "decision": "superseded", "newer": n}
+    _approve(client, n)
+    r = client.post(f"/p/{b}/reopen", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == f"/p/{m}"
+
+
+def test_no_redirect_leaves_the_site(cfg):
+    from auction_bot.review.app import _local_path
+    assert _local_path("/bids") and _local_path("/review?model=GDH206")
+    for bad in ("", "bids", "//evil.example", "/\\evil.example", "/x\\evil", "https://evil.example"):
+        assert not _local_path(bad), bad
+    store = Store(cfg.db_path)
+    a = _seed(store, "TW1", "GDH206", "4", 50_000)
+    store.close()
+    client, _ = _client(cfg)
+    _approve(client, a)
+    r = client.post(f"/p/{a}/reopen", data={"next": "/\\evil.example"}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == f"/p/{a}"
+    r = client.post("/sessions/earlier/delete", data={"next": "/\\evil.example"}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/review"
+
+
+def test_a_revision_that_is_not_a_number_is_a_bad_request(cfg):
+    store = Store(cfg.db_path)
+    a = _seed(store, "TW1", "GDH206", "4", 50_000)
+    store.close()
+    client, _ = _client(cfg)
+    for bad in ("²", "-1", "1.5"):
+        r = _post(client, a, amount="1000", rev=bad)
+        assert r.status_code == 400 and r.json()["detail"] == "rev must be a number", bad
+    assert _post(client, a, amount="1000", rev=" 0 ").status_code == 200
+
+
+def test_desk_js_reopen_waits_for_the_lot_and_says_what_happened():
+    src = DESK_JS.read_text(encoding="utf-8")
+    body = src.split("function reopen() {")[1].split("\n  }\n")[0]
+    assert 'if (e.detail > 1 && (DECIDING[act] || act === "reopen")) return;' in src  # a double click reopens once
+    assert "return loadLot(pid);" in body                     # the in-flight guard holds until the lot has reloaded
+    assert '"The lot could not be reopened (error " + r.status + "). Reload the page and look again."' in body
+    assert "Error " not in body
+    assert '"Reopened. A newer scan replaced this lot: decide the new one (lot " + newer + ")."' in body
+    assert "loadLot(newer, newer)" in body
+
+
 def test_reopen_waits_while_bids_are_placed(cfg):
     from tests.test_dashboard_app import FakeJobs
 

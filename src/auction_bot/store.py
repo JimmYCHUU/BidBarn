@@ -164,6 +164,7 @@ class Refused(Exception):
 
 
 CHANGED_LOT = "This lot changed since you opened it: a later pass updated its judgement. Look at it again before deciding."
+BID_ONCE = "This vehicle was bid on already. One bid per vehicle, so it is not approved again."
 
 
 class VehicleClaimed(Refused):
@@ -195,9 +196,12 @@ class Store:
         self._ensure_columns("decisions", DECISION_COLUMNS)
         self._ensure_columns("manual_actions", {"note": "TEXT"})  # typed reasons from watch sessions
         # Approvals made before the claim existed: the oldest approved lot of a vehicle holds it. Idempotent.
-        # (A stub table without the decision columns has no approvals to claim.)
+        # (A stub table without the decision columns has no approvals to claim.) It reads first and writes only
+        # when an approval has no claim: pages open a store per request, and an open must not wait for a writer.
         have = {r["name"] for r in self.conn.execute("PRAGMA table_info(proposals)")}
-        if {"approved_bid_jpy_k", "bid_jpy_k", "decided_at"} <= have:
+        if {"approved_bid_jpy_k", "bid_jpy_k", "decided_at"} <= have and self.conn.execute(
+                "SELECT 1 FROM proposals p WHERE p.decision='approved' AND NOT EXISTS "
+                "(SELECT 1 FROM bid_intents i WHERE i.ref_no=p.ref_no) LIMIT 1").fetchone():
             self.conn.execute(
                 "INSERT OR IGNORE INTO bid_intents(ref_no, proposal_id, amount_jpy_k, at) "
                 "SELECT ref_no, id, COALESCE(approved_bid_jpy_k, bid_jpy_k, 0), COALESCE(decided_at, created_at) "
@@ -379,9 +383,12 @@ class Store:
             "SELECT p.* FROM proposals p WHERE p.decision='approved' AND (p.placed_at IS NOT NULL "
             "OR p.id IN (SELECT proposal_id FROM bid_intents)) ORDER BY p.id").fetchall()
 
-    def reopen(self, pid: int) -> None:
-        """Return an approved or rejected lot that was not placed live to waiting, and free its vehicle's claim.
-        Never approves anything. The undone decision stays in `decisions` (marked) for the day log."""
+    def reopen(self, pid: int) -> int | None:
+        """Undo the decision on an approved or rejected lot that was not placed live, and free its vehicle's claim.
+        The lot waits again, unless a newer scan of the same vehicle and guide replaced it (`bot scan --rescan`):
+        then it is retired as superseded and the newer lot is the one to decide. Returns that newer lot's id, or
+        None when the lot waits again. Never approves anything. The undone decision stays in `decisions`
+        (marked) for the day log."""
         p = self.proposal(pid)
         if p is None:
             raise KeyError(pid)
@@ -389,26 +396,28 @@ class Store:
             raise Refused("Only an approved or rejected lot can be reopened; this one is waiting or out of the review.")
         if p["placed_at"] or self.already_bid(p["ref_no"]):
             raise Refused("This lot was placed live, so it cannot be reopened.")
-        newer = self._newer_than(p)
-        if newer is not None:
-            raise Refused(f"A newer scan replaced this lot. Decide the new one (lot {newer['id']}).")
         cur = self.conn.execute(
             "UPDATE proposals SET decision='pending', decision_reason=NULL, decided_at=NULL, approved_bid_jpy_k=NULL, "
             "placement_json=NULL WHERE id=? AND decision IN ('approved','rejected') AND placed_at IS NULL", (pid,))
         if cur.rowcount != 1:  # a live placement in another process finished since the check above
             self.conn.rollback()
             raise Refused("This lot was placed live, so it cannot be reopened.")
+        # read under the write lock the UPDATE took: no scan can store a newer lot between this check and the commit
+        newer = self._newer_than(p)
+        if newer is not None:  # replaced: out of the review, not waiting beside the newer lot
+            self.conn.execute("UPDATE proposals SET decision='superseded' WHERE id=?", (pid,))
         self.conn.execute("DELETE FROM bid_intents WHERE proposal_id=?", (pid,))
         self.conn.execute(
             "UPDATE decisions SET undone_at=? WHERE id=(SELECT MAX(id) FROM decisions WHERE proposal_id=? AND undone_at IS NULL)",
             (now(), pid))
         self.conn.commit()
+        return newer["id"] if newer is not None else None
 
     def decide(self, pid: int, action: str, reason: str | None, amount_jpy_k: int | None, make_rule: bool,
                via: str = "detail", seen_rev: int | None = None) -> None:
         """Record the human decision. The only caller is the review page (CLAUDE.md, rule 1). Refuses a lot that is
-        no longer pending, a lot whose judgement changed since the page that asked (`seen_rev`), and an approval of
-        a vehicle another proposal already holds the claim on."""
+        no longer pending, a lot whose judgement changed since the page that asked (`seen_rev`), an approval of a
+        vehicle that was bid on already, and an approval of a vehicle another proposal already holds the claim on."""
         p = self.proposal(pid)
         if p is None:
             raise KeyError(pid)
@@ -418,6 +427,8 @@ class Store:
         if why:
             raise Refused(why)
         decision = "approved" if action == "approve" else "rejected"
+        if decision == "approved" and (p["placed_at"] or self.already_bid(p["ref_no"])):  # bid once, done
+            raise Refused(BID_ONCE)
         ts = now()
         tele = self.telemetry(pid)
         seconds = None
@@ -434,7 +445,8 @@ class Store:
                 held = self.intent_for(p["ref_no"])
                 if held is None or held["proposal_id"] != pid:
                     raise VehicleClaimed(p["ref_no"], held["proposal_id"] if held else 0)
-                # a claim already in this proposal's own name (a legacy backfill): this approval takes it over
+                # a claim already in this proposal's own name: another tab approved this same lot a moment ago. The
+                # UPDATE below then finds the lot decided and rolls this back, so the first approval keeps its amount.
                 self.conn.execute("UPDATE bid_intents SET amount_jpy_k=?, at=? WHERE proposal_id=?", (claim, ts, pid))
         # the revision rides in the UPDATE too: a judgement another process wrote since the read above must not slip through
         rev_sql, rev_arg = (" AND rev=?", (seen_rev,)) if seen_rev is not None else ("", ())

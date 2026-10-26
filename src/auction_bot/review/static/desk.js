@@ -397,6 +397,8 @@
     select(q.row);
   }
   // -- reopen: a decided lot back to waiting. Not a decision (nothing is approved), so no window and no key ------
+  // A lot a newer scan replaced is retired instead, and the reply names the newer lot (`newer`) to decide.
+  // The guard holds until the lot view has reloaded, so a second click cannot send a second reopen.
   function reopen() {
     var v = lotView();
     if (!v || !v.dataset.reopen) return;
@@ -407,12 +409,22 @@
       .then(function (r) {
         return r.json().catch(function () { return null; }).then(function (data) {
           if (!r.ok) {
-            var why = (data && data.detail && String(data.detail)) || "Error " + r.status + ".";
-            return refreshBoard().then(function () { fail(ref + ": " + why); });
+            var why = (data && data.detail && String(data.detail)) ||
+              "The lot could not be reopened (error " + r.status + "). Reload the page and look again.";
+            return refreshBoard().then(function () {
+              fail(ref + ": " + why);
+              if (r.status === 409 && state.lot === pid) return loadLot(pid);   // still open: show what it is now
+            });
           }
+          var newer = data && data.newer ? String(data.newer) : "";
           return refreshBoard().then(function () {
+            if (newer) {
+              say("Reopened. A newer scan replaced this lot: decide the new one (lot " + newer + ").");
+              if (state.lot === pid) return loadLot(newer, newer);    // the lot to decide now
+              return;
+            }
             say("Reopened: back to waiting.");
-            if (state.lot === pid) loadLot(pid);     // the same lot, as it reads now
+            if (state.lot === pid) return loadLot(pid);     // the same lot, as it reads now
           });
         });
       })
@@ -514,9 +526,9 @@
     var btn = t.closest("button[data-act]");
     if (btn) {
       var act = btn.dataset.act;
-      // The second click of a double click (e.detail 2, 3...) never decides or clears: by then the next lot's
-      // bar may sit under the cursor. A keyboard press on a focused button has e.detail 0 and still counts.
-      if (e.detail > 1 && DECIDING[act]) return;
+      // The second click of a double click (e.detail 2, 3...) never decides, clears or reopens: by then the next
+      // lot's bar may sit under the cursor. A keyboard press on a focused button has e.detail 0 and still counts.
+      if (e.detail > 1 && (DECIDING[act] || act === "reopen")) return;
       if (act === "approve") approve();
       else if (act === "amount") openPanel("amount");
       else if (act === "reject") openPanel("reject");

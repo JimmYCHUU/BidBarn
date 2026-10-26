@@ -279,6 +279,12 @@ def _wants_json(request: Request) -> bool:
     return "application/json" in (request.headers.get("accept") or "")
 
 
+def _local_path(next: str) -> bool:
+    """A redirect target on this page only: a path, never another host. Browsers read `//host` and `/\\host`
+    as another site, so the second character may be neither slash, and no backslash is allowed anywhere."""
+    return next.startswith("/") and next[1:2] not in ("/", "\\") and "\\" not in next
+
+
 STATUS_LABELS = {"BID": "Bid", "NEEDS_REVIEW": "Needs review", "SKIP": "Skip"}
 _ICON_NAME = re.compile(r"^[a-z0-9-]{1,40}$")
 _ICON_CLASS = re.compile(r"^[A-Za-z0-9_ -]{0,60}$")
@@ -532,8 +538,14 @@ def create_app(cfg: Config, finish_event=None, jobs=None) -> FastAPI:
                feedback_req: str = Form(""), feedback_note: str = Form(""), rev: str = Form("")):
         if action not in ("approve", "reject"):
             raise HTTPException(400, "bad action")
-        if rev.strip() and not rev.strip().isdigit():
-            raise HTTPException(400, "rev must be a number")
+        seen_rev = None
+        if rev.strip():
+            try:
+                seen_rev = int(rev.strip())
+            except ValueError:
+                raise HTTPException(400, "rev must be a number")
+            if seen_rev < 0:
+                raise HTTPException(400, "rev must be a number")
         s = store()
         try:
             row = s.proposal(pid)
@@ -561,7 +573,7 @@ def create_app(cfg: Config, finish_event=None, jobs=None) -> FastAPI:
             try:
                 s.decide(pid, action, reason.strip() or None, amt, bool(make_rule),
                          via=via if via in ("detail", "triage", "desk") else "detail",
-                         seen_rev=int(rev) if rev.strip() else None)
+                         seen_rev=seen_rev)
             except VehicleClaimed as exc:
                 holder = s.proposal(exc.holder)
                 name = guide_names().get(holder["guide_id"]) or holder["model_code"] if holder else "another guide"
@@ -583,14 +595,15 @@ def create_app(cfg: Config, finish_event=None, jobs=None) -> FastAPI:
     @app.post("/p/{pid}/reopen")
     def reopen(request: Request, pid: int, next: str = Form("")):
         """Return an approved or rejected lot that was not placed live to waiting. Not a decision: it approves
-        nothing, and Jim decides the lot again himself. Held back while a run is placing the approved bids."""
+        nothing, and Jim decides the lot again himself. A lot a newer scan replaced is retired instead, and the
+        reply names the newer lot to decide. Held back while a run is placing the approved bids."""
         cur = jobs.current()
         if cur and (cur.get("progress") or {}).get("stage") == "place":
             raise HTTPException(409, "The approved bids are being placed: reopen this lot when the run has finished.")
         s = store()
         try:
             try:
-                s.reopen(pid)
+                newer = s.reopen(pid)
             except KeyError:
                 raise HTTPException(404)
             except Refused as exc:
@@ -598,8 +611,10 @@ def create_app(cfg: Config, finish_event=None, jobs=None) -> FastAPI:
         finally:
             s.close()
         if _wants_json(request):
+            if newer is not None:
+                return JSONResponse({"ok": True, "decision": "superseded", "newer": newer})
             return JSONResponse({"ok": True, "decision": "pending"})
-        return RedirectResponse(next if next.startswith("/") and not next.startswith("//") else f"/p/{pid}", status_code=303)
+        return RedirectResponse(next if _local_path(next) else f"/p/{newer or pid}", status_code=303)
 
     @app.post("/p/{pid}/delete")
     def delete_lot(request: Request, pid: int):
@@ -641,7 +656,7 @@ def create_app(cfg: Config, finish_event=None, jobs=None) -> FastAPI:
                 pass  # it ended a moment ago
         if _wants_json(request):
             return JSONResponse({"ok": True, "deleted": count})
-        return RedirectResponse(next if next.startswith("/") and not next.startswith("//") else "/review", status_code=303)
+        return RedirectResponse(next if _local_path(next) else "/review", status_code=303)
 
     @app.get("/p/{pid}/suggest")
     def suggest(pid: int, reason: str = ""):
@@ -693,7 +708,7 @@ def create_app(cfg: Config, finish_event=None, jobs=None) -> FastAPI:
         except InstructionError as exc:
             raise HTTPException(400, f"standing instruction not understood: {exc}")
         append_override(cfg, code.upper(), text)
-        return RedirectResponse(next if next.startswith("/") and not next.startswith("//") else "/review", status_code=303)
+        return RedirectResponse(next if _local_path(next) else "/review", status_code=303)
 
     @app.get("/sheet-trial", response_class=HTMLResponse)
     def sheet_trial_page(request: Request, stamp: str | None = None):
