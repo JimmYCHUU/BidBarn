@@ -1,4 +1,4 @@
-# The desk (phases 1 and 2)
+# The desk (phases 1, 2 and 3)
 
 The desk is a second review page, beside today's. `/`, `/review`, `/list` and `/p/<n>` work as
 before. The desk is at `/desk` (nav item **Desk**) and the bid sheet is at `/bids` (nav item
@@ -86,8 +86,7 @@ in the day for every lot already waiting, one paced load each. The page loads go
 like any other.
 
 `day_pages` (pages read only for the day) is in the scan's own summary line and in the run's stored
-summary. It is not on the dashboard run page yet. That is a small follow-up after the pending
-dashboard edits are committed.
+summary. The run page shows it as "Lot pages read for the auction day".
 
 ## Phase 2: the safer store
 
@@ -139,6 +138,74 @@ What stays:
 - Reopen on a lot a newer scan replaced retires the old lot and points at the new one, instead of
   refusing. The old approval is undone, and the new lot is decided as any other.
 
+## Phase 3: Scan now
+
+Phase 3 puts the day's scan on the desk. Until now a scan was started from the Runs page or by Bid
+mode, which then waits for your review.
+
+The scan bar is the row under the page heading, above the board. It says what the scan is doing:
+
+| The bar says | What it means | Button |
+|---|---|---|
+| No scan yet. | No scan has finished that the dashboard knows of. | Scan now |
+| Last scan 14:05, 12 new for the desk. | The newest finished scan (Scan now, Scan Nichibo or Bid mode) and how many lots it sent to the desk. | Scan now |
+| Scanning: guide 3 of 12, 5 new for the desk so far. | A scan is running. Before the first guide it says it is checking the sign-in and the guides. | Stop |
+| Sign in to Nichibo in the bot's window. The scan carries on after that. | Nichibo was signed out at the start. The bot's window is open. The bar is amber. | Stop |
+| Nichibo signed out during the scan. Sign in in the bot's window; the scan carries on after that. | Nichibo signed out part way through. Same window, same wait. | Stop |
+| Bid mode is running. Scan now waits until it has finished. | Another job holds the browser (Bid mode, a placement, a scan from a console). Nothing is started. The name is the other job's. | none |
+| The last scan stopped at 14:20: and the reason | The newest scan failed or was stopped. | Scan now |
+
+If you press Scan now while something else holds the browser, the refusal shows in the bar and
+stays until the state changes.
+
+What Scan now does:
+
+- It checks the sign-in, fetches the guides, and scans Nichibo for every active guide, with the same
+  pacing and the same cache as any scan. Then it ends.
+- It never waits for your review and never places a bid. Lots appear on the desk as they are stored.
+  Nothing is approved by it.
+- It fetches the guides every time, so a scan never runs on yesterday's guides.
+
+If Nichibo signs out during the scan, a sign-in window opens once, as `bot login --wait` does, and
+waits up to 15 minutes for you. When you have signed in, the scan carries on. A second sign-out in
+the same run stops the scan, and the bar says so.
+
+Stop is how you pause. Press Stop, and press Scan now again later: the second scan reuses the cached
+pages and the lots already stored, so it carries on from where the first one stopped, as far as the
+cache goes. Pages older than `cache_hours` are read again.
+
+The board refreshes while a scan runs (every 30 seconds, and once at the end). A refresh keeps a
+decision that is waiting in its 10-second undo window, and keeps the open lot open. The bar itself
+checks every 5 seconds while a scan runs, every minute when idle, and stops checking while the tab is
+hidden.
+
+Bid mode and Learn mode still work on the old pages. They leave the daily routine at the
+switch-over, when the desk becomes the home page.
+
+Small fixes in this phase:
+
+- The run page shows "Lot pages read for the auction day".
+- The overview's "Scanned" step counts a Scan now.
+- Reopen of a lot a newer scan replaced keeps its time, and the desk jumps to the new lot.
+- A lot cleared by a newer scan no longer counts as replacing an older decision.
+
+The desk starts one command only, `scan-now`, and can stop it. It cannot start a live placement.
+
+### Choices made in phase 3, to confirm
+
+- The dashboard's job runner is kept. It already runs one Nichibo job at a time, holds the browser
+  profile, and has Stop, logs and the run history. The idea of an in-process queue is not built. If
+  this is wrong, the only loss is that "checkpoints" stay as the cache plus the stored lots.
+- "Pause scanning" is Stop. A stopped scan is carried on by pressing Scan now again, from the cache and
+  the stored lots. If this is wrong, a restarted scan reads again the search pages that are older than
+  `cache_hours`.
+- Signing in mid-scan: the scan opens the sign-in window itself and carries on once, instead of ending
+  and asking you to press a button. This is the one wait on a person. If this is wrong, a window opens
+  on your screen while you are away, and the run ends after 15 minutes.
+- Bid mode and Learn mode are not removed in this phase. They leave the daily routine in the
+  switch-over.
+- Scan now fetches the guides every time, as Bid mode does.
+
 ## The keys
 
 | Key | What it does |
@@ -166,10 +233,9 @@ amount below the start price rounded down to thousands: "The amount is below the
 yen, say) waits out the 10 seconds, then the desk shows the route's refusal and nothing is recorded.
 
 
-## What phases 1 and 2 leave out
+## What phases 1 to 3 leave out
 
 - The Rulebook.
-- Scan now on the desk. The Runs page still starts scans.
 - Search across sessions.
 - Ctrl+K.
 
@@ -194,6 +260,7 @@ Every action on `/review` and `/p/<n>`, and where it is on the desk.
 | Triage order and model heads | The same order. The head links to the guide stay on `/review` |
 | Next lot after a decision | The next row in the lane is selected |
 | Delete session, Finish, Pause, Resume | Stay on the old pages and the overview |
+| Start a scan (Runs page, Bid mode) | Scan now in the scan bar (phase 3). It never waits for review and never places. Bid mode and Learn mode stay on the old pages |
 | Reopen (phase 2) | **Reopen** in the lot view of the Decided lane, on `/p/<n>` and on the bid sheet |
 | All lots table with filters | Stays at `/list` |
 
@@ -218,6 +285,11 @@ Do these on the copy (see below). Each line is one action and what you should se
 - [ ] Phase 2: approve a vehicle under one guide, then try to approve it under its other guide. It is refused at once, and the message names the first guide and lot.
 - [ ] Phase 2: approve a lot, then press Reopen in its lot view (Decided lane). It returns to waiting, and `/p/<n>` shows no decision. The same button is on `/p/<n>` and on `/bids`.
 - [ ] Phase 2: on `/bids`, click Place as dry run twice (needs the sign-in, as above). The second run does not type the lot again, and the bid sheet says "Dry run done: not typed again. Reopen it to send it again."
+- [ ] Phase 3: on the copy, with the sign-in done in the bot's window, press Scan now in the scan bar. The bar changes to "Scanning: ..." with a Stop button, and lots start to appear on the board. Needs real Nichibo traffic; skip it otherwise.
+- [ ] Phase 3: watch the bar. The guide count goes up. A lot you have open stays open, and a decision waiting in its 10 seconds is not lost when the board refreshes.
+- [ ] Phase 3: press Stop. The bar says "The last scan stopped at ..." with Scan now.
+- [ ] Phase 3: press Scan now again. The scan carries on from the cache and the lots already stored, and ends with "Last scan ..., n new for the desk."
+- [ ] Phase 3: nothing was approved or placed by the scan. `/bids` is the same as before.
 
 ## How to try it before the merge
 
@@ -257,5 +329,5 @@ Decisions made there are thrown away with the copy. The originals are not touche
 
 No Nichibo action is needed to try the desk, the lot views or the old pages. Do not start a scan or
 a placement from both places at once: the same browser profile lock covers scans and `place`, and
-the bot runs one at a time. The optional dry run on the bid sheet (last item of the check list) is
-the one thing that does need Nichibo.
+the bot runs one at a time. The optional dry run on the bid sheet and the Scan now lines of the check list are
+the things that do need Nichibo.

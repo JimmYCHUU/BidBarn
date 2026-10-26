@@ -37,6 +37,7 @@ builds it: the review routes are defined there, the dashboard routes are registe
 | `POST /finish` | The header's Finish button. Under `bot bid` on a console it sets the event the console waits on; under a Bid run started from the page it writes that run's finish file (see Finish). 404 when no review is waiting |
 | `GET /review`, `/list`, `/p/{id}` | The review pages |
 | `GET /desk`, `/desk/board`, `/desk/lot/{id}` | The desk: lots by auction session and lane. Reads only; its decisions go to `POST /p/{id}/decide`, `/delete` and `/event`. See `docs/desk.md` |
+| `GET /desk/scan` | The desk's scan bar as a fragment: the scan's state (idle, running, waiting for a sign-in, another job running, last scan stopped) and its button. Reads the status only; the page polls it. See `docs/desk.md` |
 | `GET /bids` | The bid sheet: the approved lots `bot place` will take, in its order, per auction, the next dry run's lots marked (a lot already placed as a dry run is done and skipped until reopened), exposure, the last day's placed lots, and a button that starts the dry-run `place` command |
 | `GET /api/status` | The state of the day, as the overview shows it |
 | `GET /api/commands` | The command table, for the forms |
@@ -118,6 +119,7 @@ SUMMARY {"guides":46,"cards":1204,"review":9,...}
 | `signin` | `nichibo`, `carbarn` (true, false), `waiting` (a window is open for Jim) |
 | `guides` | `guides`, `snapshot` |
 | `review` | `pending`, `approved`, `waiting` (true while the run waits for Finish, false once it has it) |
+| `scan-now` | The same `signin` and `scan` stages as above, then it ends: no `review`, no `place`. The command is `scan-now`; it takes no options |
 | `learn` | `phase` (`recording`, `guides`, `scan`, `compare`), `session`, `events`, `lots`, `bids`, `searched` |
 
 A Bid run passes through `signin`, `guides`, `scan` (and `judge`), `review` and `place` in turn.

@@ -1,7 +1,7 @@
 # BidBarn 🚗
 
 ![Python 3.12](https://img.shields.io/badge/python-3.12-blue)
-![Tests](https://img.shields.io/badge/tests-706%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-730%20passing-brightgreen)
 ![Playwright](https://img.shields.io/badge/browser-Playwright%20Chromium-45ba4b)
 ![No paid AI](https://img.shields.io/badge/AI%20APIs-none%20required-lightgrey)
 ![Testing lock](https://img.shields.io/badge/placement-testing%20lock%20on-orange)
@@ -351,6 +351,11 @@ guide is refused at once; an approval of a lot that changed or was replaced sinc
 is refused; an approved or rejected lot can be reopened until it is placed live; and a lot placed as
 a dry run is not typed again until reopened.
 
+Phase 3 added a scan bar to the desk: **Scan now** checks the sign-in, fetches the guides and scans
+Nichibo for every active guide, then ends. It does not wait for your review and places nothing.
+**Stop** pauses it, and Scan now again carries on from the cache and the stored lots. If Nichibo signs
+out during the scan, a sign-in window opens once and the scan carries on after you sign in.
+
 The parity table, the keys, what the desk leaves out, the check list and how to try it before the
 merge are in [docs/desk.md](docs/desk.md).
 
@@ -560,7 +565,7 @@ Everything the bot downloads stays on the office PC. Git never sees any of it.
 .venv\Scripts\python -m pytest -q
 ```
 
-706 tests: the golden cases from the manual walkthrough against the real GDH206 guide, variant
+730 tests: the golden cases from the manual walkthrough against the real GDH206 guide, variant
 resolution on captured Alphard and E-Class guides, the seat rule, OCR parsing on three real sheets
 plus the header-band crop and its fallback, an offline end-to-end scan against captured Nichibo
 pages, the card-and-sheet path that opens no page, the placeholder path that parks a lot
