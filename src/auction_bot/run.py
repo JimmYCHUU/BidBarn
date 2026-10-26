@@ -133,7 +133,7 @@ def scan_all(cfg: Config, echo: Callable[[str], None] = print, headless: bool = 
         store.close()
     d = dict(stats.__dict__)
     echo(f"Scan: {d['guides']} guides, {d['cards']} cards, {d['opened']} judged ({d['sheet_only']} from the card and the sheet, "
-         f"{d['pages']} with the page, {d['pending']} waiting for images), {d['review']} to review, {d['skip']} skipped, "
+         f"{d['pages']} with the page, {d['day_pages']} pages read for the auction day, {d['pending']} waiting for images), {d['review']} to review, {d['skip']} skipped, "
          f"{d['reused']} already known" + (f", {len(d['errors'])} errors" if d["errors"] else ""))
     for err in d["errors"][:10]:
         echo(f"   error: {err}")

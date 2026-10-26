@@ -408,6 +408,22 @@ class Store:
         self.conn.execute(f"UPDATE proposals SET {', '.join(sets)} WHERE id=?", args)
         self.conn.commit()
 
+    def set_auction_day(self, pid: int, date: str, hall: str) -> None:
+        """Add the auction day and hall to one proposal's stored facts; no other key, column or row changes."""
+        row = self.conn.execute("SELECT facts_json FROM proposals WHERE id=?", (pid,)).fetchone()
+        if row is None:
+            return
+        try:
+            facts = json.loads(row["facts_json"] or "{}")
+        except json.JSONDecodeError:
+            return
+        if not isinstance(facts, dict):
+            return
+        facts["auction_date"], facts["auction_place"] = date, hall
+        self.conn.execute("UPDATE proposals SET facts_json=? WHERE id=?",
+                          (json.dumps(facts, ensure_ascii=False, default=str), pid))
+        self.conn.commit()
+
     def supersede_pending(self, ref_no: str, guide_id: int | None) -> int:
         """Retire earlier pending proposals for this vehicle+guide before a fresh evaluation is stored."""
         cur = self.conn.execute(

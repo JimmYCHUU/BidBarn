@@ -78,7 +78,8 @@ def test_card_sheet_scan_opens_no_detail_pages(cfg, monkeypatch):
     stats = scan(cfg, browser, store, ["GDH206"], limit_per_model=3)
     assert stats.errors == []
     assert stats.opened == 3 and stats.sheet_only == 3 and stats.pages == 0 and stats.pending == 0
-    assert [u for u in browser.visited if "/auction/" in u] == []  # only the search page was loaded
+    assert len([u for u in browser.visited if "/auction/" in u and "/auction?" not in u]) == 3  # Jim, 2026-10-26: a review lot opens its page once for the auction day
+    assert stats.day_pages == 3
     rows = store.list_proposals(decision="pending", status="NEEDS_REVIEW")
     assert len(rows) == 3
     for r in rows:
@@ -94,7 +95,7 @@ def test_card_sheet_scan_opens_no_detail_pages(cfg, monkeypatch):
     # A rescan does not touch the network for lots already pending.
     before = len(browser.visited)
     stats2 = scan(cfg, browser, store, ["GDH206"], limit_per_model=3)
-    assert stats2.reused >= 3 and stats2.opened == 3 and len(browser.visited) == before
+    assert stats2.reused >= 3 and stats2.opened == 3 and len(browser.visited) == before + 3  # Jim, 2026-10-26: only the 3 new review lots open their page (the day); the pending ones cost nothing
     store.close()
 
 
@@ -114,7 +115,7 @@ def test_placeholder_sheet_parks_the_lot_without_a_page(cfg):
     store = Store(cfg.db_path)
     stats = scan(cfg, browser, store, ["GDH206"], limit_per_model=2)
     assert stats.pending == 2 and stats.pages == 0 and stats.review == 2
-    assert [u for u in browser.visited if "/auction/" in u] == []
+    assert len([u for u in browser.visited if "/auction/" in u and "/auction?" not in u]) == 2  # Jim, 2026-10-26: a review lot opens its page once for the auction day
     rows = store.list_proposals(decision="pending", status="NEEDS_REVIEW")
     assert len(rows) == 2 and all(json.loads(r["soft_json"])["images_pending"] for r in rows)
     # Replay leaves parked lots alone (nothing to re-read yet).

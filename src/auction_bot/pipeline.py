@@ -20,13 +20,13 @@ from auction_bot.carbarn.models import ModelRule, rule_to_summary
 from auction_bot.catalog.client import CatalogClient, catalog_enabled
 from auction_bot.catalog.lookup import candidate_codes, finding_key, lookup, unknown
 from auction_bot.config import Config, cache_dir
-from auction_bot.nichibo.browser import Browser, NotLoggedIn
+from auction_bot.nichibo.browser import Browser, ForbiddenUrl, NotLoggedIn
 from auction_bot.nichibo.cache import NoCache, PageCache
 from auction_bot.progress import Cancelled
 from auction_bot.nichibo.facts import VehicleFacts
 from auction_bot.nichibo.search import search_rule
 from auction_bot.nichibo.sheet_ocr import read_sheet
-from auction_bot.nichibo.vehicle import _safe, download_evidence, fetch_facts, load_saved_evidence, photos_complete
+from auction_bot.nichibo.vehicle import _safe, auction_day, download_evidence, fetch_facts, load_saved_evidence, photos_complete
 from auction_bot.rules.hard import (NEEDS_REVIEW, PASS, SKIP, Check, allowed_seats, card_grid_check, card_prefilter,
                                     evaluate_hard)
 from auction_bot.rules.eligibility import Eligibility, check_lot
@@ -44,7 +44,8 @@ class ScanStats:
     guides: int = 0
     cards: int = 0
     opened: int = 0  # candidates taken past the card stage
-    pages: int = 0  # detail pages actually loaded
+    pages: int = 0  # detail pages actually loaded for the rules
+    day_pages: int = 0  # lot pages read only for the auction day and hall (Jim, 2026-10-26)
     sheet_only: int = 0  # judged from the search card and the sheet, no page
     pending: int = 0  # sheet not published yet, no page
     model_calls: int = 0
@@ -161,6 +162,49 @@ def _should_skip_existing(store: Store, ref_no: str, rule: ModelRule, rescan: bo
     return prev["rule_updated_at"] == rule.updated_at  # SKIP under identical rules
 
 
+def _read_day(browser: Browser, cfg: Config, ref_no: str, cache, stats: ScanStats) -> tuple[str, str] | None:
+    """The auction day and hall from the lot's own page, for a lot that reaches the review (Jim, 2026-10-26).
+
+    Signed out, a refused URL and a stop propagate; any other failure leaves the day unknown."""
+    progress.check_cancel()
+    try:
+        day = auction_day(browser, cfg, ref_no, cache)
+    except (NotLoggedIn, ForbiddenUrl, Cancelled):
+        raise
+    except Exception as exc:
+        log.warning("   %s: could not read the auction day: %s", ref_no, exc)
+        return None
+    stats.day_pages += 1
+    return day
+
+
+def _fill_waiting_day(store: Store, browser: Browser, cfg: Config, ref_no: str, rule: ModelRule, cache,
+                      stats: ScanStats) -> None:
+    """A lot already waiting for review that has no auction day yet: read it and add it to that row, nothing else."""
+    prev = store.latest_proposal(ref_no, rule.guide_id)
+    if prev is None or prev["decision"] != "pending" or prev["status"] not in ("BID", "NEEDS_REVIEW"):
+        return
+    try:
+        facts = json.loads(prev["facts_json"] or "{}")
+    except json.JSONDecodeError:
+        return
+    if not isinstance(facts, dict) or facts.get("auction_date"):
+        return
+    day = _read_day(browser, cfg, ref_no, cache, stats)
+    if day and day[0]:
+        store.set_auction_day(prev["id"], day[0], day[1])
+
+
+def _with_day(proposal: dict, browser: Browser, cfg: Config, ref_no: str, cache, stats: ScanStats) -> None:
+    """A new proposal for review without an auction day: read it from the lot's page before it is stored."""
+    facts = proposal.get("facts_json")
+    if proposal.get("status") not in ("BID", NEEDS_REVIEW) or not isinstance(facts, dict) or facts.get("auction_date"):
+        return
+    day = _read_day(browser, cfg, ref_no, cache, stats)
+    if day:
+        facts["auction_date"], facts["auction_place"] = day
+
+
 def _deleted_soft(store: Store, ref_no: str, guide_id: int | None) -> dict | None:
     """The judgement of a lot Jim deleted from the review, so it is reused when nothing changed (no new model call)."""
     prev = store.latest_proposal(ref_no, guide_id)
@@ -236,6 +280,7 @@ def scan(cfg: Config, browser: Browser, store: Store, model_codes: list[str] | N
             progress.check_cancel()
             if _should_skip_existing(store, card.ref_no, rule, rescan, session_runs):
                 stats.reused += 1
+                _fill_waiting_day(store, browser, cfg, card.ref_no, rule, cache, stats)
                 report(quiet=True)
                 continue
             store.upsert_vehicle(card.ref_no, rule.model_code, card.to_dict())
@@ -262,9 +307,10 @@ def scan(cfg: Config, browser: Browser, store: Store, model_codes: list[str] | N
                 t_sheet = time.time() - t0
                 if evidence.get("images_pending"):
                     stats.pending += 1
+                    parked = pending_images_proposal(rule, card, evidence, cfg)
+                    _with_day(parked, browser, cfg, card.ref_no, cache, stats)
                     store.supersede_pending(card.ref_no, rule.guide_id)
-                    store.add_proposal(snapshot=snap_path.name, rule_updated_at=rule.updated_at, run_id=run,
-                                       **pending_images_proposal(rule, card, evidence, cfg))
+                    store.add_proposal(snapshot=snap_path.name, rule_updated_at=rule.updated_at, run_id=run, **parked)
                     stats.review += 1
                     log.info("   %s -> images not published yet | sheet %.1fs, no page opened", summary_line(card), t_sheet)
                     report()
@@ -303,6 +349,7 @@ def scan(cfg: Config, browser: Browser, store: Store, model_codes: list[str] | N
                     stats=stats, judge_client=judge_client, store=store, photo_loader=load_photos,
                     previous_soft=_deleted_soft(store, card.ref_no, rule.guide_id), catalog_client=catalog_client,
                 )
+                _with_day(proposal, browser, cfg, card.ref_no, cache, stats)
                 store.supersede_pending(card.ref_no, rule.guide_id)
                 store.add_proposal(snapshot=snap_path.name, rule_updated_at=rule.updated_at, run_id=run, **proposal)
                 _count(stats, proposal["status"])

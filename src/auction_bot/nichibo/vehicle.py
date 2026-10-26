@@ -34,6 +34,22 @@ def fetch_facts(browser: Browser, cfg: Config, ref_no: str, cache: PageCache | N
     return facts
 
 
+def auction_day(browser: Browser, cfg: Config, ref_no: str, cache: PageCache | None = None) -> tuple[str, str]:
+    """The auction day (YYYYMMDD) and hall from the lot's own page, as `fetch_facts` reads them but with no translator call.
+
+    Same cache entry as `fetch_facts`, so a page is downloaded at most once."""
+    cache = cache or NoCache()
+    url = detail_url(cfg, ref_no)
+    html = cache.get(url)
+    if html is None:
+        html = browser.goto(url)
+        if "/login" in browser.page.url:
+            raise NotLoggedIn("Nichibo redirected to the login page. Run `bot login`.")
+        cache.put(url, html)
+    facts = parse_detail_page(html, url)
+    return facts.auction_date or "", facts.auction_place or ""
+
+
 def fetch_translation(browser: Browser, cfg: Config, facts: VehicleFacts, cache: PageCache | None = None) -> dict | None:
     """Nichibo's own auction-sheet translator (English text of the sheet)."""
     if not facts.sheet_url:
