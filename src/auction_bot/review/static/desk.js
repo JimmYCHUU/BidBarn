@@ -357,7 +357,7 @@
     });
   }
   function describeError(r, data, ref) {
-    if (r.status === 409) return ref + ": This lot changed while you decided. It is back on the desk.";
+    if (r.status === 409) return ref + ": This lot changed while you decided (decided elsewhere, or replaced by a newer scan). Nothing was recorded from the desk.";
     return ref + ": " + ((data && data.detail && String(data.detail)) || "The decision was not accepted (" + r.status + ").");
   }
   function send(q, refresh) {
@@ -372,7 +372,7 @@
         return refreshBoard().then(function () { fail(describeError(r, data, q.ref)); });
       });
     }).catch(function () {
-      refreshBoard().then(function () { fail(q.ref + ": The decision could not be sent. The lot is back on the desk."); });
+      refreshBoard().then(function () { fail(q.ref + ": The decision could not be sent. Check the lot's lane before deciding it again."); });
     });
   }
   function undo(q) {              // a row's own Undo passes its entry; U and the toast cancel the newest

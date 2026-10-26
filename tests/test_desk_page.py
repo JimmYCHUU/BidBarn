@@ -329,7 +329,9 @@ def test_desk_js_acts_only_on_the_lot_that_is_shown():
 def test_desk_js_errors_name_the_lot_and_stay():
     src = DESK_JS.read_text(encoding="utf-8")
     assert "function fail(" in src and "Dismiss" in src
-    assert 'ref + ": This lot changed while you decided. It is back on the desk."' in src
+    # A refused decision records nothing; the lot is in the Decided lane (decided elsewhere) or replaced (a replay)
+    assert 'ref + ": This lot changed while you decided (decided elsewhere, or replaced by a newer scan). Nothing was recorded from the desk."' in src
+    assert "It is back on the desk" not in src
     assert 'could not be cleared: " + why' in src and "it is no longer waiting." in src
     assert "Type a whole number of thousands of yen." in src
 
