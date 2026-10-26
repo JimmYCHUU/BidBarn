@@ -61,6 +61,12 @@ CREATE TABLE IF NOT EXISTS bids (
   message TEXT,
   screenshot TEXT
 );
+CREATE TABLE IF NOT EXISTS bid_intents (
+  ref_no TEXT PRIMARY KEY,         -- one claim per vehicle: the proposal approved for it
+  proposal_id INTEGER NOT NULL UNIQUE,
+  amount_jpy_k INTEGER NOT NULL,
+  at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS review_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   proposal_id INTEGER NOT NULL,
@@ -133,12 +139,24 @@ DECISION_COLUMNS = {
     "opened_at": "TEXT", "decide_seconds": "REAL", "sheet_zoomed": "INTEGER DEFAULT 0",
     "photos_clicked": "INTEGER DEFAULT 0", "nichibo_opened": "INTEGER DEFAULT 0", "amount_edited": "INTEGER DEFAULT 0",
     "proposed_jpy_k": "INTEGER", "via": "TEXT",
+    "undone_at": "TEXT",  # Reopen undid this decision: it stays in the day log but is not learned from
 }
 EVENTS = ("open", "sheet_zoom", "photos_click", "nichibo_click", "amount_edit", "decide")
 
 
 def now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+class Refused(Exception):
+    """A decision the store will not record. `str(exc)` is a full sentence for the page."""
+
+
+class VehicleClaimed(Refused):
+    """Approving a vehicle that another proposal already holds the claim on."""
+    def __init__(self, ref_no: str, holder: int):
+        self.ref_no, self.holder = ref_no, holder
+        super().__init__(f"This vehicle is already approved (lot {holder}). One bid per vehicle, so it is not approved again.")
 
 
 class Store:
@@ -161,6 +179,15 @@ class Store:
         self.conn.commit()
         self._ensure_columns("decisions", DECISION_COLUMNS)
         self._ensure_columns("manual_actions", {"note": "TEXT"})  # typed reasons from watch sessions
+        # Approvals made before the claim existed: the oldest approved lot of a vehicle holds it. Idempotent.
+        # (A stub table without the decision columns has no approvals to claim.)
+        have = {r["name"] for r in self.conn.execute("PRAGMA table_info(proposals)")}
+        if {"approved_bid_jpy_k", "bid_jpy_k", "decided_at"} <= have:
+            self.conn.execute(
+                "INSERT OR IGNORE INTO bid_intents(ref_no, proposal_id, amount_jpy_k, at) "
+                "SELECT ref_no, id, COALESCE(approved_bid_jpy_k, bid_jpy_k, 0), COALESCE(decided_at, created_at) "
+                "FROM proposals WHERE decision='approved' ORDER BY id")
+            self.conn.commit()
 
     def _ensure_columns(self, table: str, columns: dict[str, str]) -> None:
         """Add the columns a newer version needs to a database created by an older one. Never drops anything."""
@@ -300,12 +327,61 @@ class Store:
         args.append(limit)
         return self.conn.execute(q, args).fetchall()
 
-    def decide(self, pid: int, action: str, reason: str | None, amount_jpy_k: int | None, make_rule: bool,
-               via: str = "detail") -> None:
-        """Record the human decision. The only caller is the review page (CLAUDE.md, rule 1)."""
+    def intent_for(self, ref_no: str) -> sqlite3.Row | None:
+        """The claim on a vehicle: the proposal approved for it, if any."""
+        return self.conn.execute("SELECT * FROM bid_intents WHERE ref_no=?", (ref_no,)).fetchone()
+
+    def _newer_than(self, p: sqlite3.Row) -> sqlite3.Row | None:
+        """A later proposal for the same vehicle and guide, if there is one."""
+        latest = self.latest_proposal(p["ref_no"], p["guide_id"])
+        return latest if latest is not None and latest["id"] != p["id"] else None
+
+    def not_pending_reason(self, row: sqlite3.Row) -> str | None:
+        """None for a lot that waits for a decision; otherwise the sentence `decide` refuses with."""
+        d = row["decision"]
+        if d == "pending":
+            return None
+        if d in ("approved", "rejected"):
+            return "This lot is already decided."
+        if d == "deleted":
+            return "This lot was cleared from the review."
+        newer = self._newer_than(row)
+        if newer is not None:
+            return f"A newer scan replaced this lot. Decide the new one (lot {newer['id']})."
+        return "A newer scan replaced this lot."
+
+    def reopen(self, pid: int) -> None:
+        """Return an approved or rejected lot that was not placed live to waiting, and free its vehicle's claim.
+        Never approves anything. The undone decision stays in `decisions` (marked) for the day log."""
         p = self.proposal(pid)
         if p is None:
             raise KeyError(pid)
+        if p["decision"] not in ("approved", "rejected"):
+            raise Refused("Only an approved or rejected lot can be reopened; this one is waiting or out of the review.")
+        if p["placed_at"] or self.already_bid(p["ref_no"]):
+            raise Refused("This lot was placed live, so it cannot be reopened.")
+        newer = self._newer_than(p)
+        if newer is not None:
+            raise Refused(f"A newer scan replaced this lot. Decide the new one (lot {newer['id']}).")
+        self.conn.execute(
+            "UPDATE proposals SET decision='pending', decision_reason=NULL, decided_at=NULL, approved_bid_jpy_k=NULL, "
+            "placement_json=NULL WHERE id=?", (pid,))
+        self.conn.execute("DELETE FROM bid_intents WHERE proposal_id=?", (pid,))
+        self.conn.execute(
+            "UPDATE decisions SET undone_at=? WHERE id=(SELECT MAX(id) FROM decisions WHERE proposal_id=? AND undone_at IS NULL)",
+            (now(), pid))
+        self.conn.commit()
+
+    def decide(self, pid: int, action: str, reason: str | None, amount_jpy_k: int | None, make_rule: bool,
+               via: str = "detail") -> None:
+        """Record the human decision. The only caller is the review page (CLAUDE.md, rule 1). Refuses a lot that is
+        no longer pending, and an approval of a vehicle another proposal already holds the claim on."""
+        p = self.proposal(pid)
+        if p is None:
+            raise KeyError(pid)
+        why = self.not_pending_reason(p)
+        if why:
+            raise Refused(why)
         decision = "approved" if action == "approve" else "rejected"
         ts = now()
         tele = self.telemetry(pid)
@@ -313,9 +389,25 @@ class Store:
         if tele.get("opened_at"):
             seconds = round((datetime.fromisoformat(ts) - datetime.fromisoformat(tele["opened_at"])).total_seconds(), 1)
         edited = int(decision == "approved" and amount_jpy_k is not None and amount_jpy_k != p["bid_jpy_k"])
-        self.conn.execute(
-            "UPDATE proposals SET decision=?, decision_reason=?, decided_at=?, approved_bid_jpy_k=? WHERE id=?",
+        if decision == "approved":
+            claim = amount_jpy_k if amount_jpy_k is not None else (p["bid_jpy_k"] or 0)
+            try:
+                self.conn.execute("INSERT INTO bid_intents(ref_no, proposal_id, amount_jpy_k, at) VALUES(?,?,?,?)",
+                                  (p["ref_no"], pid, claim, ts))
+            except sqlite3.IntegrityError:
+                self.conn.rollback()
+                held = self.intent_for(p["ref_no"])
+                if held is None or held["proposal_id"] != pid:
+                    raise VehicleClaimed(p["ref_no"], held["proposal_id"] if held else 0)
+                # a claim already in this proposal's own name (a legacy backfill): this approval takes it over
+                self.conn.execute("UPDATE bid_intents SET amount_jpy_k=?, at=? WHERE proposal_id=?", (claim, ts, pid))
+        cur = self.conn.execute(
+            "UPDATE proposals SET decision=?, decision_reason=?, decided_at=?, approved_bid_jpy_k=? "
+            "WHERE id=? AND decision='pending'",
             (decision, reason, ts, amount_jpy_k if decision == "approved" else None, pid))
+        if cur.rowcount != 1:  # another tab decided it first
+            self.conn.rollback()
+            raise Refused("This lot is already decided.")
         self.conn.execute(
             "INSERT INTO decisions(proposal_id, ref_no, model_code, action, reason, amount_jpy_k, make_rule, at, "
             "opened_at, decide_seconds, sheet_zoomed, photos_clicked, nichibo_opened, amount_edited, proposed_jpy_k, via) "
@@ -361,12 +453,12 @@ class Store:
         return out
 
     def decision_for(self, pid: int) -> sqlite3.Row | None:
-        return self.conn.execute("SELECT * FROM decisions WHERE proposal_id=? ORDER BY id DESC LIMIT 1", (pid,)).fetchone()
+        return self.conn.execute("SELECT * FROM decisions WHERE proposal_id=? AND undone_at IS NULL ORDER BY id DESC LIMIT 1", (pid,)).fetchone()
 
     def decisions_with_facts(self, model_code: str | None = None, since: str | None = None) -> list[dict]:
         """Every human decision joined with the proposal it was made on (facts parsed)."""
         q = ("SELECT d.*, p.summary, p.facts_json, p.hard_json, p.bid_jpy_k AS bid_jpy_k, p.guide_id, p.status "
-             "FROM decisions d JOIN proposals p ON p.id=d.proposal_id WHERE 1=1")
+             "FROM decisions d JOIN proposals p ON p.id=d.proposal_id WHERE d.undone_at IS NULL")
         args: list = []
         if model_code:
             q += " AND d.model_code=?"; args.append(model_code)
@@ -518,7 +610,7 @@ class Store:
     def past_decisions(self, model_code: str, limit: int = 8) -> list[dict]:
         rows = self.conn.execute(
             "SELECT d.action, d.reason, p.summary FROM decisions d JOIN proposals p ON p.id=d.proposal_id "
-            "WHERE d.model_code=? AND d.reason IS NOT NULL AND d.reason<>'' ORDER BY d.id DESC LIMIT ?",
+            "WHERE d.undone_at IS NULL AND d.model_code=? AND d.reason IS NOT NULL AND d.reason<>'' ORDER BY d.id DESC LIMIT ?",
             (model_code, limit)).fetchall()
         return [{"decision": r["action"], "reason": r["reason"], "summary": r["summary"]} for r in rows]
 
@@ -543,7 +635,7 @@ class Store:
         """The latest human decisions, newest first, with the lot in brief (read only, for the overview)."""
         rows = self.conn.execute(
             "SELECT d.action, d.amount_jpy_k AS amount, d.reason, d.ref_no, d.model_code, d.at, d.proposal_id, p.summary "
-            "FROM decisions d LEFT JOIN proposals p ON p.id=d.proposal_id ORDER BY d.id DESC LIMIT ?", (limit,)).fetchall()
+            "FROM decisions d LEFT JOIN proposals p ON p.id=d.proposal_id WHERE d.undone_at IS NULL ORDER BY d.id DESC LIMIT ?", (limit,)).fetchall()
         return [dict(r) for r in rows]
 
     # -- runs (commands started from the dashboard) ------------------------------

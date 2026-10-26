@@ -49,6 +49,9 @@ hard constraints. Do not weaken them, work around them, or "temporarily" disable
 - `dry_run: true` in `config.yaml` is the default and stays the default. Live placement needs
   BOTH `dry_run: false` in config AND `bot place --live`. Do not add a third way.
 - Every vehicle can be bid on at most once ever (`bids` table primary key). Keep it that way.
+- An approval also claims its vehicle (`bid_intents`, one row per vehicle), so a second approval of the same
+  vehicle under another guide is refused when it is made. Reopen (`Store.reopen`, the Reopen buttons) only
+  returns a decision that was not placed live to waiting and frees the claim; it never approves (Jim, 2026-10-26).
 - Never place, cancel or change a bid on Nichibo as part of a test, a demo, or "to check it works".
 - Learning features (review telemetry, `skip:` standing instructions, `bot insights`,
   `bot learn --har`) may only add SKIPs, ordering and pre-fills. `skip` is the only verb a
