@@ -2,7 +2,7 @@
    (data-confirm, data-ev, data-zoom ...): the desk uses data-desk-* names. #}
 {% from "_desk_macros.html" import k %}
 {% set f = p.facts or {} %}{% set h = p.hard or {} %}{% set s = p.soft or {} %}{% set el = p.eligibility %}
-<article class="desk-lotview" data-lot="{{ p.id }}" data-ref="{{ p.ref_no }}" data-decide="/p/{{ p.id }}/decide" data-delete="/p/{{ p.id }}/delete" data-event="/p/{{ p.id }}/event" data-start="{{ start_k }}">
+<article class="desk-lotview" data-lot="{{ p.id }}" data-ref="{{ p.ref_no }}" data-decide="/p/{{ p.id }}/decide" data-delete="/p/{{ p.id }}/delete" data-event="/p/{{ p.id }}/event" data-start="{{ start_k }}"{% if covered %} data-covered="{{ covered }}"{% endif %}>
   <header class="dl-head">
     <button type="button" class="dl-close btn btn--sm" data-act="close" aria-label="Close the lot">Close</button>
     <div class="dl-title">
@@ -130,18 +130,23 @@
 
   {% if p.decision == 'pending' and p.status != 'SKIP' %}
   <footer class="dl-bar" aria-label="Decision">
-    {% if blocked %}<p class="dl-blocked">{{ blocked }}</p>{% endif %}
+    {# One bid per vehicle: a lot whose other guide's proposal is approved offers no Approve and no amount. #}
+    {% if covered %}<p class="dl-covered">{{ covered }}</p>{% elif blocked %}<p class="dl-blocked">{{ blocked }}</p>{% endif %}
     <div class="dl-actions">
+      {% if not covered %}
       <button type="button" class="approve" data-act="approve" data-desk-amount="{{ p.proposed_bid_jpy_k or '' }}"{% if blocked %} disabled title="{{ blocked }}"{% endif %}>Approve{% if p.proposed_bid_jpy_k and not blocked %} {{ '{:,}'.format(p.proposed_bid_jpy_k) }}K{% endif %}</button>
       <button type="button" data-act="amount">Change amount</button>
+      {% endif %}
       <button type="button" class="reject" data-act="reject">Reject</button>
       <button type="button" class="btn--quiet" data-act="clear" title="Out of the desk without a decision">Clear</button>
     </div>
+    {% if not covered %}
     <div class="dl-panel" data-panel="amount" hidden>
       {% for c in s.candidates or [] %}<label class="dl-radio"><input type="radio" name="pick" value="{{ c.amount_k }}"{% if c.amount_k == p.proposed_bid_jpy_k %} checked{% endif %}> <span class="num"><b>{{ '{:,}'.format(c.amount_k) }}K</b> {{ c.label }}</span></label>{% endfor %}
       <label class="dl-own">Own amount (K JPY) <input type="number" name="amount" min="0" step="10" value="{{ p.proposed_bid_jpy_k or '' }}"></label>
       <div><button type="button" class="approve" data-act="amount-submit">Approve at this amount</button></div>
     </div>
+    {% endif %}
     <div class="dl-panel" data-panel="reject" hidden>
       <label>Reason <textarea name="reason" rows="2"></textarea></label>
       <label class="dl-check-row"><input type="checkbox" name="make_rule" value="1"> Also save as a standing instruction for {{ p.model_code }}</label>

@@ -118,6 +118,9 @@ def register(app, templates, cfg, store, page, *, load, sort_key) -> None:
         facts = p.get("facts") or {}
         start_k = (facts.get("start_price_jpy") or 0) // 1000
         amount = p.get("proposed_bid_jpy_k")
+        # The same vehicle approved under another guide: one bid per vehicle, so this one is not approved again.
+        cover = next((sb for sb in p["siblings"] if sb["decision"] == "approved"), None)
+        covered = f"Covered by the approval of #{cover['id']} under {cover['guide_name']}." if cover else ""
         if not amount:
             blocked = "No amount from the grid. Change the amount to type one."
         elif amount * 1000 < (facts.get("start_price_jpy") or 0):
@@ -126,4 +129,5 @@ def register(app, templates, cfg, store, page, *, load, sort_key) -> None:
             blocked = ""
         images_seen = {str(x).replace("\\", "/").rsplit("/", 1)[-1] for x in (p.get("soft") or {}).get("images_used") or []}
         return templates.TemplateResponse(request, "_desk_lot.html", {
-            "p": p, "look": look_items(p), "grid": mini_grid(cfg, p), "start_k": start_k, "blocked": blocked, "seen": images_seen})
+            "p": p, "look": look_items(p), "grid": mini_grid(cfg, p), "start_k": start_k, "blocked": blocked, "seen": images_seen,
+            "covered": covered})

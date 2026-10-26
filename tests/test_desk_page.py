@@ -479,3 +479,29 @@ def test_the_lot_view_shows_the_rules_reasons_and_the_per_variant_amounts(cfg):
     amount = t.split('aria-label="Amount"')[1].split("</section>")[0]
     assert "two variants fit" in amount
     assert "Van DX" in amount and "1,200K" in amount and "Van GL" in amount and "no bid" in amount
+
+
+def test_a_lot_covered_by_its_other_guides_approval_cannot_be_approved_again(cfg):
+    """I2: the same vehicle under a second guide, once the first is approved, offers no Approve and no amount."""
+    store = Store(cfg.db_path)
+    a = _seed(store, "TW1", "GDH206", "4", 50_000, guide=1)
+    b = _seed(store, "TW1", "GDH206", "4", 50_000, guide=2)
+    store.close()
+    client, _ = _client(cfg)
+    before = client.get(f"/desk/lot/{b}").text
+    assert 'data-act="approve"' in before and "Covered by" not in before
+    assert client.post(f"/p/{a}/decide", data={"action": "approve", "amount": "1000", "via": "desk"}, headers=JSON).status_code == 200
+    t = client.get(f"/desk/lot/{b}").text
+    assert re.search(rf"Covered by the approval of #{a} under [^<]+\.", t)
+    for gone in ('data-act="approve"', 'data-act="amount"', 'data-act="amount-submit"', 'name="amount"'):
+        assert gone not in t, gone
+    assert 'data-act="reject"' in t and 'data-act="clear"' in t
+    assert re.search(rf'<article[^>]*data-covered="Covered by the approval of #{a} under', t)
+
+
+def test_desk_js_does_not_queue_an_approve_for_a_covered_lot():
+    src = DESK_JS.read_text(encoding="utf-8")
+    assert "dataset.covered" in _js_fn(src, "approve")
+    assert 'action === "approve" && v.dataset.covered' in _js_fn(src, "queueDecision")
+    key_e = src[src.index('else if (k === "e")'):]
+    assert "dataset.covered" in key_e[:key_e.index("\n")]

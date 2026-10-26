@@ -295,6 +295,7 @@
     if (!v) return;
     var pid = v.dataset.lot, row = state.row || pid;
     if (waitingFor(row) || waitingFor(pid)) { say("This lot already waits to be sent. Undo it first."); return; }
+    if (action === "approve" && v.dataset.covered) { say(v.dataset.covered + " It is not approved again."); return; }
     var body = new FormData();
     body.append("action", action);
     body.append("via", "desk");
@@ -315,6 +316,7 @@
   function approve() {
     if (settling()) return;
     var v = lotView();
+    if (v && v.dataset.covered) { say(v.dataset.covered + " It is not approved again."); return; }   // one bid per vehicle
     var b = v && $('[data-act="approve"]', v);
     if (!b) return;
     if (b.disabled) { say(b.title || "This lot cannot be approved as it is."); return; }
@@ -438,7 +440,7 @@
       if (state.row && !lotView()) loadLot(state.row, state.row);
     }
     else if (k === "a") approve();
-    else if (k === "e") { if (lotView() && panel("amount")) openPanel("amount"); }
+    else if (k === "e") { var cv = lotView(); if (cv && cv.dataset.covered) say(cv.dataset.covered); else if (cv && panel("amount")) openPanel("amount"); }
     else if (k === "r") { if (lotView() && panel("reject")) openPanel("reject"); }
     else if (k === "d") clearLot();
     else if (k === "u") undo();
