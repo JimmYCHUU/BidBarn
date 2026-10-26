@@ -9,7 +9,7 @@ import json
 import logging
 import re
 import time
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Callable
@@ -178,6 +178,11 @@ def _read_day(browser: Browser, cfg: Config, ref_no: str, cache, stats: ScanStat
     return day
 
 
+def _today_jst() -> str:
+    """Today in Japan (YYYYMMDD), the calendar Nichibo's auction days are in."""
+    return datetime.now(timezone(timedelta(hours=9))).strftime("%Y%m%d")
+
+
 def _day_known(facts) -> bool:
     return isinstance(facts, dict) and bool(facts.get("auction_date") or facts.get("auction_day_read"))
 
@@ -205,7 +210,7 @@ def _fill_waiting_day(store: Store, browser: Browser, cfg: Config, ref_no: str, 
         return
     if not isinstance(facts, dict) or _day_known(facts):
         return
-    known = store.known_day(ref_no)
+    known = store.known_day(ref_no, _today_jst())
     if known:
         store.set_auction_day(prev["id"], known["auction_date"], known["auction_place"])
         return
@@ -219,7 +224,7 @@ def _carry_day(store: Store, proposal: dict) -> bool:
         return False
     if _day_known(facts):
         return False
-    known = store.known_day(proposal["ref_no"])
+    known = store.known_day(proposal["ref_no"], _today_jst())
     if known:
         facts.update(known)
         return False

@@ -424,15 +424,19 @@ class Store:
                           (json.dumps(facts, ensure_ascii=False, default=str), pid))
         self.conn.commit()
 
-    def known_day(self, ref_no: str) -> dict | None:
-        """The auction day an earlier proposal for this vehicle (any guide) already holds: date, place, read flag."""
+    def known_day(self, ref_no: str, on_or_after: str) -> dict | None:
+        """The auction day the newest earlier proposal for this vehicle (any guide) holds, if it has not passed
+        (YYYYMMDD on or after `on_or_after`). A lot number seen again after its auction may be a new listing, so a
+        past day is not carried and the page is read again (Jim, 2026-10-26). A page read with no date is not carried."""
         for r in self.conn.execute("SELECT facts_json FROM proposals WHERE ref_no=? ORDER BY id DESC", (ref_no,)):
             try:
                 f = json.loads(r["facts_json"] or "{}")
             except json.JSONDecodeError:
                 continue
-            if isinstance(f, dict) and (f.get("auction_date") or f.get("auction_day_read")):
-                return {"auction_date": f.get("auction_date") or "", "auction_place": f.get("auction_place") or "",
+            if isinstance(f, dict) and f.get("auction_date"):
+                if str(f["auction_date"]) < on_or_after:
+                    return None
+                return {"auction_date": f["auction_date"], "auction_place": f.get("auction_place") or "",
                         "auction_day_read": True}
         return None
 

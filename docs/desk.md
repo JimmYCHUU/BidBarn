@@ -80,8 +80,10 @@ takes it again.
 
 A lot that reaches the review (BID or NEEDS_REVIEW) now has its own page opened once, to read its
 auction day and hall. That is one more paced page load per such lot, once: the day is stored and
-carried forward. The first scan after the merge fills in the day for every lot already waiting, one
-paced load each. The page loads go through the URL guard like any other.
+carried forward while it has not passed (today in Japan time or later). A lot number seen again after
+its auction day may be a new listing, so its page is read again. The first scan after the merge fills
+in the day for every lot already waiting, one paced load each. The page loads go through the URL guard
+like any other.
 
 `day_pages` (pages read only for the day) is in the scan's own summary line and in the run's stored
 summary. It is not on the dashboard run page yet. That is a small follow-up after the pending

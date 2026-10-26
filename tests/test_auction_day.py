@@ -19,6 +19,12 @@ def _lot_visits(browser):
     return [u for u in browser.visited if "/auction/" in u and "/auction?" not in u]
 
 
+def _today_in_japan(monkeypatch, day: str):
+    """Pin the scan's idea of today in Japan; the captured lot page's auction is on 20260915."""
+    import auction_bot.pipeline as pl
+    monkeypatch.setattr(pl, "_today_jst", lambda: day)
+
+
 def test_a_card_only_lot_for_review_gets_its_auction_day(cfg, monkeypatch):
     _card_only(cfg, monkeypatch)
     store = Store(cfg.db_path)
@@ -115,6 +121,7 @@ def test_a_waiting_lot_that_has_its_day_is_not_read_again_even_with_a_cold_cache
 def test_a_stored_day_is_carried_forward_to_a_re_evaluated_lot(cfg, monkeypatch):
     from tests.test_pipeline_offline import PLACEHOLDER_GIF
     _card_only(cfg, monkeypatch)
+    _today_in_japan(monkeypatch, "20260901")  # before the auction: the stored day still holds
     store = Store(cfg.db_path)
     scan(cfg, FakeBrowser(PLACEHOLDER_GIF), store, ["GDH206"], limit_per_model=2)  # parked, day read
     parked = {r["ref_no"] for r in store.list_proposals(decision="pending", status="NEEDS_REVIEW")}
@@ -127,6 +134,35 @@ def test_a_stored_day_is_carried_forward_to_a_re_evaluated_lot(cfg, monkeypatch)
     for r in new:
         f = json.loads(r["facts_json"])
         assert f["auction_date"] == "20260915" and f["auction_place"] == "CAA Gifu"
+    store.close()
+
+
+def test_a_past_day_is_not_carried_to_a_re_evaluated_lot(cfg, monkeypatch):
+    # A lot number seen again after its auction may be a new listing (Jim, 2026-10-26): read its page again.
+    from tests.test_pipeline_offline import PLACEHOLDER_GIF
+    _card_only(cfg, monkeypatch)
+    _today_in_japan(monkeypatch, "20260901")
+    store = Store(cfg.db_path)
+    scan(cfg, FakeBrowser(PLACEHOLDER_GIF), store, ["GDH206"], limit_per_model=2)  # parked, day read
+    _today_in_japan(monkeypatch, "20261001")  # the auction of 20260915 is over
+    again = FakeBrowser()
+    stats = scan(cfg, again, store, ["GDH206"], limit_per_model=2, fresh=True)
+    assert stats.pending == 0 and stats.day_pages == 2 and len(_lot_visits(again)) == 2
+    store.close()
+
+
+def test_known_day_carries_only_a_day_that_has_not_passed(cfg):
+    store = Store(cfg.db_path)
+    add = lambda ref, facts: store.add_proposal(ref_no=ref, guide_id=1, model_code="X", snapshot="s", rule_updated_at="u",
+                                                status="SKIP", stage="card", summary="", facts_json=facts, hard_json={})
+    add("A", {"auction_date": "20261020", "auction_place": "JU Gifu"})
+    add("A", {"auction_date": "20261027", "auction_place": "USS Tokyo"})  # the newest row decides
+    add("B", {"auction_date": "", "auction_day_read": True})  # a page with no date: not carried
+    assert store.known_day("A", "20261026") == {"auction_date": "20261027", "auction_place": "USS Tokyo", "auction_day_read": True}
+    assert store.known_day("A", "20261027")["auction_date"] == "20261027"  # the auction day itself still holds
+    assert store.known_day("A", "20261028") is None  # past: read again, never fall back to an older row
+    assert store.known_day("B", "20261026") is None
+    assert store.known_day("C", "20261026") is None
     store.close()
 
 
@@ -178,6 +214,7 @@ class _NoDate(FakeBrowser):
 
 def test_a_waiting_lot_copies_a_day_another_row_already_holds(cfg, monkeypatch):
     _card_only(cfg, monkeypatch)
+    _today_in_japan(monkeypatch, "20260901")  # before the auction: the other row's day still holds
     store = Store(cfg.db_path)
     scan(cfg, FakeBrowser(), store, ["GDH206"], limit_per_model=1)
     row = store.list_proposals(decision="pending", status="NEEDS_REVIEW")[0]
@@ -195,6 +232,25 @@ def test_a_waiting_lot_copies_a_day_another_row_already_holds(cfg, monkeypatch):
     assert not any(u.endswith(f"/auction/{row['ref_no']}") for u in _lot_visits(again))
     got = json.loads(store.proposal(row["id"])["facts_json"])
     assert got["auction_date"] == "20260915" and got["auction_place"] == "CAA Gifu" and got["auction_day_read"] is True
+    store.close()
+
+
+def test_a_waiting_lot_does_not_copy_a_day_that_has_passed(cfg, monkeypatch):
+    _card_only(cfg, monkeypatch)
+    _today_in_japan(monkeypatch, "20260901")
+    store = Store(cfg.db_path)
+    scan(cfg, FakeBrowser(), store, ["GDH206"], limit_per_model=1)
+    row = store.list_proposals(decision="pending", status="NEEDS_REVIEW")[0]
+    facts = json.loads(row["facts_json"])
+    store.add_proposal(ref_no=row["ref_no"], guide_id=987654, model_code="OTHER", snapshot="s", rule_updated_at="u",
+                       status="SKIP", stage="card", summary="", facts_json=dict(facts), hard_json={"checks": []})
+    facts["auction_date"] = facts["auction_place"] = ""
+    facts.pop("auction_day_read", None)
+    store.update_soft(row["id"], json.loads(row["soft_json"]), facts=facts)
+    _today_in_japan(monkeypatch, "20261001")  # the other row's day has passed: read the page instead
+    again = FakeBrowser()
+    stats = scan(cfg, again, store, ["GDH206"], limit_per_model=0, fresh=True)
+    assert stats.day_pages == 1 and any(u.endswith(f"/auction/{row['ref_no']}") for u in _lot_visits(again))
     store.close()
 
 
