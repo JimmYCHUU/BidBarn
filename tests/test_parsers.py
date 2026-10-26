@@ -86,3 +86,25 @@ def test_nichibo_url_guard():
         assert nichibo_url_allowed(u)[0], u
     for u in forbidden:
         assert not nichibo_url_allowed(u)[0], u
+
+
+def test_page_request_guard_covers_every_forbidden_area_but_the_bid_click():
+    # The second line of defence aborts requests a page makes by itself. It covers the same areas as
+    # the first, paid image requests included; only the bid that place_bid's own click sends passes it.
+    from auction_bot.nichibo.browser import _NICHIBO_PAGE_DENY, nichibo_url_allowed
+    base = "https://autosearch.nichibojapan.com"
+    aborted = [
+        "/stock/abc123", "/vehicleOffers", "/vehicle-offers/1", "/offer", "/cart", "/checkout",
+        "/auction/cart/abc", "/auction/update-image-credit?NihonId=1",
+        "/auction/request-image?NihonId=1", "/auction/images-request",
+    ]
+    for p in aborted:
+        assert _NICHIBO_PAGE_DENY.match(base + p), p
+        assert not nichibo_url_allowed(base + p)[0], p
+    passed = [
+        "/auction/bid?v=x&b=1", "/auction/search", "/image.php?img_url=abc", "/js/app.js",
+        "/auction/by9NRDJydGQwZ0dYQXpwOHNsTEVSK3BVRWJ1N1krcGIrLzNpSDB1d2ovND0=",
+    ]
+    for p in passed:
+        assert not _NICHIBO_PAGE_DENY.match(base + p), p
+    assert not nichibo_url_allowed(base + "/auction/bid?v=x&b=1")[0]  # still refused for goto and get

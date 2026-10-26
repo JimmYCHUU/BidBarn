@@ -29,11 +29,15 @@ class ForbiddenUrl(RuntimeError):
 # uses the auction search, auction detail pages, the sheet translator, images and login.
 # Everything else on Nichibo is refused here, including carts, offers and paid image requests.
 _NICHIBO_HOST = re.compile(r"(^|\.)nichibojapan\.com$", re.I)
-_NICHIBO_DENY = re.compile(
-    r"^/(stock|vehicleoffers|vehicle-offers|offer|offers|buy|purchase|order|checkout|cart|"
-    r"auction/cart|auction/bid|auction/update-image-credit|auction/request-image|auction/images-request)(/|\?|$)",
-    re.I,
+# One list feeds both guards, so they cannot drift apart.
+_FORBIDDEN_AREAS = (
+    r"stock|vehicle[-_]?offers?|offers?|buy|purchase|order|checkout|cart|"
+    r"auction/cart|auction/update-image-credit|auction/request-image|auction/images-request"
 )
+# The bid form is refused for every navigation and direct request; only the click in
+# bid.py::place_bid may send it, so the page-request guard below lets it through.
+_NICHIBO_DENY = re.compile(rf"^/({_FORBIDDEN_AREAS}|auction/bid)(/|\?|$)", re.I)
+_NICHIBO_PAGE_DENY = re.compile(rf"https?://[^/]*nichibojapan\.com/({_FORBIDDEN_AREAS})(/|\?|$)", re.I)
 _NICHIBO_ALLOW = re.compile(
     r"^/(auction/?|auction/search|auction/jsonAuctionSheetData|auction/jsonSuggested|auction/jsonMaketPrice/?|"
     r"image\.php|login|logout|updateSides|auction/[A-Za-z0-9+/=%_.-]+)$",
@@ -88,7 +92,7 @@ class Browser:
                 **size,
             )
             # Second line of defence: even a page-initiated request to a forbidden Nichibo area is aborted.
-            self.context.route(re.compile(r"https?://[^/]*nichibojapan\.com/(stock|vehicle[-_]?offers?|offers?|buy|purchase|order|checkout|cart|auction/cart|auction/update-image-credit)(/|\?|$)", re.I), _route_guard)
+            self.context.route(_NICHIBO_PAGE_DENY, _route_guard)
         except BaseException:
             self._close()  # the launch failed: nothing is left open and the lock is given back
             raise
