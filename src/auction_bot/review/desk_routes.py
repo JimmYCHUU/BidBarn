@@ -44,7 +44,8 @@ def mini_grid(cfg, p: dict) -> dict | None:
         rules = rules_for_code(cfg, p.get("model_code") or "")
     except Exception:  # a snapshot that cannot be read reads as "no grid", never an error on the page
         return None
-    rule = next((r for r in rules if r.guide_id == p.get("guide_id")), None) or (rules[0] if rules else None)
+    # Only the lot's own guide: another guide's variant would light a cell that is not where this bid came from.
+    rule = next((r for r in rules if r.guide_id == p.get("guide_id")), None)
     variant = next((v for v in (rule.variants if rule else []) if v.label == name), None)
     if variant is None:
         return None

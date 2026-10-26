@@ -200,3 +200,50 @@ def test_the_lot_view_gives_review_js_nothing_to_bind(cfg, monkeypatch):
 def test_an_unknown_lot_is_404(cfg):
     client, _ = _client(cfg)
     assert client.get("/desk/lot/9999").status_code == 404
+
+
+BAR_BUTTONS = ('data-act="approve"', 'data-act="amount"', 'data-act="reject"', 'data-act="clear"')
+
+
+def test_a_cleared_lot_shows_cleared_and_no_decision_bar(cfg):
+    pid = _scanned(cfg)
+    client, _ = _client(cfg)
+    assert client.post(f"/p/{pid}/delete", headers={"Accept": "application/json"}).status_code == 200
+    t = client.get(f"/desk/lot/{pid}").text
+    assert "Cleared, not a decision" in t
+    assert not any(b in t for b in BAR_BUTTONS)
+
+
+def test_an_approved_lot_shows_its_decision_and_amount(cfg):
+    store = Store(cfg.db_path)
+    pid = _seed(store, "AP1", "GDH206", "4", 50_000)  # start price 500K
+    store.close()
+    client, _ = _client(cfg)
+    r = client.post(f"/p/{pid}/decide", data={"action": "approve", "amount": "1000"}, headers={"Accept": "application/json"})
+    assert r.status_code == 200, r.text
+    t = client.get(f"/desk/lot/{pid}").text
+    assert "Approved" in t and "1,000K" in t
+    assert not any(b in t for b in BAR_BUTTONS)
+
+
+def test_a_rejected_lot_shows_its_reason(cfg):
+    pid = _scanned(cfg)
+    client, _ = _client(cfg)
+    r = client.post(f"/p/{pid}/decide", data={"action": "reject", "reason": "ten seats on the sheet"}, headers={"Accept": "application/json"})
+    assert r.status_code == 200, r.text
+    t = client.get(f"/desk/lot/{pid}").text
+    assert "Rejected" in t and "ten seats on the sheet" in t
+    assert not any(b in t for b in BAR_BUTTONS)
+
+
+def test_a_lot_of_another_guide_gets_no_grid(cfg):
+    pid = _scanned(cfg)
+    store = Store(cfg.db_path)
+    store.conn.execute("UPDATE proposals SET guide_id=987654 WHERE id=?", (pid,))
+    store.conn.commit()
+    from auction_bot.review.app import _load
+    p = _load(store.proposal(pid))
+    store.close()
+    assert mini_grid(cfg, p) is None
+    client, _ = _client(cfg)
+    assert 'class="used"' not in client.get(f"/desk/lot/{pid}").text
