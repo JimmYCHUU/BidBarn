@@ -351,9 +351,12 @@ class Store:
         return self.conn.execute("SELECT * FROM bid_intents WHERE ref_no=?", (ref_no,)).fetchone()
 
     def _newer_than(self, p: sqlite3.Row) -> sqlite3.Row | None:
-        """A later proposal for the same vehicle and guide, if there is one."""
+        """A later proposal for the same vehicle and guide that replaces this one, if there is one. A newer row that
+        was cleared (deleted) or retired (superseded) replaces nothing."""
         latest = self.latest_proposal(p["ref_no"], p["guide_id"])
-        return latest if latest is not None and latest["id"] != p["id"] else None
+        if latest is None or latest["id"] == p["id"] or latest["decision"] not in ("pending", "approved", "rejected"):
+            return None
+        return latest
 
     def not_pending_reason(self, row: sqlite3.Row) -> str | None:
         """None for a lot that waits for a decision; otherwise the sentence `decide` refuses with."""
@@ -405,7 +408,7 @@ class Store:
         # read under the write lock the UPDATE took: no scan can store a newer lot between this check and the commit
         newer = self._newer_than(p)
         if newer is not None:  # replaced: out of the review, not waiting beside the newer lot
-            self.conn.execute("UPDATE proposals SET decision='superseded' WHERE id=?", (pid,))
+            self.conn.execute("UPDATE proposals SET decision='superseded', decided_at=? WHERE id=?", (now(), pid))
         self.conn.execute("DELETE FROM bid_intents WHERE proposal_id=?", (pid,))
         self.conn.execute(
             "UPDATE decisions SET undone_at=? WHERE id=(SELECT MAX(id) FROM decisions WHERE proposal_id=? AND undone_at IS NULL)",

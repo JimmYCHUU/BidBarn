@@ -637,7 +637,12 @@ def create_app(cfg: Config, finish_event=None, jobs=None) -> FastAPI:
     def delete_session(request: Request, key: str, next: str = Form("/review")):
         """Every waiting lot of a session out of the review (`key`: a session id, or `earlier` for the lots no
         dashboard run wrote). A session that is running is stopped; one placing bids is left alone."""
-        sid = None if key == "earlier" else (int(key) if key.isdigit() else -1)
+        sid = None
+        if key != "earlier":
+            try:  # str.isdigit() accepts "²", which int() refuses: a bad key is no session
+                sid = int(key) if key.isdigit() else -1
+            except ValueError:
+                sid = -1
         cur = jobs.current()
         live = cur if cur and sid is not None and cur.get("session_id") == sid else None
         if live and (live.get("progress") or {}).get("stage") == "place":

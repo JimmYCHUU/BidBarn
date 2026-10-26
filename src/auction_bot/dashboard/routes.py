@@ -26,7 +26,7 @@ MODES = ("learn", "bid")  # the two runs the overview starts; everything else is
 STEP_COMMANDS = ["login", "check-login", "fetch-rules", "scan", "judge", "replay", "sheet-trial", "place"]
 SHOWN_OPTIONS = {"scan": ["model", "limit"], "replay": ["apply"], "sheet-trial": ["count"]}
 # What a log entry shows of a run's closing numbers: at most three, by the labels `summary_pairs` gives them.
-ENTRY_LABELS = {"scan": ["For review", "Skipped", "Errors"], "fetch-rules": ["Guides"], "judge": ["Judged", "Model unavailable"],
+ENTRY_LABELS = {"scan": ["For review", "Skipped", "Errors"], "scan-now": ["For review", "Skipped", "Errors"], "fetch-rules": ["Guides"], "judge": ["Judged", "Model unavailable"],
                 "replay": ["Changed", "Stored"], "place": ["Bids", "Dry run"], "login": ["Nichibo", "Carbarn dashboard"],
                 "check-login": ["Nichibo", "Carbarn dashboard"], "learn": ["Lots", "Agree", "Disagree"], "bid": ["For review", "Bids"],
                 "sheet-trial": ["Sheets", "Failed", "Disagreements"]}
@@ -72,7 +72,7 @@ def options_words(run: dict) -> str:
             models.append(value)
             i += 2
         elif a == "--limit" and value is not None:
-            words.append(f"at most {value} lot{'' if value == '1' else 's'}" + (" per model" if command == "scan" else ""))
+            words.append(f"at most {value} lot{'' if value == '1' else 's'}" + (" per model" if command in ("scan", "scan-now") else ""))
             i += 2
         elif a == "--days" and value is not None:
             words.append(f"the last {value} day{'' if value == '1' else 's'}")
@@ -101,11 +101,11 @@ def summary_pairs(run: dict) -> list[tuple[str, str]]:
     if run.get("command") == "learn":
         counts = s.get("counts") if isinstance(s.get("counts"), dict) else {}
         return [(label, f"{int(counts[key]):,}") for key, label in LEARN_COUNTS if isinstance(counts.get(key), int)]
-    order = ["guides", "cards", "opened", "sheet_only", "pages", "review", "bid", "skip", "reused", "pending", "model_calls",
+    order = ["guides", "cards", "opened", "day_pages", "sheet_only", "pages", "review", "bid", "skip", "reused", "pending", "model_calls",
              "checked", "changed", "applied", "unchanged", "needs_fetch", "judged", "unavailable", "decisions",
              "approved", "snapshot", "nichibo", "carbarn", "dry_run",
              "lots", "ok", "failed", "low_confidence", "calls", "cached", "disagreements", "decision"]
-    names = {"guides": "Guides", "cards": "Cards read", "opened": "Lots opened", "sheet_only": "Judged from the sheet",
+    names = {"guides": "Guides", "cards": "Cards read", "opened": "Lots opened", "day_pages": "Lot pages read for the auction day", "sheet_only": "Judged from the sheet",
              "pages": "Pages opened", "review": "For review", "bid": "Bid", "skip": "Skipped", "reused": "Reused",
              "pending": "Images pending", "model_calls": "Model calls", "checked": "Checked", "changed": "Changed",
              "applied": "Stored", "unchanged": "Unchanged", "needs_fetch": "Need a page", "judged": "Judged",
@@ -311,7 +311,10 @@ def register(app, templates, cfg, jobs, store, page) -> None:
         `done`. A reconnect continues after the last line the page received."""
         run_or_404(run_id)
         last = request.headers.get("last-event-id") or ""
-        start = int(last) if last.isdigit() else max(0, after)
+        try:  # str.isdigit() accepts "²", which int() refuses: a bad header is no header
+            start = int(last) if last.isdigit() else max(0, after)
+        except ValueError:
+            start = max(0, after)
 
         def stream():
             index, told = start, object()

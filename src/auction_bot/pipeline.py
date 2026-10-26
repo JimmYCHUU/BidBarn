@@ -402,7 +402,7 @@ def scan(cfg: Config, browser: Browser, store: Store, model_codes: list[str] | N
 
 def _scan_counters(stats: ScanStats) -> dict:
     """The running totals the dashboard shows while a scan is going (errors as a count)."""
-    return {"cards": stats.cards, "opened": stats.opened, "review": stats.review, "skip": stats.skip, "bid": stats.bid,
+    return {"cards": stats.cards, "opened": stats.opened, "day_pages": stats.day_pages, "review": stats.review, "skip": stats.skip, "bid": stats.bid,
             "reused": stats.reused, "pending": stats.pending, "model_calls": stats.model_calls, "errors": len(stats.errors)}
 
 

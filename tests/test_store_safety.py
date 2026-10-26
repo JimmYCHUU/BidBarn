@@ -99,7 +99,7 @@ def test_reopen_retires_a_lot_a_newer_scan_replaced_and_frees_the_vehicle(tmp_pa
     assert s.reopen(a) == n
     p = s.proposal(a)
     assert p["decision"] == "superseded"
-    assert p["decided_at"] is None and p["approved_bid_jpy_k"] is None
+    assert p["decided_at"] is not None and p["approved_bid_jpy_k"] is None  # stamped: the page never reads "Superseded at None"
     assert p["decision_reason"] is None and p["placement_json"] is None
     assert s.intent_for("R2") is None
     assert s.conn.execute("SELECT undone_at FROM decisions WHERE proposal_id=?", (a,)).fetchone()["undone_at"]
@@ -407,3 +407,18 @@ def test_a_dry_result_written_before_phase_two_counts_as_done(tmp_path):
         '{"ok": true, "message": "dry run", "screenshot": null, "dry_run": true, "at": "2026-10-01T00:00:00+00:00"}', a))
     s.conn.commit()
     assert s.approved_unplaced(10, dry_run=True) == [] and s.dry_done_count() == 1
+
+
+@pytest.mark.parametrize("newer_decision", ["deleted", "superseded"])
+def test_a_newer_row_that_was_cleared_or_retired_replaces_nothing(tmp_path, newer_decision):
+    s = Store(tmp_path / "b.sqlite"); a, n = _frozen_pair(s)
+    s.conn.execute("UPDATE proposals SET decision=? WHERE id=?", (newer_decision, n)); s.conn.commit()
+    assert s.reopen(a) is None
+    assert s.proposal(a)["decision"] == "pending" and s.proposal(a)["decided_at"] is None
+
+
+@pytest.mark.parametrize("newer_decision", ["approved", "rejected"])
+def test_a_newer_row_that_was_decided_still_replaces(tmp_path, newer_decision):
+    s = Store(tmp_path / "b.sqlite"); a, n = _frozen_pair(s)
+    s.conn.execute("UPDATE proposals SET decision=? WHERE id=?", (newer_decision, n)); s.conn.commit()
+    assert s.reopen(a) == n

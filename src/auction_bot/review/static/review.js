@@ -272,7 +272,7 @@
         if (next < rows.length) select(next, true);
       } else {
         form.querySelectorAll("button, input").forEach(function (el) { el.disabled = false; });
-        fail(form, x.d.detail || ("Error " + x.status));
+        fail(form, (x.d.detail || ("Error " + x.status)) + (x.status === 409 ? " Reload the page to see the lot as it is now." : ""));
       }
     }).catch(function (err) {
       form.querySelectorAll("button, input").forEach(function (el) { el.disabled = false; });

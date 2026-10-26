@@ -321,7 +321,7 @@ def test_scan_prints_progress_for_the_dashboard(cfg, monkeypatch, capsys):
     # One letter per finished guide: f lots for review, e nothing new, x an error. While a guide is going it has none.
     assert last == {"stage": "scan", "guides": 1, "guide": 1, "code": "GDH206", "codes": ["GDH206"], "marks": "f",
                     "cards": stats.cards, "opened": 2, "review": 2, "skip": stats.skip, "bid": 0, "reused": 0,
-                    "pending": 0, "model_calls": 0, "errors": 0}
+                    "pending": 0, "day_pages": 0, "model_calls": 0, "errors": 0}
     assert all(e["marks"] == "" for e in events[:-1])
     assert [e["opened"] for e in events if e.get("opened")] == sorted(e["opened"] for e in events if e.get("opened"))
     assert {1, 2} <= {e.get("opened") for e in events}  # one line after each lot

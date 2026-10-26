@@ -653,3 +653,29 @@ def test_run_screenshot_link_still_opens_the_lightbox():
     html = (base / "templates" / "run.html").read_text(encoding="utf-8")
     js = (base / "static" / "review.js").read_text(encoding="utf-8")
     assert "data-sheet-zoom" in html and '"[data-zoom], [data-sheet-zoom]"' in js
+
+
+def test_a_finished_scan_now_run_reads_like_a_scan_and_names_the_day_pages(cfg):
+    rid = _run(cfg, "scan-now", ["scan-now"], summary={"guides": 3, "cards": 40, "opened": 12, "day_pages": 3, "review": 2, "skip": 8},
+               progress={"stage": "scan", "guides": 3, "guide": 3, "codes": ["GDH206"], "marks": "ffe"})
+    client, _ = _client(cfg)
+    page = client.get(f"/runs/{rid}").text
+    assert "Scan now" in page and "Review the lots" in page
+    assert re.search(r"<dt>Cards read</dt><dd>40</dd>", page)
+    assert re.search(r"<dt>Lot pages read for the auction day</dt><dd>3</dd>", page)
+    assert [k for k, _ in summary_pairs({"command": "scan-now", "summary": {"opened": 1, "day_pages": 3, "pages": 2}})] ==         ["Lots opened", "Lot pages read for the auction day", "Pages opened"]
+    from auction_bot.dashboard import status as st
+    assert (st.COMMAND_ICONS["scan-now"], st.COMMAND_SHORT["scan-now"], st.DOING["scan-now"]) == ("scan-search", "Scan now", "Scanning Nichibo")
+
+
+def test_a_last_event_id_that_is_not_a_number_starts_from_the_top(cfg):
+    rid = _run(cfg, "scan", summary={"guides": 1}, lines=["one", "two"])
+    client, _ = _client(cfg)
+    with client.stream("GET", f"/api/runs/{rid}/events", headers={"Last-Event-ID": "²".encode("latin-1")}) as r:
+        assert r.status_code == 200
+        assert "one" in "".join(r.iter_text())
+
+
+def test_dashboard_js_scan_counters_show_the_day_pages():
+    src = (Path(__file__).resolve().parent.parent / "src" / "auction_bot" / "review" / "static" / "dashboard.js").read_text(encoding="utf-8")
+    assert '["day_pages", p.day_pages, "Lot pages read for the auction day"]' in src

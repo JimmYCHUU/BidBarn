@@ -283,7 +283,7 @@
       if (p.stage === "scan") {
         showGuides(p);
         where.textContent = p.guide ? "Guide " + p.guide + " of " + p.guides + (p.code ? ", " + p.code : "") : "Reading the guides";
-        showCounters([["cards", p.cards, "Cards read"], ["opened", p.opened, "Lots opened"],
+        showCounters([["cards", p.cards, "Cards read"], ["opened", p.opened, "Lots opened"], ["day_pages", p.day_pages, "Lot pages read for the auction day"],
           ["review", (p.review || 0) + (p.bid || 0), "For review"], ["skip", p.skip, "Skipped"], ["reused", p.reused, "Known already"],
           ["pending", p.pending, "Images pending"], ["model_calls", p.model_calls, "Model calls"], ["errors", p.errors, "Errors"]]);
       } else if (p.stage === "judge") {

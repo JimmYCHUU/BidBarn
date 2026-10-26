@@ -413,14 +413,23 @@
               "The lot could not be reopened (error " + r.status + "). Reload the page and look again.";
             return refreshBoard().then(function () {
               fail(ref + ": " + why);
-              if (r.status === 409 && state.lot === pid) return loadLot(pid);   // still open: show what it is now
+              if (state.lot === pid) return loadLot(pid);   // any refusal: the lot still open shows what it is now
             });
           }
           var newer = data && data.newer ? String(data.newer) : "";
           return refreshBoard().then(function () {
             if (newer) {
+              var nr = rowFor(newer);     // in whichever session and lane holds it
+              if (!nr) {
+                say("Reopened. A newer scan replaced this lot (lot " + newer + "), which is not on the board now.");
+                if (state.lot === pid) return loadLot(pid);          // stay: the lot as it reads now
+                return;
+              }
               say("Reopened. A newer scan replaced this lot: decide the new one (lot " + newer + ").");
-              if (state.lot === pid) return loadLot(newer, newer);    // the lot to decide now
+              if (state.lot === pid) {    // only when the reopened lot is still the one on screen
+                state.session = nr.dataset.session; state.lane = nr.dataset.lane;
+                return select(newer);     // select paints the board on that session and lane, then loads the lot
+              }
               return;
             }
             say("Reopened: back to waiting.");

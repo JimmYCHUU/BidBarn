@@ -701,7 +701,15 @@ def test_desk_js_reopen_waits_for_the_lot_and_says_what_happened():
     assert '"The lot could not be reopened (error " + r.status + "). Reload the page and look again."' in body
     assert "Error " not in body
     assert '"Reopened. A newer scan replaced this lot: decide the new one (lot " + newer + ")."' in body
-    assert "loadLot(newer, newer)" in body
+    assert "loadLot(newer, newer)" not in body
+    # item 3: the new lot is found on the refreshed board and opened on the session and lane that hold it
+    assert "var nr = rowFor(newer);" in body
+    assert "state.session = nr.dataset.session; state.lane = nr.dataset.lane;" in body
+    assert "return select(newer);" in body
+    assert "which is not on the board now." in body and "if (state.lot === pid) return loadLot(pid);" in body
+    # item 4: any refusal reloads the lot, not only a 409
+    assert "r.status === 409 && state.lot" not in body
+    assert "if (state.lot === pid) return loadLot(pid);   // any refusal" in body
 
 
 def test_reopen_waits_while_bids_are_placed(cfg):
@@ -804,3 +812,31 @@ def test_a_covered_lot_stays_covered_however_old_the_approval(cfg):
     store.close()
     sessions = build_desk(pending, [], lambda p: (p["id"],), datetime.now(timezone.utc), covering=covering)
     assert sum(s.undecided() for s in sessions) == 0
+
+
+def test_a_replaced_lot_reopened_keeps_its_time_on_its_page(cfg):
+    store = Store(cfg.db_path)
+    a = _seed(store, "TW1", "GDH206", "4", 50_000)
+    store.close()
+    client, _ = _client(cfg)
+    _approve(client, a)
+    store = Store(cfg.db_path)
+    _seed(store, "TW1", "GDH206", "4", 50_000)
+    store.close()
+    assert client.post(f"/p/{a}/reopen", headers=JSON).json()["decision"] == "superseded"
+    store = Store(cfg.db_path)
+    assert store.proposal(a)["decided_at"] is not None
+    store.close()
+    page = client.get(f"/p/{a}").text
+    assert "None" not in page
+
+
+def test_a_bad_session_key_is_no_session(cfg):
+    client, _ = _client(cfg)
+    assert client.post("/sessions/²/delete", follow_redirects=False).status_code == 404
+    assert client.post("/sessions/abc/delete", follow_redirects=False).status_code == 404
+
+
+def test_review_js_a_refused_decision_says_to_reload():
+    src = (DESK_JS.parent / "review.js").read_text(encoding="utf-8")
+    assert '" Reload the page to see the lot as it is now."' in src and "x.status === 409" in src
