@@ -569,6 +569,15 @@ def manual_soft(rule: ModelRule, hard, facts: VehicleFacts, ocr, ocr_hints: list
             "eligibility": eligibility.to_dict() if eligibility else None}
 
 
+def guide_dir(out_dir: Path, guide_id: int | None) -> Path:
+    """A guide's own evaluation files, so a lot proposed under two guides keeps both sets."""
+    if guide_id is None:
+        return out_dir
+    d = out_dir / f"guide_{guide_id}"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def evaluate_vehicle(cfg: Config, rule: ModelRule, facts: VehicleFacts, no_model: bool,
                      evidence_loader: Callable[[], dict], past_decisions: list[dict] | None = None,
                      stats: ScanStats | None = None, judge_client=None, store=None, photo_loader=None,
@@ -594,7 +603,8 @@ def evaluate_vehicle(cfg: Config, rule: ModelRule, facts: VehicleFacts, no_model
     evidence = evidence_loader()
     out_dir = Path(evidence["dir"])
     out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "rule.json").write_text(json.dumps(rule_to_summary(rule), indent=1, ensure_ascii=False), encoding="utf-8")
+    gdir = guide_dir(out_dir, rule.guide_id)
+    (gdir / "rule.json").write_text(json.dumps(rule_to_summary(rule), indent=1, ensure_ascii=False), encoding="utf-8")
     (out_dir / "facts.json").write_text(json.dumps(facts.to_dict(), indent=1, ensure_ascii=False), encoding="utf-8")
 
     # Read the printed fields of the sheet locally (seats, model code, km, grade, 4WD).
@@ -621,7 +631,7 @@ def evaluate_vehicle(cfg: Config, rule: ModelRule, facts: VehicleFacts, no_model
     if no_model:
         # Route 1: the reviewer judges the sheet. Give them the checklist and keyword hints.
         soft = manual_soft(rule, hard, facts, ocr, ocr_hints, evidence, eligibility=elig)
-        (out_dir / "hard.json").write_text(json.dumps(hard.to_dict(), indent=1), encoding="utf-8")
+        (gdir / "hard.json").write_text(json.dumps(hard.to_dict(), indent=1), encoding="utf-8")
         return dict(base, status=NEEDS_REVIEW, stage="manual", bid_jpy_k=hard.bid_jpy_k, base_jpy_k=hard.base_jpy_k,
                     facts_json=facts.to_dict(), hard_json=hard.to_dict(), evidence_json=evidence, soft_json=soft)
 
@@ -677,14 +687,14 @@ def evaluate_vehicle(cfg: Config, rule: ModelRule, facts: VehicleFacts, no_model
             if stats is not None and res.provider:
                 stats.model_calls += 1
             soft.update(**_judge_fields(res))
-            (out_dir / "judge.json").write_text(json.dumps(res.to_dict(), indent=1, ensure_ascii=False), encoding="utf-8")
+            (gdir / "judge.json").write_text(json.dumps(res.to_dict(), indent=1, ensure_ascii=False), encoding="utf-8")
             log.info("   judge %s -> %s, proposed %s (%s)", res.provider or "unavailable", res.recommendation,
                      res.proposed_bid_jpy_k, "; ".join(res.notes)[:120])
         elif new_photos:
             soft.update(judge_pending=True, judge_notes=["photos arrived after the judgement; run `bot judge --pending`"])
         else:
             soft.update(judge_pending=True, judge_notes=["judge pending: run `bot judge --pending`"])
-        (out_dir / "hard.json").write_text(json.dumps(hard.to_dict(), indent=1), encoding="utf-8")
+        (gdir / "hard.json").write_text(json.dumps(hard.to_dict(), indent=1), encoding="utf-8")
         return dict(base, status=NEEDS_REVIEW, stage="judge", bid_jpy_k=hard.bid_jpy_k, base_jpy_k=hard.base_jpy_k,
                     facts_json=facts.to_dict(), hard_json=hard.to_dict(), evidence_json=evidence, soft_json=soft)
 
@@ -701,8 +711,8 @@ def evaluate_vehicle(cfg: Config, rule: ModelRule, facts: VehicleFacts, no_model
     else:
         status = NEEDS_REVIEW
     log.info("   soft %s %s -> %s bid %s", soft.status, "; ".join(soft.reasons)[:160], status, final_hard.bid_jpy_k)
-    (out_dir / "hard.json").write_text(json.dumps(final_hard.to_dict(), indent=1), encoding="utf-8")
-    (out_dir / "soft.json").write_text(json.dumps(soft.to_dict(), indent=1, ensure_ascii=False), encoding="utf-8")
+    (gdir / "hard.json").write_text(json.dumps(final_hard.to_dict(), indent=1), encoding="utf-8")
+    (gdir / "soft.json").write_text(json.dumps(soft.to_dict(), indent=1, ensure_ascii=False), encoding="utf-8")
     return dict(base, status=status, stage="soft", bid_jpy_k=final_hard.bid_jpy_k, base_jpy_k=final_hard.base_jpy_k,
                 facts_json=facts.to_dict(), hard_json=final_hard.to_dict(), soft_json=soft.to_dict(), evidence_json=evidence)
 
@@ -933,7 +943,7 @@ def judge_pending(cfg: Config, store: Store, model_codes: list[str] | None = Non
         soft.update(**_judge_fields(res), catalog=maker, photos_complete=complete)
         out_dir = Path(evidence["dir"])
         out_dir.mkdir(parents=True, exist_ok=True)
-        (out_dir / "judge.json").write_text(json.dumps(res.to_dict(), indent=1, ensure_ascii=False), encoding="utf-8")
+        (guide_dir(out_dir, row["guide_id"]) / "judge.json").write_text(json.dumps(res.to_dict(), indent=1, ensure_ascii=False), encoding="utf-8")
         if maker is not None:
             (out_dir / "catalog.json").write_text(json.dumps(maker, indent=1, ensure_ascii=False), encoding="utf-8")
         store.update_soft(row["id"], soft, facts=facts.to_dict(), evidence=evidence)

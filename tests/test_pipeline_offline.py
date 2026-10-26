@@ -119,7 +119,8 @@ def test_scan_route1_end_to_end(cfg):
     assert p["bid_jpy_k"] == 1_240  # 2020 / 120K-130K = 1,160 + 80 (grade 4)
     ev = json.loads(p["evidence_json"])
     assert ev["sheet"] and Path(ev["sheet"]).exists() and ev["photos"] == []  # photos are a Nichibo link now
-    assert (Path(ev["dir"]) / "rule.json").exists() and (Path(ev["dir"]) / "hard.json").exists()
+    gdir = Path(ev["dir"]) / f"guide_{p['guide_id']}"
+    assert (gdir / "rule.json").exists() and (gdir / "hard.json").exists()
 
     # Second scan re-uses pending proposals instead of re-opening pages, and the search
     # page comes from the disk cache, so only the next three detail pages are fetched.
@@ -138,6 +139,28 @@ def test_scan_route1_end_to_end(cfg):
     assert "sheet_2.jpg" in r.text and "1,240" in r.text and "Open on Nichibo" in r.text  # one link to Nichibo, in the head
     assert 'href="/guides/GDH206"' in r.text  # the lot links to its guide
     store.close()
+
+
+def test_two_guides_keep_their_own_evaluation_files(cfg, tmp_path):
+    from dataclasses import replace
+    from auction_bot.carbarn.client import load_rules
+    from auction_bot.pipeline import evaluate_vehicle
+    store = Store(cfg.db_path)
+    scan(cfg, FakeBrowser(), store, ["GDH206"], no_model=None, limit_per_model=1)
+    row = store.list_proposals(decision="pending", status="NEEDS_REVIEW")[0]
+    store.close()
+    facts = VehicleFacts.from_dict(json.loads(row["facts_json"]))
+    rule = load_rules(cfg)[0][0]
+    ev_dir = tmp_path / "ev" / "lot"
+    loader = lambda: {"dir": str(ev_dir), "sheet": None, "photos": []}
+    for g in (223, 224):
+        out = evaluate_vehicle(cfg, replace(rule, guide_id=g), facts, no_model=True, evidence_loader=loader)
+        assert out["stage"] == "manual"
+    for g in (223, 224):
+        gdir = ev_dir / f"guide_{g}"
+        assert json.loads((gdir / "rule.json").read_text(encoding="utf-8"))["guide_id"] == g
+        assert (gdir / "hard.json").exists()
+    assert (ev_dir / "facts.json").exists() and not (ev_dir / "rule.json").exists()
 
 
 def test_scan_refuses_stale_snapshot(cfg):
