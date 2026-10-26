@@ -346,3 +346,22 @@ def test_the_lot_fragment_has_a_close_button_and_names_its_ref(cfg):
     html = client.get(f"/desk/lot/{pid}").text
     assert re.search(r'<button[^>]*data-act="close"[^>]*aria-label="Close the lot"', html)
     assert 'data-ref="A1"' in html
+
+
+# -- Task 4 fix round 2 ----------------------------------------------------------------------------------
+
+def test_desk_js_waiting_line_replaces_notes_and_toast_clicks_do_not_close_the_lot():
+    src = DESK_JS.read_text(encoding="utf-8")
+    body = src[src.index("function showWaiting()"):]
+    body = body[:body.index("\n  }")]
+    assert 'noteText = ""' in body and "clearTimeout(noteTimer)" in body
+    assert "!t.isConnected" in src and "composedPath().indexOf(toast)" in src
+
+
+def test_desk_js_lot_keys_use_the_lot_shown():
+    src = DESK_JS.read_text(encoding="utf-8")
+    for fn in ("showSheet", "showPhoto", "zoom", "openNichibo"):
+        body = src[src.index(f"function {fn}("):]
+        body = body[:body.index("\n  }")]
+        assert "lotView()" in body, fn
+    assert "lotPane)" not in src[src.index("function inLot"):src.index("function look(")]

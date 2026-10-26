@@ -87,7 +87,9 @@
     renderToast();
   }
   function fail(text) { errorText = text; renderToast(); }
-  function showWaiting() { renderToast(); }
+  function showWaiting() {         // a decision now waits: its line replaces any note, a sticky error stays
+    clearTimeout(noteTimer); noteText = ""; renderToast();
+  }
 
   // -- board: session and lane, rows ---------------------------------------------------------------
   function rowFor(pid) { return $('.desk-row[data-pid="' + pid + '"]', board); }
@@ -230,17 +232,23 @@
     el.classList.add("desk-flash");
     setTimeout(function () { el.classList.remove("desk-flash"); }, 1600);
   }
+  function inLot(sel) {            // only inside the lot that is loaded; none while another lot loads
+    var v = lotView();
+    return v ? $(sel, v) : null;
+  }
   function showSheet() {
-    var a = $('[data-desk-zoom="sheet"]', lotPane);
+    if (!lotView()) { say("Opening the lot..."); return; }
+    var a = inLot('[data-desk-zoom="sheet"]');
     if (!a) { say("This lot has no sheet downloaded."); return; }
     shown = a; flash(a);
   }
   function showPhoto(n) {
-    var a = $('[data-desk-zoom="photo"][data-photo-no="' + n + '"]', lotPane);
+    if (!lotView()) { say("Opening the lot..."); return; }
+    var a = inLot('[data-desk-zoom="photo"][data-photo-no="' + n + '"]');
     if (!a) { say("This lot has no photo " + n + "."); return; }
     shown = a; flash(a); telemetry("photos_click", n);
   }
-  function showSection(label) { flash($('[aria-label="' + label + '"]', lotPane)); }
+  function showSection(label) { flash(inLot('[aria-label="' + label + '"]')); }
   function look(btn) {
     var where = btn.dataset.where;
     if (where === "photo" && btn.dataset.photo) showPhoto(btn.dataset.photo);
@@ -250,11 +258,13 @@
     else showSection("Requirements");
   }
   function zoom() {
-    var a = shown || $('[data-desk-zoom="sheet"]', lotPane);
+    if (!lotView()) { say("Opening the lot..."); return; }
+    var a = shown && shown.isConnected ? shown : inLot('[data-desk-zoom="sheet"]');
     if (a) a.click(); else say("Nothing to zoom on this lot.");
   }
   function openNichibo() {
-    var a = $('[data-desk-ev="nichibo_click"]', lotPane);
+    if (!lotView()) { say("Opening the lot..."); return; }
+    var a = inLot('[data-desk-ev="nichibo_click"]');
     if (a) a.click(); else say("This lot has no Nichibo address.");
   }
 
@@ -497,6 +507,7 @@
   document.addEventListener("keydown", onKey);
   document.addEventListener("click", function (e) {     // narrow: a click outside the lot overlay closes it
     var t = e.target;
+    if (!t.isConnected || (e.composedPath && e.composedPath().indexOf(toast) >= 0)) return;   // the toast's own buttons
     if (narrow.matches && state.lot && !lotPane.contains(t) && !t.closest("#desk-toast, .desk-row, .desk-pending, .desk-sess, .desk-lane")) closeLot();
   });
   window.addEventListener("pagehide", sendAllNow);
