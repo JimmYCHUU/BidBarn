@@ -1,0 +1,2 @@
+{# Shared by the desk templates. #}
+{% macro k(jpy) %}{{ '{:,}'.format((jpy / 1000)|round|int) }}K{% endmacro %}

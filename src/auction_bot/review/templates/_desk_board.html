@@ -1,7 +1,7 @@
 {# The desk board: session strip, lane tabs, rows. Every session's rows are here; the ones outside the current
    session and lane are `hidden`, so it works without JavaScript. Also served alone by GET /desk/board. #}
 {% macro href(session, lane) %}/desk?session={{ session|urlencode }}&amp;lane={{ lane }}{% endmacro %}
-{% macro k(jpy) %}{{ '{:,}'.format((jpy / 1000)|round|int) }}K{% endmacro %}
+{% from "_desk_macros.html" import k %}
 {% set cur = sessions|selectattr('key', 'equalto', current)|first %}
 {% if not sessions %}
 <div class="desk-empty card"><div class="card-body">{{ icon('inbox') }} <b>Nothing to decide</b><p class="muted">No lots are waiting. A scan puts new ones here.</p></div></div>

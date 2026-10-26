@@ -1,0 +1,149 @@
+{# The desk's lot view, a fragment served by GET /desk/lot/<id>. No attribute here is one review.js binds page-wide
+   (data-confirm, data-ev, data-zoom ...): the desk uses data-desk-* names. #}
+{% from "_desk_macros.html" import k %}
+{% set f = p.facts or {} %}{% set h = p.hard or {} %}{% set s = p.soft or {} %}{% set el = p.eligibility %}
+<article class="desk-lotview" data-lot="{{ p.id }}" data-decide="/p/{{ p.id }}/decide" data-delete="/p/{{ p.id }}/delete" data-event="/p/{{ p.id }}/event" data-start="{{ start_k }}">
+  <header class="dl-head">
+    <div class="dl-title">
+      <h2>{{ f.year or '' }} {{ f.make }} {{ f.model }} <span class="muted">{{ f.variant_text }}</span></h2>
+      <p class="muted"><span class="mono">{{ p.ref_no }}</span> · {% if f.auction_place or f.auction_date %}{{ f.auction_place }} {{ f.auction_date }}{% else %}Auction day not known{% endif %} · Guide: {{ p.guide_name }}</p>
+      <dl class="dl-facts num">
+        <div><dt>Year</dt><dd>{{ f.year or '?' }}</dd></div>
+        <div><dt>Km</dt><dd>{{ '{:,}'.format(f.km or 0) }}</dd></div>
+        <div><dt>Grade</dt><dd>{{ f.grade_raw or '?' }}</dd></div>
+        <div><dt>Start</dt><dd>{{ k(f.start_price_jpy or 0) }}</dd></div>
+        <div><dt>Chassis</dt><dd class="mono">{{ f.chassis or 'not read yet' }}</dd></div>
+      </dl>
+    </div>
+    <div class="dl-amount num">
+      {% if p.proposed_bid_jpy_k %}<b>{{ '{:,}'.format(p.proposed_bid_jpy_k) }}K</b>{% if p.bid_jpy_k and p.bid_jpy_k != p.proposed_bid_jpy_k %}<small>grid {{ '{:,}'.format(p.bid_jpy_k) }}K</small>{% endif %}
+      {% else %}<span class="muted">No amount</span>{% endif %}
+    </div>
+  </header>
+
+  <div class="dl-links">
+    {% if f.url %}<a class="btn" href="{{ f.url }}" target="_blank" rel="noopener" data-desk-ev="nichibo_click">Open on Nichibo {{ icon('external-link', 'icon--sm') }}</a>{% endif %}
+    {% if p.siblings %}
+    <span class="dl-guides" role="group" aria-label="Guides for this vehicle">
+      <span class="muted">Also proposed under</span>
+      {% for sb in p.siblings %}<button type="button" class="btn btn--sm" data-sibling="{{ sb.id }}">{{ sb.guide_name }}{% if sb.bid_jpy_k %} · {{ '{:,}'.format(sb.bid_jpy_k) }}K{% endif %} ({{ sb.decision }})</button>{% endfor %}
+      <span class="faint">Approve it once: only one bid per vehicle is ever placed.</span>
+    </span>
+    {% endif %}
+  </div>
+
+  <section class="dl-sec" aria-label="Look at">
+    {% if look %}
+    <h3>Look at</h3>
+    <ul class="dl-looks">
+      {% for item in look %}<li><button type="button" class="desk-look desk-look--{{ item.kind }}" data-where="{{ item.where }}" data-photo="{{ item.photo_no or '' }}">{{ item.text }}</button></li>{% endfor %}
+    </ul>
+    {% else %}
+    <p class="dl-clear">{{ icon('circle-check', 'mark-ok') }} Card-clear: the card answered every requirement. Check the sheet, then decide.</p>
+    {% endif %}
+  </section>
+
+  {% if (s.requirements or [])|rejectattr('kind', 'equalto', 'eligibility')|list %}
+  <section class="dl-sec" aria-label="Requirements">
+    <h3>Requirements</h3>
+    <ul class="dl-reqs">
+      {% for r in s.requirements or [] %}{% if r.kind != 'eligibility' %}{% set b = p.badges[loop.index0] if loop.index0 < p.badges|length else none %}{% set lad = p.ladders.get(r.id) %}
+      <li class="dl-req">
+        <span class="dl-tag">{{ r.source }}</span>
+        <span class="dl-req-main"><b>{{ r.text }}</b>{% if r.amount_k %} <span class="muted">({{ '%+d' % r.amount_k }}K chip)</span>{% endif %}
+          {% if b %}<span class="dl-verdict dl-verdict--{{ b.cls }}">{{ b.mark }}</span>{% if b.evidence %}<span class="dl-evid muted">{{ b.evidence }}</span>{% endif %}
+          {% else %}<span class="dl-verdict dl-verdict--unk">to judge</span>{% endif %}
+          {% if lad %}
+          <ol class="dl-steps">
+            {% for st in lad.steps %}<li class="dl-step{% if st.decided %} dl-step--decided{% endif %}"><b>{{ st.step }}</b> {{ st.state }}{% if st.evidence %} <span class="muted">{{ st.evidence }}</span>{% endif %}{% if st.step == 'photo' and st.photo_no %} <button type="button" class="desk-look" data-where="photo" data-photo="{{ st.photo_no }}">photo {{ st.photo_no }}</button>{% endif %}{% if st.step == 'maker' and st.url %} <a href="{{ st.url }}" target="_blank" rel="noopener">{{ st.grade or 'catalogue' }}</a>{% if st.mark %} [{{ st.mark }}]{% endif %}{% endif %}</li>{% endfor %}
+          </ol>
+          {% endif %}
+        </span>
+      </li>
+      {% endif %}{% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  <section class="dl-sec" aria-label="Amount">
+    <h3>Amount</h3>
+    {% if grid %}
+    <table class="dl-grid num">
+      <thead><tr><th scope="col">Year</th>{% for band in grid.bands %}<th scope="col">{{ band }}</th>{% endfor %}</tr></thead>
+      <tbody>
+        {% for row in grid.rows %}<tr><th scope="row">{{ row.year }}</th>
+          {% for c in row.cells %}<td{% if c.used %} class="used"{% endif %}>{% if c.k is none %}<span class="faint">no bid</span>{% else %}{{ '{:,}'.format(c.k) }}{% endif %}</td>{% endfor %}</tr>{% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+    {% if h.base_jpy_k %}<p class="num muted">Grid cell {{ h.year }} / {{ h.band_label }} = {{ '{:,}'.format(h.base_jpy_k) }}K{% if h.variant_name %} · {{ h.variant_name }}{% endif %}</p>{% endif %}
+    {% if h.modifiers_applied %}<p class="muted">Modifiers: {{ h.modifiers_applied|join(', ') }}</p>{% endif %}
+    {% if h.deferred_modifiers %}<p class="dl-warn">Modifier you must judge yourself: {{ h.deferred_modifiers|join('; ') }}</p>{% endif %}
+    {% if s.candidates %}<p class="num muted">Candidates: {% for c in s.candidates %}{{ '{:,}'.format(c.amount_k) }}K ({{ c.label }}){% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
+  </section>
+
+  {% if el %}
+  <section class="dl-sec" aria-label="Import eligibility">
+    <h3>Import eligibility <span class="pill {{ 'pill--bad' if el.verdict == 'cannot_import' else ('pill--warn' if el.verdict == 'confirm' else 'pill--ok') }}">{{ el.label }}</span></h3>
+    {% if el.pair %}<p class="num"><b>{{ el.pair.label }}</b>{% if el.pair.window %} <span class="muted">window {{ el.pair.window }}</span>{% endif %}{% if el.pair.expiry %} <span class="muted">expires {{ el.pair.expiry }}</span>{% endif %}</p>{% endif %}
+    <ul class="dl-checks">
+      {% for c in el.checks or [] %}<li class="dl-check dl-check--{{ c.state }}"><b>{{ c.name }}</b> {{ c.detail }}</li>{% endfor %}
+    </ul>
+    {% for t in el.texts or [] %}<p class="dl-pairtext"><b>{{ t.label }}</b>: {{ t.text }}{% if t.verdict %} <span class="dl-verdict">{{ t.verdict }}</span>{% if t.evidence %} <span class="muted">{{ t.evidence }}</span>{% endif %}{% endif %}</p>{% endfor %}
+  </section>
+  {% endif %}
+
+  {% if p.judge %}
+  {% set j = p.judge.judgement or {} %}
+  <section class="dl-sec dl-model" aria-label="The model's pre-fill">
+    <h3>The model's pre-fill <span class="pill pill--violet">{{ p.judge.provider or 'no model' }}</span></h3>
+    {% if p.judge.unavailable %}<p class="dl-warn">Model unavailable: {{ p.judge.unavailable }}. Judge the sheet and photos yourself.</p>{% endif %}
+    <p>{% if p.recommendation %}<span class="pill pill--violet">recommends: {{ p.recommendation }}</span>{% endif %}
+      {% if p.proposed_bid_jpy_k %}<span class="num">proposes <b>{{ '{:,}'.format(p.proposed_bid_jpy_k) }}K</b></span>{% endif %}</p>
+    {% if j.summary %}<p><b>{{ j.summary }}</b></p>{% endif %}
+  </section>
+  {% endif %}
+
+  <section class="dl-sec" aria-label="Evidence">
+    <h3>Evidence</h3>
+    {% if p.evidence_base and p.sheet_file %}
+    <a class="dl-sheet" href="/evidence/{{ p.evidence_base }}/{{ p.sheet_file }}" target="_blank" rel="noopener" data-desk-zoom="sheet"><img src="/evidence/{{ p.evidence_base }}/{{ p.sheet_file }}" alt="Auction sheet" loading="lazy"></a>
+    {% if p.sheet_file in seen %}<p class="faint">Sheet seen by the model</p>{% endif %}
+    {% elif f.sheet_url %}<p><a href="{{ f.sheet_url }}" target="_blank" rel="noopener">Auction sheet on Nichibo (not downloaded)</a></p>
+    {% else %}<p class="muted">No sheet yet.</p>{% endif %}
+    {% if p.photo_files %}
+    <div class="dl-photos">
+      {% for ph in p.photo_files %}<a id="dl-photo-{{ loop.index }}" class="dl-photo" href="/evidence/{{ p.evidence_base }}/{{ ph }}" target="_blank" rel="noopener" data-desk-zoom="photo" data-photo-no="{{ loop.index }}"><img src="/evidence/{{ p.evidence_base }}/{{ ph }}" alt="Photo {{ loop.index }}" loading="lazy"><span class="dl-photo-no">{{ loop.index }}</span>{% if ph in seen %}<span class="dl-seen">seen by the model</span>{% endif %}</a>{% endfor %}
+    </div>
+    {% else %}<p class="muted">No photos were downloaded for this lot.</p>{% endif %}
+    {% if f.translator %}<dl class="dl-translation">{% for key, v in f.translator.items() if key != 'sheet_url' %}<div><dt>{{ key }}</dt><dd>{{ v }}</dd></div>{% endfor %}</dl>{% endif %}
+  </section>
+
+  {% if p.decision == 'pending' and p.status != 'SKIP' %}
+  <footer class="dl-bar" aria-label="Decision">
+    {% if blocked %}<p class="dl-blocked">{{ blocked }}</p>{% endif %}
+    <div class="dl-actions">
+      <button type="button" class="approve" data-act="approve"{% if blocked %} disabled title="{{ blocked }}"{% endif %}>Approve{% if p.proposed_bid_jpy_k and not blocked %} {{ '{:,}'.format(p.proposed_bid_jpy_k) }}K{% endif %}</button>
+      <button type="button" data-act="amount">Change amount</button>
+      <button type="button" class="reject" data-act="reject">Reject</button>
+      <button type="button" class="btn--quiet" data-act="clear" title="Out of the desk without a decision">Clear</button>
+    </div>
+    <div class="dl-panel" data-panel="amount" hidden>
+      {% for c in s.candidates or [] %}<label class="dl-radio"><input type="radio" name="pick" value="{{ c.amount_k }}"{% if c.amount_k == p.proposed_bid_jpy_k %} checked{% endif %}> <span class="num"><b>{{ '{:,}'.format(c.amount_k) }}K</b> {{ c.label }}</span></label>{% endfor %}
+      <label class="dl-own">Own amount (K JPY) <input type="number" name="amount" min="0" step="10" value="{{ p.proposed_bid_jpy_k or '' }}"></label>
+    </div>
+    <div class="dl-panel" data-panel="reject" hidden>
+      <label>Reason <textarea name="reason" rows="2"></textarea></label>
+      <label class="dl-check-row"><input type="checkbox" name="make_rule" value="1"> Also save as a standing instruction for {{ p.model_code }}</label>
+      <label>Standing instruction <input type="text" name="rule_text"></label>
+      <label>The model was wrong about
+        <select name="feedback_req"><option value="">(nothing to correct)</option>{% for r in s.requirements or [] if r.kind != 'eligibility' %}<option value="{{ r.id }}">{{ r.text[:60] }}</option>{% endfor %}</select></label>
+      <label>Because <input type="text" name="feedback_note"></label>
+    </div>
+  </footer>
+  {% elif p.decision == 'deleted' %}
+  <footer class="dl-bar"><p>Cleared, not a decision{% if p.decided_at %} · {{ local_time(p.decided_at) }}{% endif %}.</p></footer>
+  {% elif p.decision != 'pending' %}
+  <footer class="dl-bar"><p><span class="pill {{ p.decision }}">{{ p.decision|capitalize }}</span>{% if p.decided_at %} {{ local_time(p.decided_at) }}{% endif %}{% if p.approved_bid_jpy_k %} at <b class="num">{{ '{:,}'.format(p.approved_bid_jpy_k) }}K</b>{% endif %}{% if p.decision_reason %}: {{ p.decision_reason }}{% endif %}</p></footer>
+  {% endif %}
+</article>
