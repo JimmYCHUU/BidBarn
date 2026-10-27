@@ -369,7 +369,7 @@ def create_app(cfg: Config, finish_event=None, jobs=None) -> FastAPI:
     from contextlib import asynccontextmanager
 
     from auction_bot.dashboard import routes as dashboard_routes
-    from auction_bot.review import desk_routes
+    from auction_bot.review import desk_routes, rulebook_routes
     from auction_bot.dashboard.jobs import JobManager, NotRunning
 
     jobs = jobs if jobs is not None else JobManager(cfg)
@@ -445,6 +445,7 @@ def create_app(cfg: Config, finish_event=None, jobs=None) -> FastAPI:
 
     dashboard_routes.register(app, templates, cfg, jobs, store, page)
     desk_routes.register(app, templates, cfg, store, page, load=_load, sort_key=triage_sort_key)
+    rulebook_routes.register(app, templates, cfg, store, page)
 
     @app.get("/review", response_class=HTMLResponse)
     def triage(request: Request, model: str | None = None):

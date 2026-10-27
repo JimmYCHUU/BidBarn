@@ -83,3 +83,104 @@ def test_nothing_locked_can_be_answered():
     assert len(rulebook.LOCKED) >= 7
     with pytest.raises(KeyError):
         rulebook.question("testing_lock")
+
+
+# -- preview and apply (routes) -------------------------------------------------------------------
+
+from tests.test_dashboard_app import FakeJobs, _client, _run   # noqa: E402
+from tests.test_pipeline_offline import cfg   # noqa: E402,F401  (fixture)
+
+JSON = {"accept": "application/json"}
+
+
+def _preview(cfg, value=2000, version=0, status="ok", command="rulebook-preview", answer=None):
+    return _run(cfg, command, status=status, summary={
+        "rulebook_version": version, "answer": answer if answer is not None else {"odo_margin_km": value},
+        "lots": [], "checked": 0, "changed": 0})
+
+
+def _versions(cfg):
+    s = Store(cfg.db_path)
+    try:
+        return s.rulebook_version()
+    finally:
+        s.close()
+
+
+def test_the_store_refuses_a_value_outside_the_catalogue(tmp_path):
+    s = Store(tmp_path / "t.sqlite")
+    for q, v in (("odo_margin", 1500), ("odo_margin", True), ("odo_margin", "2000"), ("gdh206k", "change"),
+                 ("gdh206k", 1000)):
+        with pytest.raises(ValueError):
+            s.add_rulebook_answer(q, v)
+    with pytest.raises(KeyError):
+        s.add_rulebook_answer("testing_lock", "keep")
+    assert s.rulebook_version() == 0
+    s.close()
+
+
+def test_apply_needs_a_matching_fresh_preview(cfg):
+    client, jobs = _client(cfg)
+    url = "/rulebook/odo_margin/apply"
+    cases = [
+        ("none", {"value": "2000", "preview_run": "99"}),
+        ("other value", {"value": "2000", "preview_run": str(_preview(cfg, 1000))}),
+        ("failed run", {"value": "2000", "preview_run": str(_preview(cfg, 2000, status="failed"))}),
+        ("other command", {"value": "2000", "preview_run": str(_preview(cfg, 2000, command="replay"))}),
+        ("other key", {"value": "2000", "preview_run": str(_preview(cfg, answer={"gdh206k": 2000}))}),
+        ("older version", {"value": "2000", "preview_run": str(_preview(cfg, 2000, version=3))}),
+    ]
+    for name, form in cases:
+        r = client.post(url, data=form, headers=JSON)
+        assert r.status_code == 409 and r.json()["detail"].endswith("."), name
+    assert _versions(cfg) == 0 and jobs.live is None
+    assert client.post(url, data={"value": "1500", "preview_run": str(_preview(cfg, 1500))}, headers=JSON).status_code == 400
+    assert client.post(url, data={"value": "2000"}, headers=JSON).status_code == 400
+    assert client.post("/rulebook/gdh206k/apply", data={"value": "1", "preview_run": "1"}, headers=JSON).status_code == 409
+    assert client.post("/rulebook/nonsense/apply", data={"value": "1", "preview_run": "1"}, headers=JSON).status_code == 404
+    assert _versions(cfg) == 0 and jobs.live is None
+
+
+def test_apply_writes_a_version_and_starts_the_replay(cfg):
+    client, jobs = _client(cfg)
+    run = _preview(cfg, 2000, version=0)
+    r = client.post("/rulebook/odo_margin/apply", data={"value": "2000", "preview_run": str(run)}, headers=JSON)
+    assert r.status_code == 200 and r.json()["ok"] is True and r.json()["version"] == 1
+    assert jobs.get(r.json()["run_id"])["args"] == ["replay", "--apply"]
+    s = Store(cfg.db_path)
+    row = s.rulebook_history()[0]
+    assert row["question_id"] == "odo_margin" and row["preview_run"] == run and s.rulebook_answers() == {"odo_margin_km": 2000}
+    s.close()
+    again = client.post("/rulebook/odo_margin/apply", data={"value": "2000", "preview_run": str(run)}, headers=JSON)
+    assert again.status_code == 409 and _versions(cfg) == 1   # the same preview cannot be used twice
+
+
+def test_apply_keeps_the_version_when_a_job_is_running(cfg):
+    client, jobs = _client(cfg)
+    jobs.start("replay", {})
+    r = client.post("/rulebook/odo_margin/apply", data={"value": "3000", "preview_run": str(_preview(cfg, 3000))},
+                    headers=JSON)
+    assert r.status_code == 200 and r.json()["version"] == 1 and "running" in r.json()["busy"] and "run_id" not in r.json()
+    assert _versions(cfg) == 1
+
+
+def test_a_browser_post_goes_back_to_the_rulebook(cfg):
+    client, _ = _client(cfg)
+    r = client.post("/rulebook/gdh206k/keep", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/rulebook"
+
+
+def test_keep_and_request(cfg):
+    client, _ = _client(cfg)
+    r = client.post("/rulebook/gdh206k/keep", headers=JSON)
+    assert r.status_code == 200 and r.json()["version"] == 1
+    assert client.post("/rulebook/odo_margin/keep", headers=JSON).status_code == 409
+    assert client.post("/rulebook/nonsense/keep", headers=JSON).status_code == 404
+    assert _versions(cfg) == 1
+    r = client.post("/rulebook/gdh206k/request", data={"text": "Treat it as skip"}, headers=JSON)
+    assert r.status_code == 200 and r.json()["ok"] is True
+    assert client.post("/rulebook/gdh206k/request", data={"text": "  "}, headers=JSON).status_code == 400
+    assert client.post("/rulebook/nonsense/request", data={"text": "x"}, headers=JSON).status_code == 404
+    s = Store(cfg.db_path)
+    assert [r["text"] for r in s.rule_requests()] == ["Treat it as skip"] and s.rulebook_version() == 1
+    s.close()

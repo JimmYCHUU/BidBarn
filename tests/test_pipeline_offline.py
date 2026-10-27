@@ -1,4 +1,4 @@
-"""End-to-end scan in route-1 mode (no model) against the captured Nichibo pages.
+﻿"""End-to-end scan in route-1 mode (no model) against the captured Nichibo pages.
 
 A fake browser serves the search-results fixture for every search URL, the
 detail fixture for every detail URL, a fake translator JSON and fake JPEG bytes.
@@ -645,3 +645,54 @@ def test_openai_route_still_downloads_max_photos_to_model_at_card_stage(cfg, mon
         pass
     store.close()
     assert seen and seen[0] == 4
+
+
+def test_a_preview_lists_the_lots_that_change_and_writes_nothing(cfg):
+    from auction_bot.pipeline import reevaluate
+    store = Store(cfg.db_path)
+    scan(cfg, FakeBrowser(), store, ["GDH206"], limit_per_model=2)
+    for r in store.list_proposals(decision="pending", status="NEEDS_REVIEW"):  # two lots stored at 50,000 km
+        facts = json.loads(r["facts_json"])
+        facts["km"] = 50_000
+        store.conn.execute("UPDATE proposals SET facts_json=? WHERE id=?", (json.dumps(facts), r["id"]))
+    store.conn.commit()
+    snapshot = lambda: store.conn.execute("SELECT id, status, bid_jpy_k, decision FROM proposals ORDER BY id").fetchall()
+    before = [tuple(r) for r in snapshot()]
+    st = reevaluate(cfg, store, ["GDH206"], answers={"odo_margin_km": 1000})
+    assert st.changed == 2 and st.applied == 0 and len(st.lots) == 2
+    lot = st.lots[0]
+    assert set(lot) == {"pid", "ref_no", "model_code", "summary", "before", "after"}
+    assert lot["model_code"] == "GDH206" and lot["before"] == {"status": "NEEDS_REVIEW", "bid_jpy_k": 1240}
+    assert lot["after"]["bid_jpy_k"] != 1240
+    assert [tuple(r) for r in snapshot()] == before and store.rulebook_version() == 0
+    assert len(reevaluate(cfg, store, ["GDH206"]).lots) == 2   # no answers given: the stored (none) apply, same two lots
+    store.close()
+
+
+def test_the_lots_list_is_capped(cfg, monkeypatch):
+    from auction_bot import pipeline
+    monkeypatch.setattr(pipeline, "LOTS_CAP", 1)
+    store = Store(cfg.db_path)
+    scan(cfg, FakeBrowser(), store, ["GDH206"], limit_per_model=2)
+    for r in store.list_proposals(decision="pending", status="NEEDS_REVIEW"):
+        facts = json.loads(r["facts_json"])
+        facts["km"] = 50_000
+        store.conn.execute("UPDATE proposals SET facts_json=? WHERE id=?", (json.dumps(facts), r["id"]))
+    store.conn.commit()
+    st = pipeline.reevaluate(cfg, store, ["GDH206"], answers={"odo_margin_km": 1000})
+    assert st.changed == 2 and len(st.lots) == 1
+    store.close()
+
+
+def test_replay_answer_refuses_apply(cfg, monkeypatch):
+    from typer.testing import CliRunner
+    import auction_bot.cli as cli
+    monkeypatch.setattr(cli, "load_config", lambda: cfg)
+    runner = CliRunner()
+    res = runner.invoke(cli.app, ["replay", "--answer", "odo_margin_km=1000", "--apply"])
+    assert res.exit_code != 0 and "--answer only previews; apply it from the Rulebook" in res.output
+    for bad in ("odo_margin_km=1500", "gdh206k=1", "odo_margin_km=x", "nonsense"):
+        res = runner.invoke(cli.app, ["replay", "--answer", bad])
+        assert res.exit_code != 0 and "is not a Rulebook answer" in res.output
+    res = runner.invoke(cli.app, ["replay", "-m", "GDH206", "--answer", "odo_margin_km=1000"])
+    assert res.exit_code == 0 and "checked" in res.output

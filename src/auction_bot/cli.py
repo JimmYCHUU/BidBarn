@@ -296,19 +296,40 @@ def scan_now(headed: bool = typer.Option(False, help="Show the browser during th
 @app.command()
 @friendly
 def replay(model: list[str] = typer.Option(None, "--model", "-m", help="Only these model codes"),
-           apply: bool = typer.Option(False, help="Supersede pending proposals whose outcome changed")) -> None:
+           apply: bool = typer.Option(False, help="Supersede pending proposals whose outcome changed"),
+           answer: list[str] = typer.Option(None, "--answer", help="Preview a Rulebook answer, KEY=VALUE (repeatable)")) -> None:
     """Re-apply the current rules and code to stored pending proposals. No Nichibo traffic.
 
     Uses the saved facts and the evidence already on disk. Without --apply it only reports.
+    --answer previews a Rulebook setting on top of the stored answers and never stores anything.
     """
     _log()
     cfg = load_config()
+    from auction_bot import rulebook
     from auction_bot.pipeline import reevaluate
     from auction_bot.store import Store
 
+    hypothetical: dict = {}
+    for item in answer or []:
+        key, _, raw = item.partition("=")
+        q = next((q for q in rulebook.OPEN if q.kind == "setting" and q.setting == key), None)
+        try:
+            value = int(raw)
+        except ValueError:
+            value = None
+        if q is None or value is None or not rulebook.valid_value(q, value):
+            typer.echo(f"{item!r} is not a Rulebook answer: use a setting such as odo_margin_km=2000, "
+                       "with one of the values the Rulebook offers.", err=True)
+            raise typer.Exit(2)
+        hypothetical[key] = value
+    if hypothetical and apply:
+        typer.echo("--answer only previews; apply it from the Rulebook.", err=True)
+        raise typer.Exit(2)
     store = Store(cfg.db_path)
     try:
-        st = reevaluate(cfg, store, model or None, apply=apply)
+        version = store.rulebook_version()
+        answers = {**store.rulebook_answers(), **hypothetical} if hypothetical else None
+        st = reevaluate(cfg, store, model or None, apply=apply, answers=answers)
     finally:
         store.close()
     for line in st.changes[:200]:
@@ -319,6 +340,7 @@ def replay(model: list[str] = typer.Option(None, "--model", "-m", help="Only the
     progress.summary({"checked": st.checked, "unchanged": st.unchanged, "changed": st.changed, "needs_fetch": st.needs_fetch,
                       "applied": st.applied, "apply": bool(apply), "changes": [str(c)[:300] for c in st.changes[:20]],
                       "changes_total": len(st.changes),
+                      **({"rulebook_version": version, "answer": hypothetical, "lots": st.lots} if hypothetical else {}),
                       **({"errors": [str(e)[:300] for e in st.errors[:20]], "errors_total": len(st.errors)} if st.errors else {})})
 
 

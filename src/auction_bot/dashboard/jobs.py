@@ -79,6 +79,7 @@ class Opt:
     label: str = ""
     help: str = ""
     choices: tuple[str, ...] = ()  # str only: the words allowed
+    low: int = 1  # int only: the smallest number allowed
 
 
 @dataclass(frozen=True)
@@ -117,6 +118,18 @@ def _judge(v: dict) -> list[str]:
 
 def _replay(v: dict) -> list[str]:
     return ["replay", *_models(v), *(["--apply"] if v.get("apply") else [])]
+
+
+def _rulebook_preview(v: dict) -> list[str]:
+    """`replay --answer setting=value` for a setting question and one of its offered values; never --apply."""
+    from auction_bot.rulebook import question, valid_value   # a plain catalogue: no browser, no network
+    try:
+        q = question(v.get("question") or "")
+    except KeyError:
+        raise BadRequest("question is not a Rulebook question") from None
+    if q.kind != "setting" or not valid_value(q, v.get("value")):
+        raise BadRequest("the Rulebook does not offer that answer")
+    return ["replay", "--answer", f"{q.setting}={v['value']}"]
 
 
 def _sheet_trial(v: dict) -> list[str]:
@@ -169,6 +182,12 @@ COMMANDS: dict[str, Cmd] = {
          "apply": Opt("bool", default=False, label="Store the new outcomes",
                       help="Off only reports what would change.")},
         _replay, help="Re-apply the current rules to the stored proposals. No Nichibo traffic."),
+    "rulebook-preview": Cmd(
+        "Rulebook preview", False,
+        {"question": Opt("str", label="Question", help="A Rulebook setting question."),
+         "value": Opt("int", label="Answer", help="One of the values the Rulebook offers.", low=0)},
+        _rulebook_preview,
+        help="Replays the stored proposals as if a Rulebook answer were given. Stores and changes nothing."),
     "sheet-trial": Cmd(
         "Sheet reader trial", True,
         {"model": _MODEL, "count": Opt("int", label="Sheets", help="How many stored sheets to send. Empty means 50.")},
@@ -208,8 +227,8 @@ def _clean(name: str, opt: Opt, value):
     if opt.kind == "int":
         if isinstance(value, bool) or not isinstance(value, int):
             raise BadRequest(f"{name} must be a whole number")
-        if not 1 <= value <= MAX_INT:
-            raise BadRequest(f"{name} must be between 1 and {MAX_INT}")
+        if not opt.low <= value <= MAX_INT:
+            raise BadRequest(f"{name} must be between {opt.low} and {MAX_INT}")
         return value
     if opt.kind == "list":
         if not isinstance(value, (list, tuple)):

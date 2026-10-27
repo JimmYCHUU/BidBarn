@@ -727,6 +727,9 @@ def _count(stats: ScanStats, status: str) -> None:
         stats.review += 1
 
 
+LOTS_CAP = 500
+
+
 @dataclass
 class ReplayStats:
     checked: int = 0
@@ -736,18 +739,27 @@ class ReplayStats:
     applied: int = 0
     changes: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)  # rows that raised; each is also a line in `changes`
+    lots: list[dict] = field(default_factory=list)   # one dict per changed lot, at most LOTS_CAP (the Rulebook preview)
+
+    def note_lot(self, row, before: tuple, after: tuple) -> None:
+        if len(self.lots) < LOTS_CAP:
+            self.lots.append({"pid": row["id"], "ref_no": row["ref_no"], "model_code": row["model_code"],
+                              "summary": (row["summary"] or "")[:120],
+                              "before": {"status": before[0], "bid_jpy_k": before[1]},
+                              "after": {"status": after[0], "bid_jpy_k": after[1]}})
 
 
 def reevaluate(cfg: Config, store: Store, model_codes: list[str] | None = None, apply: bool = False,
-               snapshot: Path | None = None) -> ReplayStats:
+               snapshot: Path | None = None, answers: dict | None = None) -> ReplayStats:
     """Re-run the current rules over stored pending proposals without touching Nichibo.
+    `answers` stands in for the stored Rulebook answers (a preview); None reads the stored ones.
 
     Uses the facts saved with each proposal and the evidence already on disk (sheet OCR is
     re-run from the saved image). A proposal whose outcome changes is superseded by a new
     one when `apply` is True. A vehicle that now needs pages or images we never downloaded
     is marked so the next scan fetches it.
     """
-    rules, snap_path = load_rules(cfg, snapshot, model_codes)
+    rules, snap_path = load_rules(cfg, snapshot, model_codes, answers=answers)
     by_guide = {r.guide_id: r for r in rules}
     by_code = {r.model_code: r for r in rules}
     no_model = (cfg.sheet_check or "none").lower() == "none"
@@ -799,6 +811,7 @@ def _replay_row(cfg: Config, store: Store, st: ReplayStats, row, rule: ModelRule
         # Passes the card checks now, but the detail page was never opened.
         st.needs_fetch += 1
         st.changes.append(f"{label}: card SKIP -> needs the detail page (next scan opens it)")
+        st.note_lot(row, old, (NEEDS_REVIEW, None))
         if apply:
             store.supersede_pending(row["ref_no"], rule.guide_id)
             store.add_proposal(ref_no=row["ref_no"], guide_id=rule.guide_id, model_code=rule.model_code,
@@ -849,6 +862,7 @@ def _replay_row(cfg: Config, store: Store, st: ReplayStats, row, rule: ModelRule
             parts.append("photos arrived after the judgement" if new[6] and not old[6] else "recommendation changed")
         why = f" ({' and '.join(parts)})" if parts else ""
     st.changes.append(f"{label}: {old[0]} {old[1]} -> {new[0]} {new[1]}{why}")
+    st.note_lot(row, old, new)
     if apply:
         store.supersede_pending(row["ref_no"], rule.guide_id)
         store.add_proposal(snapshot=snap_path.name, rule_updated_at=rule.updated_at, run_id=row["run_id"], **proposal)

@@ -250,7 +250,9 @@ class Store:
         question under its id. Earlier versions are never touched."""
         from . import rulebook
         q = rulebook.question(question_id)
-        answers = self.rulebook_answers()
+        if not rulebook.valid_value(q, value):
+            raise ValueError(f"{value!r} is not an answer the Rulebook offers for {question_id}.")
+        answers =self.rulebook_answers()
         answers[q.setting or q.id] = value
         cur = self.conn.execute(
             "INSERT INTO rulebook_versions(question_id, value_json, answers_json, note, preview_run, created_at) "

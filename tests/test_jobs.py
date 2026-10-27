@@ -330,7 +330,7 @@ def test_the_real_spawn_runs_the_cli(cfg, make):
     text = "\n".join(m.lines_after(run["id"])["lines"])
     assert done["status"] == "ok" and done["exit_code"] == 0, text
     for command in COMMANDS:
-        assert command in text, text  # every command the dashboard offers exists in the CLI
+        assert CLI_NAME.get(command, command) in text, text  # every command the dashboard offers exists in the CLI
 
 
 # -- runs left over from an earlier dashboard ------------------------------------------------------------
@@ -683,7 +683,14 @@ SAMPLES = {"bool": [None, True, False], "int": [None, 1, 25, 100_000],
            "list": [None, [], ["gdh206"], ["GDH206", "zwr90", "S321V-2", "gdh206"]], "str": [None, "word"]}
 
 
+CLI_NAME = {"rulebook-preview": "replay"}   # a table entry that runs another CLI command
+
+
 def combinations(cmd: Cmd):
+    if cmd is COMMANDS["rulebook-preview"]:   # only catalogue pairs are valid; the others are tested on their own
+        for value in (0, 1000, 2000, 3000, 5000):
+            yield {"question": "odo_margin", "value": value}
+        return
     names = list(cmd.options)
     for values in itertools.product(*(SAMPLES[cmd.options[n].kind] for n in names)):
         yield dict(zip(names, values))
@@ -691,14 +698,14 @@ def combinations(cmd: Cmd):
 
 
 def test_the_table_is_the_daily_set():
-    assert list(COMMANDS) == ["bid", "learn", "scan-now", "scan", "fetch-rules", "judge", "replay", "sheet-trial", "place", "insights", "login",
+    assert list(COMMANDS) == ["bid", "learn", "scan-now", "scan", "fetch-rules", "judge", "replay", "rulebook-preview", "sheet-trial", "place", "insights", "login",
                               "check-login"]
     assert {n for n, c in COMMANDS.items() if c.needs_profile} == {"bid", "learn", "scan-now", "scan", "fetch-rules", "judge", "sheet-trial",
                                                                    "place", "login", "check-login"}
     assert {n: sorted(c.options) for n, c in COMMANDS.items()} == {
         "bid": [], "learn": [], "scan-now": [],  # the modes take no options from the page
         "scan": ["fresh", "headless", "limit", "model", "rescan"], "fetch-rules": ["model"], "judge": ["limit", "model"],
-        "replay": ["apply", "model"], "sheet-trial": ["count", "model"], "place": ["headless"],
+        "replay": ["apply", "model"], "rulebook-preview": ["question", "value"], "sheet-trial": ["count", "model"], "place": ["headless"],
         "insights": ["days", "min_support", "model"], "login": [], "check-login": []}
     for cmd in COMMANDS.values():
         assert cmd.label and cmd.help and all(o.kind in jobs.KINDS and o.label for o in cmd.options.values())
@@ -711,7 +718,7 @@ def test_no_combination_can_ask_for_live_placement():
         for options in combinations(cmd):
             argv = build_argv(name, options)
             total += 1
-            assert argv[0] == name and all(isinstance(a, str) for a in argv)
+            assert argv[0] == CLI_NAME.get(name, name) and all(isinstance(a, str) for a in argv)
             assert "--live" not in argv and not any("live" in a.lower() for a in argv), (name, options, argv)
             assert "--all" not in argv and "--sheet-check" not in argv
             if name == "judge":
@@ -884,7 +891,8 @@ def test_every_argv_is_understood_by_the_real_cli():
 # -- what the package may contain ------------------------------------------------------------------------
 
 def test_the_dashboard_never_loads_playwright():
-    allowed = {"auction_bot", "auction_bot.config", "auction_bot.store", "auction_bot.progress", "auction_bot.lock"}
+    allowed = {"auction_bot", "auction_bot.config", "auction_bot.store", "auction_bot.progress", "auction_bot.lock",
+               "auction_bot.rulebook"}  # a plain catalogue of questions, no browser
     tree = ast.parse((DASHBOARD / "jobs.py").read_text(encoding="utf-8"))
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
@@ -912,3 +920,16 @@ def test_the_live_flag_is_written_nowhere_in_the_dashboard_package():
     assert DASHBOARD / "jobs.py" in files and DASHBOARD / "__init__.py" in files
     for path in files:
         assert b"--live" not in path.read_bytes(), path
+
+
+def test_the_preview_command_accepts_only_catalogue_answers():
+    assert build_argv("rulebook-preview", {"question": "odo_margin", "value": 2000}) == [
+        "replay", "--answer", "odo_margin_km=2000"]
+    assert build_argv("rulebook-preview", {"question": "odo_margin", "value": 0}) == ["replay", "--answer", "odo_margin_km=0"]
+    assert not COMMANDS["rulebook-preview"].needs_profile
+    for options in ({"question": "odo_margin", "value": 1500}, {"question": "gdh206k", "value": 1},
+                    {"question": "testing_lock", "value": 1}, {"question": "odo_margin"}, {"value": 2000},
+                    {"question": "odo_margin", "value": True}, {"question": "odo_margin", "value": 2000, "apply": True},
+                    {"question": "odo_margin", "value": -1}):
+        with pytest.raises(BadRequest):
+            build_argv("rulebook-preview", options)
