@@ -7,6 +7,7 @@ rules by itself. Nothing here approves or places a bid.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 
@@ -186,3 +187,70 @@ def current_answers(cfg) -> dict:
         return store.rulebook_answers()
     finally:
         store.close()
+
+
+# -- which waiting lots an open question touches today ---------------------------------------------------
+
+_ELIGIBILITY_QUESTIONS = frozenset({"interior_years", "selected_pair", "no_selected_pair", "model_code_unmatched"})
+_WELCAB_WORDS = re.compile(r"welcab|wheelchair|slope|ramp|swivel|rotating|lift-?up|\bseat", re.I)
+_MARGIN_REACH_KM = 5000   # the largest margin the Rulebook offers
+
+
+def _waiting(row: dict) -> bool:
+    return row.get("decision", "pending") == "pending" and row.get("status") in ("BID", "NEEDS_REVIEW")
+
+
+def _near_a_bound(row: dict, rules) -> bool:
+    """The lot's listed km is within the largest margin below a band's upper bound or its variant's cap."""
+    facts = row.get("facts") or {}
+    km = facts.get("km")
+    if not isinstance(km, int) or isinstance(km, bool):
+        return False
+    rule = next((r for r in rules if r.guide_id == row.get("guide_id")), None) or next(
+        (r for r in rules if r.model_code == row.get("model_code")), None)
+    if rule is None:
+        return False
+    try:
+        variants = list(rule.resolve_variant(facts.get("chassis") or "", facts.get("variant_text") or "").candidates)
+    except Exception:  # a lot whose variant cannot be named is judged against every variant of the rule
+        variants = []
+    for variant in variants or list(rule.variants):
+        bounds = {cell.band.odo_to for cell in variant.cells.values()}
+        bounds.add(variant.max_odo)
+        if any(bound - _MARGIN_REACH_KM < km <= bound for bound in bounds if bound):
+            return True
+    return False
+
+
+def _welcab(row: dict) -> bool:
+    soft = row.get("soft") or {}
+    for r in soft.get("requirements") or []:
+        if r.get("topic") == "welcab_seat" or (r.get("kind") == "chip" and _WELCAB_WORDS.search(r.get("text") or "")):
+            return True
+    return any("welcab" in str(l.get("id") or l.get("topic") or "").lower() for l in soft.get("ladders") or [])
+
+
+def _elig_verdict(row: dict) -> str:
+    view = row.get("eligibility") or (row.get("soft") or {}).get("eligibility") or {}
+    return view.get("verdict") or "eligible"
+
+
+def affected(q: Question, rows: list[dict], rules) -> list[int]:
+    """The ids of the waiting lots (BID or NEEDS_REVIEW, pending) this open question touches today, from the
+    rows the desk loads (facts, soft and hard parsed) and the current rules. Not a promise of a change: the
+    preview says what would change. A question with no rule of its own touches nothing."""
+    waiting = [r for r in rows if _waiting(r)]
+    if q.id == "odo_margin":
+        picked = [r for r in waiting if _near_a_bound(r, rules)]
+    elif q.id == "guide_213271":
+        picked = [r for r in waiting if r.get("guide_id") == 213271]
+    elif q.id == "gdh206k":
+        picked = [r for r in waiting if str(r.get("model_code") or "").upper() == "GDH206K"
+                  or str((r.get("facts") or {}).get("chassis") or "").upper().rstrip("?") == "GDH206K"]
+    elif q.id in ("welcab_chips", "welcab_refinements"):
+        picked = [r for r in waiting if _welcab(r)]
+    elif q.id in _ELIGIBILITY_QUESTIONS:
+        picked = [r for r in waiting if _elig_verdict(r) != "eligible"]
+    else:
+        picked = []
+    return [r["id"] for r in picked]

@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Rulebook · BidBarn{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/desk.css?v={{ asset_v }}">{% endblock %}
+{% block body %}
+<div class="page-head"><h1>Rulebook</h1>
+  <span class="page-sub">{{ open_questions|length }} open {{ 'question' if open_questions|length == 1 else 'questions' }}{% if version %}, Rulebook version {{ version }}{% endif %}</span>
+</div>
+<p class="rb-lead">What Carbarn decided, what is still open, and what no page can change. Answering a question never approves or places a bid. An answer only changes how the bot reads a lot, and every lot still waits for you.</p>
+
+<section id="decided" class="card rb-section" aria-labelledby="rb-decided-h">
+  <div class="card-head"><h2 id="rb-decided-h">Decided</h2><span class="end faint">{{ decided|length }} rules{% if history %}, {{ history|length }} {{ 'answer' if history|length == 1 else 'answers' }} from you{% endif %}</span></div>
+  <div class="card-body">
+    {% if history %}
+    <h3 class="rb-sub">Your answers</h3>
+    <ol class="rb-history" reversed>
+      {% for v in history %}<li id="v-{{ v.version }}"><b>Version {{ v.version }}</b>{% if v.date %}, {{ v.date }}{% endif %}. {{ v.words }}</li>{% endfor %}
+    </ol>
+    <h3 class="rb-sub">Rules already confirmed</h3>
+    {% endif %}
+    <ul class="rb-decided">
+      {% for d in decided %}<li>{{ d.text }}<span class="faint"> {% if d.date %}{{ d.date }}. {% endif %}{{ d.source }}.</span></li>{% endfor %}
+    </ul>
+  </div>
+</section>
+
+<section id="open" class="rb-section" aria-labelledby="rb-open-h">
+  <div class="section-title"><h2 id="rb-open-h">Open questions</h2></div>
+  {% for item in open_questions %}{% set q = item.q %}
+  <article class="card rb-q" id="q-{{ q.id }}" data-qid="{{ q.id }}">
+    <div class="card-head"><h3>{{ q.title }}</h3><span class="end"><span class="pill pill--warn">Open</span></span></div>
+    <div class="card-body">
+      <p>{{ q.text }}</p>
+      {% if q.kind == 'setting' %}
+        {% set cur = q.choices | selectattr('value', 'equalto', item.current) | first %}
+        <p class="rb-today">Today: {{ (cur.label if cur else item.current) | replace(' (today)', '') }}.</p>
+      {% else %}
+        <p class="rb-today">Today: {{ q.today }}</p>
+      {% endif %}
+      <p class="rb-affects">Affects {{ item.lots }} waiting {{ 'lot' if item.lots == 1 else 'lots' }}. <a href="/desk">Open the desk</a></p>
+
+      {% if q.kind == 'setting' %}
+      <fieldset class="rb-choices" data-setting>
+        <legend class="faint">Choose a margin, then preview what it would change.</legend>
+        {% for c in q.choices %}
+        <label class="rb-choice"><input type="radio" name="rb-{{ q.id }}" value="{{ c.value }}"{% if c.value == item.current %} checked{% endif %}> {{ c.label | replace(' (today)', '') }}{% if c.value == item.current %} <span class="pill pill--info">Current</span>{% endif %}</label>
+        {% endfor %}
+      </fieldset>
+      <div class="rb-actions">
+        <button type="button" class="btn--primary" data-act="preview">Preview</button>
+        <button type="button" data-act="apply" disabled>Apply</button>
+      </div>
+      <div class="rb-result" data-result aria-live="polite"></div>
+      {% else %}
+      <div class="rb-forms">
+        <form method="post" action="/rulebook/{{ q.id }}/keep" data-form="keep" data-qid="{{ q.id }}">
+          <button type="submit">Keep it as it is</button>
+        </form>
+        <form method="post" action="/rulebook/{{ q.id }}/request" data-form="request" data-qid="{{ q.id }}" class="rb-request">
+          <label class="field"><span>Ask for a change</span>
+            <textarea name="text" rows="2" required aria-label="Ask for a change to {{ q.title }}"{% if q.change_hint %} placeholder="{{ q.change_hint }}"{% endif %}></textarea></label>
+          <button type="submit">Send the request</button>
+        </form>
+      </div>
+      <p class="rb-msg" data-msg role="status"></p>
+      {% endif %}
+      {% if item.requests %}
+      <div class="rb-requests"><span class="faint">Your change requests</span>
+        <ul>{% for r in item.requests %}<li>{{ r.text }}{% if r.date %} <span class="faint">{{ r.date }}</span>{% endif %}</li>{% endfor %}</ul>
+      </div>
+      {% endif %}
+      <p class="faint">{{ q.source }}</p>
+    </div>
+  </article>
+  {% else %}
+  <div class="card"><div class="card-body"><p class="faint">Every open question has an answer.</p></div></div>
+  {% endfor %}
+</section>
+
+<section id="locked" class="card rb-section" aria-labelledby="rb-locked-h">
+  <div class="card-head"><h2 id="rb-locked-h">Locked</h2><span class="end faint">{{ icon('lock') }} Not changed from any page</span></div>
+  <div class="card-body">
+    <ul class="rb-locked">
+      {% for l in locked %}<li>{{ icon('lock') }}<span>{{ l.text }} <span class="faint">{{ l.source }}.</span></span></li>{% endfor %}
+    </ul>
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}<script src="/static/rulebook.js?v={{ asset_v }}" defer></script>{% endblock %}

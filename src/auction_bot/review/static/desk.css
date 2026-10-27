@@ -168,3 +168,29 @@
 .desk-scan--running { border-color: var(--line-strong); color: var(--ink); }
 .desk-scan--signin, .desk-scan--failed { border-color: var(--warn-line); background: var(--warn-bg); color: var(--warn-ink); }
 .desk-scan-msg { flex: 1 1 100%; font-weight: 600; color: var(--warn-ink); }
+
+/* Rulebook */
+.rb-lead { margin: 0 0 14px; color: var(--ink-2); max-width: 72ch; }
+.rb-section { margin-bottom: 16px; }
+.rb-sub { font-size: 13px; font-weight: 700; margin: 4px 0 6px; color: var(--ink-2); }
+.rb-history, .rb-decided { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.rb-q .rb-today { color: var(--ink-2); }
+.rb-affects { font-weight: 600; }
+.rb-choices { border: 0; margin: 0; padding: 0; display: grid; gap: 6px; }
+.rb-choice { display: flex; align-items: center; gap: 8px; font-weight: 500; color: var(--ink); }
+.rb-actions, .rb-forms { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-start; }
+.rb-request { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; flex: 1 1 320px; }
+.rb-request .field { flex: 1 1 240px; }
+.rb-result:empty { display: none; }
+.rb-result { padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: var(--r-md); background: var(--surface-2); color: var(--ink-2); }
+.rb-result--bad { border-color: var(--bad-line); background: var(--bad-bg); color: var(--bad-ink); }
+.rb-result--ok { border-color: var(--ok-line); background: var(--ok-bg); color: var(--ok-ink); }
+.rb-result table { width: 100%; margin-top: 8px; border-collapse: collapse; font-size: 13px; background: var(--surface); }
+.rb-result th, .rb-result td { padding: 5px 8px; text-align: left; border-bottom: 1px solid var(--line); }
+.rb-result .table-wrap { max-height: 320px; overflow: auto; }
+.rb-msg { min-height: 1em; font-weight: 600; color: var(--ink-2); }
+.rb-msg--bad { color: var(--bad-ink); }
+.rb-requests ul { margin: 4px 0 0; padding-left: 20px; }
+.rb-locked { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.rb-locked li { display: flex; gap: 10px; align-items: flex-start; }
+.rb-locked .icon { flex: none; margin-top: 3px; color: var(--ink-3); }
