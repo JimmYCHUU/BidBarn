@@ -110,8 +110,8 @@ that is not in its catalogue (`src/auction_bot/rulebook.py`). The golden test ca
   out of date separately. If this is wrong, the preview shows less than Apply will do.
 - A preview writes no file and never calls a model. If this is wrong, the only loss is that a preview
   under the opt-in `openai` mode reads soft lots as manual.
-- An approved lot keeps the amount you approved after an Apply; Reopen it to have the new rule price
-  it again.
+- An approved lot keeps the amount you approved after an Apply. Reopen returns it to waiting; the next
+  `replay --apply` (a Rulebook Apply, or `bot replay --apply`) prices it again under the new rule.
 - A lot parked because its images are not published yet keeps its amount from the search card, so
   Apply prices it again from that card under the new answer, and the preview lists it. It stays
   parked, with its auction day and hall. If the margin takes it over the cap, it is skipped at the

@@ -27,7 +27,9 @@ builds it: the review routes are defined there, the dashboard routes are registe
 
 | Route | What |
 |---|---|
-| `GET /` | Overview |
+| `GET /` | The desk (the same page as `/desk`). BidBarn opens here |
+| `GET /overview` | The overview and day log: Bid mode, Learn mode, Pause, Resume, Delete session. Moved here from `/` in the switch-over |
+| `GET /api/find?q=` | Ctrl+K: pages and lots matching the text (lot number, chassis or model code, from 2 characters). Reads only; changes nothing. See `docs/desk.md` |
 | `GET /runs`, `GET /runs?command=learn`, `?command=bid`, `?command=steps`, `?command=scan` | The runs; `steps` means every single step, a command name means that one |
 | `GET /runs/{id}` | One run: live console, or outcome and log |
 | `GET /runs/{id}/log.txt` | The raw log as a file (only from `data/runs/`) |

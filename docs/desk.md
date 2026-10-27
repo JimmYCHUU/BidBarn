@@ -1,8 +1,8 @@
-# The desk (phases 1, 2 and 3)
+# The desk (phases 1 to 4 and the switch-over)
 
-The desk is a second review page, beside today's. `/`, `/review`, `/list` and `/p/<n>` work as
-before. The desk is at `/desk` (nav item **Desk**) and the bid sheet is at `/bids` (nav item
-**Bid sheet**). Both read the store and the evidence files already on disk. They send no requests of
+The desk is the home page. BidBarn opens on it at `/`, and `/desk` is the same page. Today's pages
+`/review`, `/list` and `/p/<n>` work as before, and the old overview is at `/overview`. The bid
+sheet is at `/bids` (nav item **Bid sheet**). Both read the store and the evidence files already on disk. They send no requests of
 their own to Nichibo or Carbarn. A row thumbnail whose sheet is not on disk is loaded from Nichibo's
 sheet address by your own browser, as on `/review`.
 
@@ -221,6 +221,32 @@ The desk starts one command only, `scan-now`, and can stop it. It cannot start a
   switch-over.
 - Scan now fetches the guides every time, as Bid mode does.
 
+## The switch-over
+
+The desk becomes the home page. Nothing about how a lot is decided changes.
+
+- `/` is the desk. `/desk` is the same page. The overview (Bid mode, Learn mode, Pause, Resume, Delete session and the day log) is at `/overview`.
+- The menu has four places: **Desk**, **Bid sheet**, **Guides**, **Rulebook**. Under them is a fold called **System**: Overview and day log, Old review, All lots, Runs, Insights, Settings, Sheet trial. Every old address still works.
+- **Ctrl+K** (Cmd+K on a Mac) opens "Find a page or a lot". Type a page name to jump to it. From 2 characters it also finds a lot by lot number, chassis or model code and opens that lot's own page, `/p/<n>`, decided lots included. Arrows move, Enter opens, Esc closes. It only links; it never changes anything. It asks `GET /api/find?q=`, which only reads.
+- A guide page (`/guides/<code>`) has an "On the desk" block: how many lots wait for you (a link to the desk), approved and rejected decisions in the last 30 days, and the odometer margin in force (a link to the Rulebook).
+- The guides page has a **Teach session** button. It starts today's Learn mode, as the button on the overview does.
+- Nothing in the menu, the drawer or Ctrl+K approves, places or starts a scan. The Teach session button starts Learn mode, which opens the browser for you and places no bid.
+
+### Choices made in the switch-over, to confirm
+
+- Old addresses stay. `/review`, `/list`, `/p/<n>`, `/runs`, `/insights`, `/config`, `/sheet-trial` and `/desk` keep working, and only `/` changes meaning. Bid mode, Learn mode, Pause, Resume and Delete session stay where they are, on `/overview`. If this is wrong, there are two ways to reach some pages until you say the old ones can go.
+- Bid mode and Learn mode are kept, in the System fold. Removing them is a separate decision for you, once you have run your days from the desk. If this is wrong, two menu items stay that you do not use.
+- The System fold is a plain list with no live job line. The desk's scan bar shows the job. If this is wrong, you open Runs to see the progress of a job that is not a scan.
+- All lots stays its own page in the System fold. A filter on the desk is later work. Ctrl+K covers finding a lot by chassis, lot number or model code now.
+- A lot found with Ctrl+K opens on `/p/<n>`, the page every lot has, decided ones included. A `/lot/<n>` address is not added.
+
+### Check list for the switch-over
+
+- [ ] Open BidBarn (`dashboard.cmd`). It opens on the desk, not on the overview.
+- [ ] Press Ctrl+K, type 2 or more characters of a chassis or lot number you know. The lot is listed; Enter opens its page, `/p/<n>`. Esc closes the box and nothing has changed.
+- [ ] In the menu, open System, then Overview and day log. The overview with Bid mode and Learn mode is there, at `/overview`.
+- [ ] Open a guide page. The "On the desk" block shows the waiting lots, the last 30 days and the odometer margin. The guides page shows **Teach session**.
+
 ## The keys
 
 | Key | What it does |
@@ -251,8 +277,7 @@ yen, say) waits out the 10 seconds, then the desk shows the route's refusal and 
 ## What phases 1 to 3 leave out
 
 - The Rulebook. Phase 4 added it: see [rulebook.md](rulebook.md).
-- Search across sessions.
-- Ctrl+K.
+- A filter on the desk for a lot you cannot name. Ctrl+K covers lot number, chassis and model code (see the switch-over, below).
 
 ## Parity with today's pages
 
@@ -274,7 +299,7 @@ Every action on `/review` and `/p/<n>`, and where it is on the desk.
 | Telemetry (open, sheet zoom, photos click, Nichibo click, amount edit) | Posted to today's event route |
 | Triage order and model heads | The same order. The head links to the guide stay on `/review` |
 | Next lot after a decision | The next row in the lane is selected |
-| Delete session, Finish, Pause, Resume | Stay on the old pages and the overview |
+| Delete session, Finish, Pause, Resume | Stay on the old pages and on the overview (`/overview`) |
 | Start a scan (Runs page, Bid mode) | Scan now in the scan bar (phase 3). It never waits for review and never places. Bid mode and Learn mode stay on the old pages |
 | Reopen (phase 2) | **Reopen** in the lot view of the Decided lane, on `/p/<n>` and on the bid sheet |
 | All lots table with filters | Stays at `/list` |
@@ -293,7 +318,7 @@ Do these on the copy (see below). Each line is one action and what you should se
 - [ ] Press `D` twice on a lot. It moves to the Decided lane as "Cleared, not a decision"; `/p/<n>` shows it as deleted, with no decision.
 - [ ] Make the browser window 1024 px wide. Select a lot: it opens over the list. Click Close: the list returns.
 - [ ] Click in the reject reason field and type `a`, `r`, `d`, `j`. The letters appear in the field and nothing is approved, rejected or cleared. `Esc` closes the panel.
-- [ ] Open `/`, `/review`, `/list` and `/p/<n>`. They look and behave as before.
+- [ ] Open `/review`, `/list` and `/p/<n>`. They look and behave as before. `/` is now the desk.
 - [ ] Open `/bids`. The lock band says the testing lock is on and placement is a dry run. The lots are numbered in the order placement takes them, the first ones (up to 25) are marked Next dry run, and the line above the sessions says how many wait for a later run.
 - [ ] Optional, after the merge (or only if you sign in to Nichibo in the copy): on `/bids`, click Place as dry run. A run starts; each approved lot gets a screenshot and the bid sheet marks it "Dry run done", and nothing is submitted. The lock keeps it a dry run. This opens Nichibo lot pages with the bot's browser profile, which is empty in the worktree, so it needs a sign-in and real Nichibo traffic. Skip it otherwise.
 

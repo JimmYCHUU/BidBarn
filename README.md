@@ -1,7 +1,7 @@
 # BidBarn 🚗
 
 ![Python 3.12](https://img.shields.io/badge/python-3.12-blue)
-![Tests](https://img.shields.io/badge/tests-811%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-830%20passing-brightgreen)
 ![Playwright](https://img.shields.io/badge/browser-Playwright%20Chromium-45ba4b)
 ![No paid AI](https://img.shields.io/badge/AI%20APIs-none%20required-lightgrey)
 ![Testing lock](https://img.shields.io/badge/placement-testing%20lock%20on-orange)
@@ -172,9 +172,9 @@ Enforced in code, not by convention. The full list for anyone touching the code 
 
 Double-click `dashboard.cmd`. The page opens in your browser at http://127.0.0.1:8765 and the
 server runs in a minimised window called "BidBarn dashboard" in the taskbar. Close that window
-to stop it. A second double-click just opens the page again. The overview offers the two modes,
-**Start Learn mode** and **Start Bid mode**, one click each; the single steps are in a fold on
-the Runs page.
+to stop it. A second double-click just opens the page again. BidBarn opens on the desk. The
+overview, under System in the menu, offers the two modes, **Start Learn mode** and **Start Bid
+mode**, one click each; the single steps are in a fold on the Runs page.
 
 The first time, run `bidbarn.cmd` once before it (see below): that creates the Python
 environment the dashboard needs.
@@ -263,10 +263,15 @@ each candidate.
 
 ## The daily workflow
 
-From the dashboard the day is one run. **Start Bid mode** on the overview passes through five
-stages (sign-in, guides, scan, review, place), shows which one it is at, waits at the review,
-and continues when you click **Finish review** in the header. The single steps are in the fold
-on the Runs page. The same steps as separate launchers, for when the dashboard is not running:
+The day starts on the desk, which is where BidBarn opens. Press **Scan now** in its scan bar,
+decide the lots that come in, then open the bid sheet and place as a dry run. Ctrl+K finds a
+lot or a page from anywhere.
+
+Bid mode is still there, under System, then Overview and day log. **Start Bid mode** there passes
+through five stages (sign-in, guides, scan, review, place), shows which one it is at, waits at
+the review, and continues when you click **Finish review** in the header. The single steps are
+in the fold on the Runs page. The same steps as separate launchers, for when the dashboard is
+not running:
 
 1. **`scan.cmd`** fetches a fresh guide snapshot and scans every active guide. Lots already
    evaluated are reused; only new listings are judged. The sheet comes straight from the search
@@ -296,7 +301,7 @@ on the Runs page. The same steps as separate launchers, for when the dashboard i
 
 | Page | What it shows |
 |---|---|
-| Overview (`/`) | The date, one sentence of state, and the two modes: **Learn** (the bot watches you bid) and **Bid** (the whole day as one run), one button each. While a run is going the band shows it instead, with **Watch the run**, and a Bid run's five stages. Below it the day's log, newest first: every run with how it ended and its closing numbers, and every review session with its decisions. A run that is going is the first entry, open, with its guide row, counters and log. Beside the log one card of state chips: sign-in, guides, lots to review, approved bids not placed, placed, and a model quota only when it is short. |
+| Overview (`/overview`, System in the menu) | The date, one sentence of state, and the two modes: **Learn** (the bot watches you bid) and **Bid** (the whole day as one run), one button each. While a run is going the band shows it instead, with **Watch the run**, and a Bid run's five stages. Below it the day's log, newest first: every run with how it ended and its closing numbers, and every review session with its decisions. A run that is going is the first entry, open, with its guide row, counters and log. Beside the log one card of state chips: sign-in, guides, lots to review, approved bids not placed, placed, and a model quota only when it is short. |
 | Runs (`/runs`) | Every run, filtered as All, Learn, Bid or Steps, with its options, duration and outcome. A closed fold, **Start a single step**, starts one part of the day on its own: sign in, check the sign-in, fetch the guides, scan (model codes, lots per model), judge pending lots, replay (store or report), place as a dry run. |
 | Guides (`/guides`, `/guides/<code>`) | Every bidding guide in the snapshot, and one guide as a page: its requirements and the chips you judge, the bid grid per variant, your standing instructions with the form to add one, the skip rules your rejections justify, the playbook and your learn-mode comments, recent decisions, and the lots under the code. Every lot links to its guide. |
 | A run (`/runs/<n>`) | Live while it runs: one cell per guide in a single row (tall and blue where lots were found, short where nothing was new, red on an error, the lit cell is the guide being scanned), the running totals, the log as it is written, and **Stop**. A Bid run shows its five stages and, at the review stage, **Open the review**. Afterwards: the outcome, the placements with their screenshots, and the whole log, also as a file. A Learn run shows your session: per lot what you did, what the bot would have done and what the model said, the notes you typed, and the rules your comments suggest with an **Add** button each. |
@@ -313,7 +318,7 @@ the one that is running. **Stop** asks the run to end at its next check point (b
 page load) and ends its process after 20 seconds if it has not; a placement is never stopped in
 the middle of a lot. **Pause** (Bid mode, before the review) ends the run at its next check point
 and frees the bot; the lots it found stay in the review, and you can review them during the break.
-**Resume** on the overview starts Bid mode again in the same session: the guides already done go
+**Resume** on the overview (`/overview`) starts Bid mode again in the same session: the guides already done go
 quickly, from the cache. **Delete session** stops the session if it runs and takes its waiting lots
 out of the review without a decision. If the dashboard window is closed while a command runs, the command
 finishes by itself and the next start of the dashboard picks its record up.
@@ -337,8 +342,21 @@ another website's page, is refused, so no page you visit can start a command or 
 
 ## The desk
 
-A second review page beside the first one, at `/desk`, with a bid sheet at `/bids`. The old pages
-are unchanged.
+BidBarn opens on the desk: `/` is the desk, and `/desk` still reaches it. A bid sheet is at `/bids`.
+The old review pages are unchanged and still at their own addresses.
+
+The menu has four places and a fold:
+
+- **Desk** (`/`), **Bid sheet** (`/bids`), **Guides** (`/guides`) and **Rulebook** (`/rulebook`).
+- **System**, a fold in the menu: Overview and day log (`/overview`, with Bid mode, Learn mode,
+  Pause, Resume and Delete session), Old review (`/review`), All lots (`/list`), Runs, Insights,
+  Settings (`/config`) and Sheet trial. Every old address still works.
+- **Ctrl+K** (Cmd+K on a Mac) opens "Find a page or a lot". Type a page name to jump to it, or from
+  2 characters a lot number, chassis or model code to open that lot's page (`/p/<n>`). Arrows
+  move, Enter opens, Esc closes. It only opens pages and changes nothing.
+- Each guide page has an "On the desk" block: lots waiting for you, approved and rejected in the
+  last 30 days, and the odometer margin in force. The guides page has a **Teach session** button
+  that starts today's Learn mode.
 
 - Lots are grouped by auction session (hall and day, in date order) and by lane: Needs a look, Card-clear, Waiting, Decided.
 - Card-clear is strict: with `sheet_check: judge`, most lots whose guide has a text requirement are Needs a look, because the model reads those notes.
@@ -570,7 +588,7 @@ Everything the bot downloads stays on the office PC. Git never sees any of it.
 .venv\Scripts\python -m pytest -q
 ```
 
-811 tests: the golden cases from the manual walkthrough against the real GDH206 guide, variant
+830 tests: the golden cases from the manual walkthrough against the real GDH206 guide, variant
 resolution on captured Alphard and E-Class guides, the seat rule, OCR parsing on three real sheets
 plus the header-band crop and its fallback, an offline end-to-end scan against captured Nichibo
 pages, the card-and-sheet path that opens no page, the placeholder path that parks a lot
@@ -645,7 +663,7 @@ it, and the OCR reads the sheet header first. The judgement layer is in (2026-09
 vision model pre-reads the lots that need a look, and photos are downloaded only for those. The
 dashboard is in (2026-09-29) and was simplified the day after: Learn mode and Bid mode start
 from the overview, the single steps sit in a fold on the Runs page, and every guide has its own
-page. It has been exercised on stand-in commands and on a throwaway database; no run started
+page. The switch-over (2026-10-27) made the desk the home page and moved the overview under System. It has been exercised on stand-in commands and on a throwaway database; no run started
 from the page has gone through to the end on real data yet, and the points still to confirm on
 the office PC are listed under "Not verified yet" in `docs/dashboard.md`. Next: the first
 complete Bid run from the dashboard, the first review pass on the triage view, and the first
