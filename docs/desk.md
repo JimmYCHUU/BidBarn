@@ -250,7 +250,7 @@ yen, say) waits out the 10 seconds, then the desk shows the route's refusal and 
 
 ## What phases 1 to 3 leave out
 
-- The Rulebook.
+- The Rulebook. Phase 4 added it: see [rulebook.md](rulebook.md).
 - Search across sessions.
 - Ctrl+K.
 

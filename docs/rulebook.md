@@ -3,10 +3,12 @@
 The Rulebook is a page at `/rulebook` (nav item **Rulebook**). It is where you answer the open
 questions about the rules, on the page, instead of in a chat. It has three parts:
 
-- **Decided.** The rules you and Carbarn have already confirmed, each with its date and where it is
-  written. Below them, **Your answers**: every answer you have given, as a numbered version.
+- **Decided.** The rules you and Carbarn have already confirmed, each with where it is written, and
+  with its date where the source gives one. Below them, **Your answers**: every answer you have given,
+  as a numbered version.
 - **Open questions.** The questions the README lists under "Open questions for Carbarn". Each shows
-  the question, what the bot does today, and how many waiting lots it touches.
+  the question, what the bot does today, and how many waiting lots it touches. For the odometer
+  margin that is how many waiting lots are within 5,000 km of a band's upper bound or the cap.
 - **Locked.** The hard rules (the testing lock, no bid without your approval, one bid per vehicle,
   never the Stock side of Nichibo, scraped data kept, no paid model APIs, eligibility is a note and
   never a skip). They have no control at all. No page changes them.
@@ -40,8 +42,11 @@ preview", and only one job runs at a time. A preview:
 - lists only what your answer itself changes: each waiting lot read under today's answers and again
   with the new one. It counts a lot changed in exactly the way Apply does, so it includes a lot whose
   recommendation or proposed amount changes, and says how many lots would need a fresh judgement.
+  The table shows at most 500 lots; the sentence above it counts every lot.
 - says separately how many other stored lots are already out of date with today's rules. Apply
   stores those changes too, because it is `replay --apply`, which brings every waiting lot up to date.
+  That includes a lot parked because its images are not published yet: it is priced again from its
+  search card, the way a scan parks it.
 
 **Apply** is enabled only after a preview that finished. When you press it, the page saves your answer
 as a new version, then starts `replay --apply`. That supersedes waiting proposals whose outcome
@@ -52,7 +57,9 @@ preview:
 - was made before a newer version (preview again);
 - is still running, or did not finish;
 - could not check some lots (it has errors);
-- cannot be checked against the Rulebook version.
+- cannot be checked against the Rulebook version;
+- was made before the guides or the waiting lots changed: a newer guide snapshot, or a lot stored,
+  decided, reopened or judged since the preview.
 
 An answer is a version in `data/bot.sqlite`, never edited. A later answer adds a version holding every
 answer so far. Nothing is deleted. The command line cannot apply an answer: `bot replay --answer`
@@ -103,5 +110,12 @@ that is not in its catalogue (`src/auction_bot/rulebook.py`). The golden test ca
   out of date separately. If this is wrong, the preview shows less than Apply will do.
 - A preview writes no file and never calls a model. If this is wrong, the only loss is that a preview
   under the opt-in `openai` mode reads soft lots as manual.
+- An approved lot keeps the amount you approved after an Apply; Reopen it to have the new rule price
+  it again.
+- A lot parked because its images are not published yet keeps its amount from the search card, so
+  Apply prices it again from that card under the new answer, and the preview lists it. It stays
+  parked, with its auction day and hall. If the margin takes it over the cap, it is skipped at the
+  card, as a scan would skip it. Nothing is downloaded for it. If this is wrong, a parked lot you
+  expected to keep its old amount changes, and the preview shows it before you confirm.
 - Answers live in `data/bot.sqlite` (private, never deleted), not in a file in git. The README's list
   points to the Rulebook.
