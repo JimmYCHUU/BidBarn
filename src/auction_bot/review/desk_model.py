@@ -319,22 +319,46 @@ class ScanState:
     poll_seconds: int
 
 
-def _hhmm(stamp: str | None) -> str:
+def _at(stamp: str | None, now: datetime | None = None) -> str:
+    """A stored time in the office's local time, as the dashboard shows times: "07:30" today, "Mon 26 Oct 07:30"
+    on another day (the weekday as the desk's session labels write it)."""
     from auction_bot.dashboard.status import parse_time
     t = parse_time(stamp)
-    return t.astimezone().strftime("%H:%M") if t else ""
+    if t is None:
+        return ""
+    t = t.astimezone()
+    today = (now or datetime.now()).astimezone().date()
+    return t.strftime("%H:%M" if t.date() == today else "%a %d %b %H:%M")
 
 
-def scan_state(status: dict) -> ScanState:
-    """The scan bar from `gather_status`'s dict. Pure: it starts and stops nothing."""
+def _signed_out_site(error: str | None) -> str | None:
+    """The site a stored run error says signed out (the `NotLoggedIn` texts), or None for any other error."""
+    e = (error or "").lower()
+    if "redirected to the login page" in e:
+        return "Nichibo"
+    if "carbarn" in e and "bot login" in e:
+        return "the Carbarn dashboard"
+    return None
+
+
+def _signin_text(prog: dict) -> str:
+    """The sign-in wait in words, naming the site the progress says is signed out (Nichibo while it is not known)."""
+    out = [name for key, name in (("nichibo", "Nichibo"), ("carbarn", "the Carbarn dashboard")) if prog.get(key) is False]
+    sites = " and ".join(out) or "Nichibo"
+    if prog.get("expired"):
+        return f"{sites[0].upper()}{sites[1:]} signed out during the scan. Sign in in the bot's window; the scan carries on after that."
+    return f"Sign in to {sites} in the bot's window. The scan carries on after that."
+
+
+def scan_state(status: dict, now: datetime | None = None) -> ScanState:
+    """The scan bar from `gather_status`'s dict. Pure: it starts and stops nothing. `now` (local time) decides
+    whether the last scan's time needs its day; tests pass it, the page uses the clock."""
     current = status.get("current")
     if current and current.get("command") == "scan-now":
         prog = current.get("progress") or {}
         rid = current.get("id")
         if prog.get("stage") == "signin" and prog.get("waiting"):
-            text = ("Nichibo signed out during the scan. Sign in in the bot's window; the scan carries on after that."
-                    if prog.get("expired") else "Sign in to Nichibo in the bot's window. The scan carries on after that.")
-            return ScanState("signin", text, rid, False, True, 5)
+            return ScanState("signin", _signin_text(prog), rid, False, True, 5)
         if prog.get("stage") == "scan" and prog.get("guides"):
             new = int(prog.get("review") or 0) + int(prog.get("bid") or 0)
             text = f"Scanning: guide {prog.get('guide') or 0} of {prog['guides']}, {new} new for the desk so far."
@@ -343,17 +367,26 @@ def scan_state(status: dict) -> ScanState:
         return ScanState("running", text, rid, False, True, 5)
     if current:
         label = current.get("label") or current.get("command") or "Another run"
-        return ScanState("busy", f"{label} is running. Scan now waits until it has finished.", current.get("id"), False, False, 15)
+        return ScanState("busy", f"{label} is running. Scan now is offered again when it has finished.", current.get("id"),
+                         False, False, 15)
     last = status.get("last_runs") or {}
     runs = [r for r in (last.get(c) for c in ("scan-now", "scan", "bid"))
             if r and r.get("status") in ("ok", "failed", "stopped")]
     newest = max(runs, key=lambda r: r.get("finished_at") or r.get("started_at") or "", default=None)
     if newest is None:
         return ScanState("idle", "No scan yet.", None, True, False, 60)
+    at = _at(newest.get("finished_at") or newest.get("started_at"), now)
     if newest["status"] != "ok":
-        return ScanState("failed", f"The last scan stopped at {_hhmm(newest.get('finished_at') or newest.get('started_at'))}: "
-                         f"{newest.get('error') or 'stopped'}", None, True, False, 60)
+        error, site = newest.get("error"), _signed_out_site(newest.get("error"))
+        if site:
+            text = f"The last scan stopped at {at}: {site} signed you out. Press Scan now to sign in and scan again."
+        elif error:
+            text = f"The last scan stopped at {at}: {error}"
+        elif newest["status"] == "stopped":
+            text = f"The last scan was stopped at {at}."
+        else:
+            text = f"The last scan failed at {at}."
+        return ScanState("failed", text, None, True, False, 60)
     summary = newest.get("summary") or {}
     n = int(summary.get("review") or 0) + int(summary.get("bid") or 0)
-    return ScanState("idle", f"Last scan {_hhmm(newest.get('finished_at') or newest.get('started_at'))}, {n} new for the desk.",
-                     None, True, False, 60)
+    return ScanState("idle", f"Last scan {at}, {n} new for the desk.", None, True, False, 60)

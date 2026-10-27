@@ -352,7 +352,7 @@ def test_scan_state_reads_each_kind():
                               "progress": {"stage": "signin", "waiting": True, "expired": True}}))
     assert out.kind == "signin" and out.text.startswith("Nichibo signed out during the scan.")
     busy = scan_state(_status({"id": 5, "command": "place", "label": "Place", "progress": {}}))
-    assert busy.kind == "busy" and busy.text == "Place is running. Scan now waits until it has finished."
+    assert busy.kind == "busy" and busy.text == "Place is running. Scan now is offered again when it has finished."
     assert (busy.can_start, busy.can_stop, busy.poll_seconds) == (False, False, 15)
     failed = scan_state(_status(**{"scan-now": _run_row("scan-now", "failed", "2026-10-26T01:00:00+00:00", error="boom"),
                                    "scan": _run_row("scan", "ok", "2026-10-25T01:00:00+00:00", {"review": 9})}))
@@ -361,3 +361,68 @@ def test_scan_state_reads_each_kind():
     newer_ok = scan_state(_status(**{"scan-now": _run_row("scan-now", "failed", "2026-10-25T01:00:00+00:00", error="x"),
                                      "bid": _run_row("bid", "ok", "2026-10-26T01:00:00+00:00", {"review": 1})}))
     assert newer_ok.kind == "idle" and "1 new" in newer_ok.text
+
+
+# -- final review fixes: the scan bar's words ----------------------------------------------------------------
+
+def _local(day, hour, minute):
+    """A stored UTC stamp for that local (office) time, and the local time itself."""
+    t = datetime(2026, 10, day, hour, minute).astimezone()
+    return t.astimezone(timezone.utc).isoformat(timespec="seconds"), t
+
+
+def test_the_last_scan_names_its_day_unless_it_was_today():
+    from auction_bot.review.desk_model import scan_state
+    stamp, t = _local(26, 7, 30)
+    last = {"scan-now": _run_row("scan-now", "ok", stamp, {"review": 10, "bid": 2})}
+    today = scan_state(_status(**last), now=t.replace(hour=18))
+    assert today.text == "Last scan 07:30, 12 new for the desk."
+    later = scan_state(_status(**last), now=t + timedelta(days=1))
+    assert later.text == "Last scan Mon 26 Oct 07:30, 12 new for the desk."
+    gone = {"scan-now": _run_row("scan-now", "failed", stamp, error="boom")}
+    assert scan_state(_status(**gone), now=t + timedelta(days=1)).text == "The last scan stopped at Mon 26 Oct 07:30: boom"
+    assert scan_state(_status(**gone), now=t).text == "The last scan stopped at 07:30: boom"
+
+
+def test_a_scan_ended_by_a_sign_out_says_to_press_scan_now():
+    from auction_bot.review.desk_model import scan_state
+    stamp, t = _local(26, 7, 30)
+    nichibo = {"scan-now": _run_row("scan-now", "failed", stamp, error="Nichibo redirected to the login page. Run `bot login`.")}
+    assert scan_state(_status(**nichibo), now=t).text == \
+        "The last scan stopped at 07:30: Nichibo signed you out. Press Scan now to sign in and scan again."
+    carbarn = {"scan": _run_row("scan", "failed", stamp, error="Carbarn API returned 401 for /x; run `bot login`.")}
+    assert scan_state(_status(**carbarn), now=t).text == \
+        "The last scan stopped at 07:30: the Carbarn dashboard signed you out. Press Scan now to sign in and scan again."
+    other = {"scan": _run_row("scan", "failed", stamp, error="Rules snapshot x is 30h old. Run `bot fetch-rules`.")}
+    assert scan_state(_status(**other), now=t).text == "The last scan stopped at 07:30: Rules snapshot x is 30h old. Run `bot fetch-rules`."
+
+
+def test_a_stopped_or_failed_scan_with_no_error_reads_as_a_sentence():
+    from auction_bot.review.desk_model import scan_state
+    stamp, t = _local(26, 7, 30)
+    stopped = scan_state(_status(**{"scan-now": _run_row("scan-now", "stopped", stamp)}), now=t)
+    assert (stopped.kind, stopped.text, stopped.can_start) == ("failed", "The last scan was stopped at 07:30.", True)
+    failed = scan_state(_status(**{"scan-now": _run_row("scan-now", "failed", stamp)}), now=t)
+    assert (failed.kind, failed.text, failed.can_start) == ("failed", "The last scan failed at 07:30.", True)
+    closed = scan_state(_status(**{"scan-now": _run_row("scan-now", "stopped", stamp,
+                                                        error="the dashboard was closed while this run was going")}), now=t)
+    assert closed.text == "The last scan stopped at 07:30: the dashboard was closed while this run was going"
+
+
+def test_the_sign_in_sentence_names_the_site_that_is_signed_out():
+    from auction_bot.review.desk_model import scan_state
+
+    def text(**prog):
+        return scan_state(_status({"id": 4, "command": "scan-now", "label": "Scan now",
+                                   "progress": {"stage": "signin", "waiting": True, **prog}})).text
+
+    assert text(nichibo=True, carbarn=False) == "Sign in to the Carbarn dashboard in the bot's window. The scan carries on after that."
+    assert text(nichibo=False, carbarn=True) == "Sign in to Nichibo in the bot's window. The scan carries on after that."
+    assert text(nichibo=False, carbarn=False) == \
+        "Sign in to Nichibo and the Carbarn dashboard in the bot's window. The scan carries on after that."
+    assert text() == "Sign in to Nichibo in the bot's window. The scan carries on after that."  # not known yet
+    assert text(expired=True, nichibo=True, carbarn=False) == \
+        "The Carbarn dashboard signed out during the scan. Sign in in the bot's window; the scan carries on after that."
+    assert text(expired=True, nichibo=False, carbarn=True) == \
+        "Nichibo signed out during the scan. Sign in in the bot's window; the scan carries on after that."
+    assert text(expired=True) == "Nichibo signed out during the scan. Sign in in the bot's window; the scan carries on after that."

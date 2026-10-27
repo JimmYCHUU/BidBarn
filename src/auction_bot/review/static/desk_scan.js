@@ -8,9 +8,12 @@
   if (!host) return;
 
   var BOARD_EVERY_MS = 30000;   // a running scan: the board is refreshed this often
+  var SETTLE_MS = 500;          // no click is taken this long after a redraw that changed the kind: Scan now and
+                                // Stop swap under the cursor, and a fast second click must not press the other one
   var timer = null;             // the one poll timer
   var inFlight = false;         // never more than one request at a time
   var lastBoard = 0;            // when the board was last asked to refresh
+  var swappedAt = 0;            // when a redraw last changed the bar's kind
 
   function bar() { return host.querySelector("[data-desk-scan]"); }
   function kind() { var b = bar(); return b ? b.dataset.kind : ""; }
@@ -50,6 +53,7 @@
         host.innerHTML = html;
         note();
         var now = kind();
+        if (now !== before) swappedAt = Date.now();
         if (active(before) && !active(now)) askBoard();
         else if (now === "running" && Date.now() - lastBoard >= BOARD_EVERY_MS) askBoard();
       })
@@ -84,6 +88,8 @@
   host.addEventListener("click", function (e) {
     var btn = e.target.closest && e.target.closest("[data-desk-scan-act]");
     if (!btn || !host.contains(btn) || btn.disabled) return;
+    if (e.detail > 1) return;                          // the second click of a double click (a key press has detail 0)
+    if (Date.now() - swappedAt < SETTLE_MS) return;    // the button under the cursor has just been swapped
     if (btn.dataset.deskScanAct === "start") {
       btn.disabled = true;
       send("/api/runs", JSON.stringify({ command: "scan-now", options: {} }));

@@ -139,11 +139,24 @@
     var r = state.row && rowFor(state.row);
     if (r && !r.hidden) r.setAttribute("aria-current", "true");
   }
+  // Only the answer to the newest board request paints: an older one (a lane Jim has left, or a refresh the scan bar
+  // asked for just before a decision's) is dropped, and whoever waits on it waits for the newest one instead.
+  var boardAsked = 0;           // the number of the newest board request
+  var boardLatest = null;       // its promise
   function refreshBoard() {
-    return fetch(boardUrl(), { headers: { Accept: "text/html" } })
+    var mine = ++boardAsked;
+    var p = fetch(boardUrl(), { headers: { Accept: "text/html" } })
       .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
-      .then(function (html) { board.innerHTML = html; readBoardState(); paintBoard(); autoOpen(); })
-      .catch(function () { say("The board could not be refreshed. Reload the page."); });
+      .then(function (html) {
+        if (mine !== boardAsked) return boardLatest;
+        board.innerHTML = html; readBoardState(); paintBoard(); autoOpen();
+      })
+      .catch(function () {
+        if (mine !== boardAsked) return boardLatest;
+        say("The board could not be refreshed. Reload the page.");
+      });
+    boardLatest = p;
+    return p;
   }
   function switchTo(session, lane) {
     state.session = session; state.lane = lane;
@@ -581,7 +594,8 @@
   document.addEventListener("click", function (e) {     // narrow: a click outside the lot overlay closes it
     var t = e.target;
     if (!t.isConnected || (e.composedPath && e.composedPath().indexOf(toast) >= 0)) return;   // the toast's own buttons
-    if (narrow.matches && state.lot && !lotPane.contains(t) && !t.closest("#desk-toast, .desk-row, .desk-pending, .desk-sess, .desk-lane")) closeLot();
+    // The scan bar's Scan now and Stop (desk_scan.js) leave the open lot alone too.
+    if (narrow.matches && state.lot && !lotPane.contains(t) && !t.closest("#desk-toast, #desk-scan, .desk-row, .desk-pending, .desk-sess, .desk-lane")) closeLot();
   });
   window.addEventListener("pagehide", sendAllNow);
   // The scan bar (desk_scan.js) asks for a fresh board while a scan runs. refreshBoard keeps the open lot (state.lot

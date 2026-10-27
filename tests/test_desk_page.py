@@ -903,3 +903,36 @@ def test_a_refusal_survives_a_same_kind_reload():
     assert "msgKind === kind()" in note          # kept while the kind is the same
     assert 'msg = ""' in note                    # dropped when the kind changes
     assert body.index("host.innerHTML = html;\n        note();") > 0   # every redraw puts it back
+
+
+# -- final review fixes ------------------------------------------------------------------------------------
+
+def test_a_double_click_on_the_scan_bar_never_lands_on_the_button_that_replaced_it():
+    body = _scan_js()
+    assert "SETTLE_MS = 500" in body
+    reload = body[body.index("function reload()"):body.index("function send(")]
+    assert "if (now !== before) swappedAt = Date.now();" in reload       # a redraw that changed the kind
+    click = body[body.index('host.addEventListener("click"'):body.index('document.addEventListener("visibilitychange"')]
+    assert "if (e.detail > 1) return;" in click                           # the second click of a double click
+    assert "if (Date.now() - swappedAt < SETTLE_MS) return;" in click     # just after Scan now and Stop swapped
+    assert click.index("e.detail > 1") < click.index('"start"') and click.index("swappedAt") < click.index('"start"')
+
+
+def test_desk_js_clicks_on_the_scan_bar_do_not_close_the_lot():
+    src = DESK_JS.read_text(encoding="utf-8")
+    line = next(ln for ln in src.splitlines() if "narrow.matches && state.lot && !lotPane.contains(t)" in ln)
+    assert "#desk-scan" in line and line.rstrip().endswith("closeLot();")
+
+
+def test_desk_js_drops_a_board_answer_older_than_the_newest_request():
+    src = DESK_JS.read_text(encoding="utf-8")
+    assert "var boardAsked = 0;" in src and "var boardLatest = null;" in src
+    body = src[src.index("function refreshBoard()"):src.index("function switchTo(")]
+    assert "var mine = ++boardAsked;" in body
+    # an older answer, or its failure, waits for the newest request instead of painting or speaking
+    assert body.count("if (mine !== boardAsked) return boardLatest;") == 2
+    assert body.index("if (mine !== boardAsked)") < body.index("board.innerHTML = html")
+    assert body.index("boardLatest = p;") < body.index("return p;")
+    # the newest answer paints as before: the queue's marks, the open lot and the lot view guard are untouched
+    assert "board.innerHTML = html; readBoardState(); paintBoard(); autoOpen();" in body
+    assert "state.lot" not in body
