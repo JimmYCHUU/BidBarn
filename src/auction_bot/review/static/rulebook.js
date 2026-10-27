@@ -33,7 +33,7 @@
   // "4 lots change: 3 amounts drop, 1 lot now skips." or "No stored lot would change."
   function countSentence(summary) {
     var lots = Array.isArray(summary.lots) ? summary.lots : [];
-    var total = typeof summary.changed === "number" ? summary.changed : lots.length;
+    var total = Math.max(lots.length, typeof summary.lots_total === "number" ? summary.lots_total : 0);
     if (!total) return "No stored lot would change.";
     var n = { drop: 0, rise: 0, skip: 0, other: 0 };
     lots.forEach(function (lot) { n[outcome(lot)] += 1; });
@@ -43,7 +43,17 @@
     if (n.skip) parts.push(n.skip === 1 ? "1 lot now skips" : n.skip + " lots now skip");
     if (n.other) parts.push(n.other === 1 ? "1 lot changes in another way" : n.other + " lots change in another way");
     var head = total === 1 ? "1 lot changes" : total + " lots change";
+    if (total > lots.length) {
+      return head + ". The table shows the first " + num(lots.length) + (parts.length ? ". Of the first " + num(lots.length) + ": " + parts.join(", ") : "") + ".";
+    }
     return head + (parts.length ? ": " + parts.join(", ") : "") + ".";
+  }
+
+  function driftSentence(summary) {
+    var n = typeof summary.drift === "number" ? summary.drift : 0;
+    if (n < 1) return "";
+    return (n === 1 ? "1 other stored lot is" : n + " other stored lots are") +
+      " already out of date with today's rules; Apply stores " + (n === 1 ? "that change" : "those changes") + " too.";
   }
 
   function state(s) {
@@ -69,6 +79,7 @@
 
   function Question(root) {
     var qid = root.dataset.qid;
+    var setting = root.querySelector("[data-setting]").dataset.setting;
     var result = root.querySelector("[data-result]");
     var previewBtn = root.querySelector('[data-act="preview"]');
     var applyBtn = root.querySelector('[data-act="apply"]');
@@ -84,6 +95,9 @@
       result.className = "rb-result" + (kind ? " rb-result--" + kind : "");
       if (text) { var p = document.createElement("p"); p.textContent = text; result.appendChild(p); }
       if (extra) result.appendChild(extra);
+    }
+    function lock(on) {   // the choice cannot change while Apply is in flight, so its reply is never dropped
+      root.querySelectorAll('input[type="radio"]').forEach(function (r) { r.disabled = on; });
     }
     function reset() {
       token += 1; good = null;
@@ -102,13 +116,14 @@
       }
       var lots = Array.isArray(s.lots) ? s.lots : [];
       var text = countSentence(s);
-      if (typeof s.changed === "number" && s.changed > lots.length) text += " The table shows the first " + lots.length + ".";
+      var drift = driftSentence(s);
+      if (drift) text += " " + drift;
       if (errors) {
         say(text + " The preview could not check " + plural(errors, "lot", "lots") + ", so it cannot be applied. Look at its run page.", "bad",
             lots.length ? lotsTable(lots) : null);
         return;
       }
-      if (!s.answer || s.answer.odo_margin_km !== value || typeof s.rulebook_version !== "number") {
+      if (!s.answer || s.answer[setting] !== value || typeof s.rulebook_version !== "number") {
         say("This preview cannot be checked against the Rulebook. Preview again.", "bad");
         return;
       }
@@ -150,7 +165,7 @@
     applyBtn.addEventListener("click", function () {
       if (!good || applyBtn.disabled) return;
       var sent = good, mine = token;
-      applyBtn.disabled = true; previewBtn.disabled = true;
+      applyBtn.disabled = true; previewBtn.disabled = true; lock(true);
       var form = new URLSearchParams();
       form.set("value", String(sent.value));
       form.set("preview_run", String(sent.run));
@@ -159,6 +174,7 @@
         body: form.toString()
       }).then(parse, down).then(function (res) {
         if (mine !== token) return;
+        lock(false);
         if (!res.ok) { previewBtn.disabled = false; say(fail(res.body.detail, res.status), "bad"); return; }
         var b = res.body;
         say(b.busy ? b.busy : "Saved as version " + b.version + ". The waiting lots are being checked again.", b.busy ? "bad" : "ok");

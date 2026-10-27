@@ -81,8 +81,9 @@ def register(app, templates, cfg, store, page) -> None:
             if kept:
                 continue
             lots = rulebook.affected(q, rows, rules)
+            unknown = q.id == "odo_margin" and not rules
             current = answers.get(q.setting, q.today) if q.kind == "setting" else None
-            open_questions.append({"q": q, "lots": len(lots), "current": current, "requests": requests.get(q.id, [])})
+            open_questions.append({"q": q, "lots": None if unknown else len(lots), "current": current, "requests": requests.get(q.id, [])})
         return page(request, "rulebook.html", "rulebook", decided=rulebook.DECIDED, history=history,
                     open_questions=open_questions, locked=rulebook.LOCKED, version=version)
 

@@ -10,16 +10,15 @@
 <section id="decided" class="card rb-section" aria-labelledby="rb-decided-h">
   <div class="card-head"><h2 id="rb-decided-h">Decided</h2><span class="end faint">{{ decided|length }} rules{% if history %}, {{ history|length }} {{ 'answer' if history|length == 1 else 'answers' }} from you{% endif %}</span></div>
   <div class="card-body">
+    <ul class="rb-decided">
+      {% for d in decided %}<li>{{ d.text }}<span class="faint"> {% if d.date %}{{ d.date }}. {% endif %}{{ d.source }}.</span></li>{% endfor %}
+    </ul>
     {% if history %}
     <h3 class="rb-sub">Your answers</h3>
     <ol class="rb-history" reversed>
       {% for v in history %}<li id="v-{{ v.version }}"><b>Version {{ v.version }}</b>{% if v.date %}, {{ v.date }}{% endif %}. {{ v.words }}</li>{% endfor %}
     </ol>
-    <h3 class="rb-sub">Rules already confirmed</h3>
     {% endif %}
-    <ul class="rb-decided">
-      {% for d in decided %}<li>{{ d.text }}<span class="faint"> {% if d.date %}{{ d.date }}. {% endif %}{{ d.source }}.</span></li>{% endfor %}
-    </ul>
   </div>
 </section>
 
@@ -36,10 +35,10 @@
       {% else %}
         <p class="rb-today">Today: {{ q.today }}</p>
       {% endif %}
-      <p class="rb-affects">Affects {{ item.lots }} waiting {{ 'lot' if item.lots == 1 else 'lots' }}. <a href="/desk">Open the desk</a></p>
+      <p class="rb-affects">{% if item.lots is none %}Affects an unknown number of waiting lots (no guide snapshot).{% else %}Affects {{ item.lots }} waiting {{ 'lot' if item.lots == 1 else 'lots' }}.{% endif %} <a href="/desk">Open the desk</a></p>
 
       {% if q.kind == 'setting' %}
-      <fieldset class="rb-choices" data-setting>
+      <fieldset class="rb-choices" data-setting="{{ q.setting }}">
         <legend class="faint">Choose a margin, then preview what it would change.</legend>
         {% for c in q.choices %}
         <label class="rb-choice"><input type="radio" name="rb-{{ q.id }}" value="{{ c.value }}"{% if c.value == item.current %} checked{% endif %}> {{ c.label | replace(' (today)', '') }}{% if c.value == item.current %} <span class="pill pill--info">Current</span>{% endif %}</label>

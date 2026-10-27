@@ -749,6 +749,8 @@ class ReplayStats:
     changes: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)  # rows that raised; each is also a line in `changes`
     lots: list[dict] = field(default_factory=list)   # one dict per changed lot, at most LOTS_CAP (the Rulebook preview)
+    lots_total: int = 0   # a preview: every lot the answer changes, listed or not
+    drift: int = 0        # a preview: stored lots already out of date with today's rules, whatever the answer
 
     def note_lot(self, row, before: tuple, after: tuple) -> None:
         if len(self.lots) < LOTS_CAP:
@@ -773,8 +775,14 @@ def reevaluate(cfg: Config, store: Store, model_codes: list[str] | None = None, 
     rules, snap_path = load_rules(cfg, snapshot, model_codes, answers=answers)
     by_guide = {r.guide_id: r for r in rules}
     by_code = {r.model_code: r for r in rules}
-    # A Rulebook preview (answers given) never asks a model, whatever sheet_check says: no paid call for a "what if".
-    no_model = answers is not None or (cfg.sheet_check or "none").lower() == "none"
+    if answers is not None:   # a preview also reads each lot under today's answers, so only the answer's effect is listed
+        today_rules, _ = load_rules(cfg, snapshot, model_codes)
+        today_guide = {r.guide_id: r for r in today_rules}
+        today_code = {r.model_code: r for r in today_rules}
+    # Replay never calls a model in judge mode (no client). The paid opt-in route would, so a preview there runs with
+    # none; it then re-reads soft lots as manual (accepted: that route is opt-in and paid).
+    sheet = (cfg.sheet_check or "none").lower()
+    no_model = sheet == "none" or (answers is not None and sheet == "openai")
     wanted = {c.upper() for c in model_codes} if model_codes else None
     st = ReplayStats()
     rows = store.list_proposals(decision="pending", model_code=None, limit=100_000)
@@ -800,7 +808,11 @@ def reevaluate(cfg: Config, store: Store, model_codes: list[str] | None = None, 
         st.checked += 1
         label = f"#{row['id']} {row['model_code']} {(row['summary'] or '')[:60]}"
         try:
-            _replay_row(cfg, store, st, row, rule, label, snap_path, no_model, apply, write_files=answers is None)
+            if answers is not None:
+                today = today_guide.get(row["guide_id"]) or today_code.get(row["model_code"]) or rule
+                _preview_row(cfg, store, st, row, today, rule, label, snap_path, no_model)
+            else:
+                _replay_row(cfg, store, st, row, rule, label, snap_path, no_model, apply)
         except Cancelled:
             raise
         except Exception as exc:  # one bad row must not stop the replay of the others (as in `scan`)
@@ -809,6 +821,34 @@ def reevaluate(cfg: Config, store: Store, model_codes: list[str] | None = None, 
             log.exception("replay failed for %s", row["ref_no"])
     report()
     return st
+
+
+def _preview_row(cfg: Config, store: Store, st: ReplayStats, row, today_rule: ModelRule, answer_rule: ModelRule,
+                 label: str, snap_path: Path, no_model: bool) -> None:
+    """One lot of a Rulebook preview: its result under today's answers against its result with the new answer.
+    Only a lot those two results differ for is listed (before = today's rules, after = with the answer). A lot whose
+    stored result already differs from today's rules is counted in `drift`, whatever the answer."""
+    cur, new = ReplayStats(), ReplayStats()
+    _replay_row(cfg, store, cur, row, today_rule, label, snap_path, no_model, False, write_files=False)
+    _replay_row(cfg, store, new, row, answer_rule, label, snap_path, no_model, False, write_files=False)
+    c = cur.lots[0] if cur.lots else None
+    n = new.lots[0] if new.lots else None
+    if c:
+        st.drift += 1
+    if not (c or n):
+        st.unchanged += 1
+        return
+    stored = (c or n)["before"]
+    before = c["after"] if c else stored
+    after = n["after"] if n else stored
+    if (before["status"], before["bid_jpy_k"]) == (after["status"], after["bid_jpy_k"]):
+        st.unchanged += 1
+        return
+    st.changed += 1
+    st.lots_total += 1
+    st.changes.append(f"{label}: {before['status']} {before['bid_jpy_k']} -> {after['status']} {after['bid_jpy_k']}")
+    if len(st.lots) < LOTS_CAP:
+        st.lots.append({**(c or n), "before": before, "after": after})
 
 
 def _replay_row(cfg: Config, store: Store, st: ReplayStats, row, rule: ModelRule, label: str, snap_path: Path,

@@ -341,7 +341,8 @@ def replay(model: list[str] = typer.Option(None, "--model", "-m", help="Only the
     progress.summary({"checked": st.checked, "unchanged": st.unchanged, "changed": st.changed, "needs_fetch": st.needs_fetch,
                       "applied": st.applied, "apply": bool(apply), "changes": [str(c)[:300] for c in st.changes[:20]],
                       "changes_total": len(st.changes),
-                      **({"rulebook_version": version, "answer": hypothetical, "lots": st.lots} if hypothetical else {}),
+                      **({"rulebook_version": version, "answer": hypothetical, "lots": st.lots, "lots_total": st.lots_total,
+                                                        "drift": st.drift} if hypothetical else {}),
                       **({"errors": [str(e)[:300] for e in st.errors[:20]], "errors_total": len(st.errors)} if st.errors else {})})
 
 

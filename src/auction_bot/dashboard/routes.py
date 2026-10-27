@@ -117,7 +117,7 @@ def summary_pairs(run: dict) -> list[tuple[str, str]]:
     if run.get("command") == "rulebook-preview":   # the lots that would change, counted (the list itself is long)
         s = dict(s)
         if isinstance(s.get("lots"), list):
-            s["lots"] = len(s["lots"])
+            s["lots"] = max(len(s["lots"]), s["lots_total"] if isinstance(s.get("lots_total"), int) else 0)
         elif isinstance(s.get("lots_total"), int):
             s["lots"] = s["lots_total"]
         else:

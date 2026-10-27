@@ -298,7 +298,7 @@ def slim(run: dict) -> dict:
     page and `get` still carry the list."""
     s = run.get("summary")
     if isinstance(s, dict) and isinstance(s.get("lots"), list) and run.get("command") == "rulebook-preview":
-        run = dict(run, summary={**{k: v for k, v in s.items() if k != "lots"}, "lots_total": len(s["lots"])})
+        run = dict(run, summary={**{k: v for k, v in s.items() if k != "lots"}, "lots_total": max(len(s["lots"]), s["lots_total"] if isinstance(s.get("lots_total"), int) else 0)})
     return run
 
 

@@ -203,3 +203,59 @@ def test_the_rulebook_is_in_the_nav(cfg):
     assert 'href="/rulebook"' in page
     assert page.index('href="/bids"') < page.index('href="/rulebook"') < page.index('href="/guides"')
     assert 'href="/rulebook" aria-current="page"' in client.get("/rulebook").text
+
+
+# -- a preview shows only what the answer changes ------------------------------------------------------
+
+def test_a_preview_under_the_judge_setting_changes_nothing_for_todays_value(cfg, monkeypatch):
+    from auction_bot.pipeline import reevaluate
+    from tests.test_judge_pipeline import _stub
+    cfg.sheet_check = "judge"
+    cfg.judge = {"max_photos": 3, "inline": True}
+    calls = []
+    _stub(monkeypatch, calls)
+    store = Store(cfg.db_path)
+    scan(cfg, FakeBrowser(), store, ["GDH206"], limit_per_model=2)
+    asked = len(calls)
+    assert asked == 2
+    assert reevaluate(cfg, store, ["GDH206"]).changed == 0
+    st = reevaluate(cfg, store, ["GDH206"], answers={"odo_margin_km": 0})
+    assert st.checked >= 2 and st.changed == 0 and st.lots == [] and st.drift == 0 and st.errors == []
+    assert len(calls) == asked
+    store.close()
+
+
+def test_a_preview_lists_only_the_answers_own_effect_and_counts_drift(cfg):
+    from auction_bot.pipeline import reevaluate
+    from tests.test_pipeline_offline import _settled_at_50k
+    store = _settled_at_50k(cfg)
+    first, boundary = store.list_proposals(decision="pending", status="NEEDS_REVIEW")[:2]
+    facts = json.loads(first["facts_json"])
+    facts["km"] = 15_000
+    # a lot already out of date with today's rules (an old amount), far from any band bound
+    store.conn.execute("UPDATE proposals SET facts_json=?, bid_jpy_k=1 WHERE id=?", (json.dumps(facts), first["id"]))
+    store.conn.commit()
+    assert reevaluate(cfg, store, ["GDH206"]).changed == 1
+    st = reevaluate(cfg, store, ["GDH206"], answers={"odo_margin_km": 1000})
+    assert [lot["pid"] for lot in st.lots] == [boundary["id"]] and st.drift == 1 and st.lots_total == 1
+    assert st.lots[0]["before"]["bid_jpy_k"] == 1710 and st.lots[0]["after"]["bid_jpy_k"] == 1640
+    today = reevaluate(cfg, store, ["GDH206"], answers={"odo_margin_km": 0})
+    assert today.lots == [] and today.changed == 0 and today.drift == 1
+    store.close()
+
+
+def test_the_unknown_count_without_a_snapshot(cfg):
+    for f in cfg.snapshot_dir.glob("*.json"):
+        f.unlink()
+    page = _client(cfg)[0].get("/rulebook").text
+    assert "Affects an unknown number of waiting lots (no guide snapshot)." in _question(page, "odo_margin")
+    assert "Affects 0 waiting lots" in _question(page, "interior_years")
+
+
+def test_decided_lists_the_rules_before_the_answers(cfg):
+    client, _ = _client(cfg)
+    client.post("/rulebook/gdh206k/keep", headers=JSON)
+    decided = _section(client.get("/rulebook").text, "decided")
+    assert decided.index("rb-decided") < decided.index("Your answers")
+    src = (Path(rulebook.__file__).parent / "review" / "static" / "rulebook.js").read_text(encoding="utf-8")
+    assert "odo_margin_km" not in src
