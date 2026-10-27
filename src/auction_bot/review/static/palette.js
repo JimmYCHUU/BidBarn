@@ -14,12 +14,22 @@
 
   function isOpen() { return root.getAttribute("data-open") === "true"; }
 
+  function stateWords(l) {
+    if (l.decision === "approved") return "Approved";
+    if (l.decision === "rejected") return "Rejected";
+    if (l.decision === "deleted") return "Cleared";
+    if (l.decision === "superseded") return "Replaced by a newer scan";
+    if (l.status === "SKIP") return "Skipped";
+    if (l.status === "NEEDS_REVIEW") return "Waiting, needs a look";
+    return "Waiting";
+  }
+
   function items() {
     var q = input.value.trim().toLowerCase();
     var pages = PAGES.filter(function (p) { return !q || p[0].toLowerCase().indexOf(q) !== -1; })
       .map(function (p) { return { label: p[0], note: "Page", url: p[1] }; });
     var found = lots.map(function (l) {
-      return { label: l.ref_no + " " + (l.summary || ""), note: l.decision + ", " + l.status, url: l.url };
+      return { label: l.ref_no + " " + (l.summary || ""), note: stateWords(l), url: l.url };
     });
     return pages.concat(found);
   }

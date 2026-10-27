@@ -192,7 +192,9 @@ def test_the_page_offers_nothing_outside_the_catalogue(cfg):
     actions = set(re.findall(r'<form[^>]*action="([^"]+)"', page))
     assert actions and all(re.fullmatch(r"/rulebook/[a-z0-9_]+/(keep|request)", a) for a in actions)
     controls = page.replace(_section(page, "locked"), "")   # the locked rules only describe the live flag in words
-    assert "--live" not in controls and not re.search(r'type="(number|text)"', page)
+    controls = re.sub(r'<div class="palette" id="palette".*?(?=<header)', "", controls, flags=re.S)  # the Ctrl+K find box is not a setting
+    assert 'id="palette"' not in controls
+    assert "--live" not in controls and not re.search(r'type="(number|text)"', controls)
     values = set(re.findall(r'type="radio"[^>]*value="([^"]*)"', page))
     assert values == {"0", "1000", "2000", "3000", "5000"}
 

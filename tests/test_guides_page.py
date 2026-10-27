@@ -372,3 +372,62 @@ def test_guide_page_marks_ladder_notes(cfg):
     snap.write_text(json.dumps(data), encoding="utf-8")
     r = _client(cfg).get("/guides/GDH206")
     assert "ladder: cruise control" in r.text and r.text.count("ladder:") == 1
+
+
+# -- the desk block and the Teach session ----------------------------------------------------------------
+
+def _plain(html: str) -> str:
+    return " ".join(re.sub(r"<[^>]+>", " ", html).split())
+
+
+def test_a_guide_page_shows_what_waits_on_the_desk(cfg):
+    store = Store(cfg.db_path)
+    _seed(store, "A", "GDH206", "4", 90_000)
+    _seed(store, "B", "GDH206", "4", 60_000)
+    store.close()
+    page = _client(cfg).get("/guides/GDH206").text
+    assert "2 lots wait for you" in _plain(page)
+    assert re.search(r'<a [^>]*href="/"[^>]*>\s*2 lots wait for you', page)
+
+
+def test_a_guide_page_counts_recent_decisions(cfg):
+    store = Store(cfg.db_path)
+    pids = [_seed(store, ref, "GDH206", "4", 50_000 + i) for i, ref in enumerate("ABC")]
+    store.close()
+    client = _client(cfg)
+    _decide(client, pids[0], action="approve", amount="1000")
+    _decide(client, pids[1], action="reject", reason="no")
+    _decide(client, pids[2], action="reject", reason="no")
+    store = Store(cfg.db_path)
+    store.conn.execute("UPDATE decisions SET at='2020-01-01T00:00:00+00:00' WHERE proposal_id=?", (pids[2],))
+    store.conn.commit()
+    store.close()
+    assert "In the last 30 days: 1 approved, 1 rejected" in _plain(client.get("/guides/GDH206").text)
+
+
+def test_a_guide_page_names_the_margin_in_force(cfg):
+    client = _client(cfg)
+    page = client.get("/guides/GDH206").text
+    assert "Odometer margin: none" in _plain(page) and 'href="/rulebook"' in page
+    store = Store(cfg.db_path)
+    store.add_rulebook_answer("odo_margin", 2000)
+    store.close()
+    page = client.get("/guides/GDH206").text
+    assert "Odometer margin: 2,000 km (Rulebook)" in _plain(page) and 'href="/rulebook"' in page
+
+
+def test_a_quiet_guide_page_reads_plainly(cfg):
+    r = _client(cfg).get("/guides/GDH206")
+    assert r.status_code == 200
+    text = _plain(r.text)
+    assert "No lots wait for you" in text and "No decisions in the last 30 days" in text
+
+
+def test_the_guides_page_offers_a_teach_session(cfg):
+    page = _client(cfg).get("/guides").text
+    m = re.search(r"<button[^>]*data-start='([^']*)'[^>]*>([^<]*(?:<[^>]+>[^<]*)*?)</button>", page)
+    assert m and json.loads(m.group(1).replace("&#34;", '"'))["command"] == "learn"
+    assert "Teach session" in _plain(m.group(2))
+    assert page.count("data-start=") == 1
+    assert "Opens the bot&#39;s browser for you to bid by hand; the bot only watches." in page or \
+        "Opens the bot's browser for you to bid by hand; the bot only watches." in page

@@ -1,10 +1,14 @@
 {% extends "base.html" %}
+{% from "_parts.html" import start_button %}
 {% block title %}Guides · BidBarn{% endblock %}
 {% block body %}
 <div class="page-head">
   <h1 class="page-title">Guides</h1>
   <span class="page-sub">{% if rules.snapshot %}{{ rules.guides }} guide{{ 's' if rules.guides != 1 }} in the snapshot, fetched {{ ago(rules.fetched_at) }}{% else %}No snapshot on this PC{% endif %}</span>
+  <div class="end">{{ start_button('learn', 'Teach session', cls='') }}</div>
 </div>
+<p class="faint">Opens the bot's browser for you to bid by hand; the bot only watches.</p>
+<div class="form-error" role="alert" data-start-error></div>
 
 {% if rules.error %}
 <div class="banner banner--bad">{{ icon('circle-alert') }}<div><b>The snapshot could not be read.</b> {{ rules.error }}</div></div>
@@ -38,4 +42,5 @@
   </div>
   {% endif %}
 </section>
+<script src="/static/dashboard.js?v={{ asset_v }}" defer></script>
 {% endblock %}

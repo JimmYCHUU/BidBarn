@@ -98,3 +98,11 @@ def test_only_the_palette_calls_find():
     for js in STATIC.glob("*.js"):
         if js.name != "palette.js":
             assert "/api/find" not in js.read_text(encoding="utf-8"), js.name
+
+
+def test_palette_js_names_a_lots_state_in_plain_words():
+    src = (STATIC / "palette.js").read_text(encoding="utf-8")
+    for words in ("Waiting, needs a look", "Waiting", "Skipped", "Approved", "Rejected", "Cleared",
+                  "Replaced by a newer scan"):
+        assert f'"{words}"' in src, words
+    assert 'l.decision + ", " + l.status' not in src

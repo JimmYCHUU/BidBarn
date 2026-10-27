@@ -28,6 +28,15 @@
   </div>
 </div>
 
+<section class="card" id="on-the-desk">
+  <div class="card-body row">
+    <b>On the desk</b>
+    <a href="/">{% if desk.waiting == 0 %}No lots wait for you{% elif desk.waiting == 1 %}1 lot waits for you{% else %}{{ desk.waiting }} lots wait for you{% endif %}</a>
+    <span>{% if desk.approved or desk.rejected %}In the last {{ desk.days }} days: {{ desk.approved }} approved, {{ desk.rejected }} rejected{% else %}No decisions in the last {{ desk.days }} days{% endif %}</span>
+    <a href="/rulebook">{% if desk.margin_km %}Odometer margin: {{ '{:,}'.format(desk.margin_km) }} km (Rulebook){% else %}Odometer margin: none{% endif %}</a>
+  </div>
+</section>
+
 <section class="card">
   <div class="card-body row">
     <a class="pill {{ 'pill--warn' if model_counts.to_review else 'pill--plain' }}" href="/review?model={{ code }}">{{ model_counts.to_review }} to review</a>

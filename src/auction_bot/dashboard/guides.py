@@ -8,6 +8,7 @@ grid is rendered on this PC and sent nowhere.
 from __future__ import annotations
 
 import re
+from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse
@@ -16,6 +17,7 @@ from auction_bot.carbarn.client import latest_snapshot, load_override, load_rule
 from auction_bot.carbarn.models import Approval, ModelRule, Modifier, OdoBand, Variant
 from auction_bot.dashboard import status as st
 from auction_bot.dashboard.jobs import MODEL_CODE
+from auction_bot import rulebook
 from auction_bot.insights import propose_skip_lines
 from auction_bot.judge.playbook import code_lines
 from auction_bot.judge.topics import detect_topic
@@ -24,6 +26,7 @@ from auction_bot.rules.eligibility import window_text  # the review card's words
 from auction_bot.rules.instructions import InstructionError, is_structured, parse_instruction, split_override_lines
 
 DECISIONS_SHOWN = 15
+DESK_DAYS = 30
 NOTES_SHOWN = 30
 _STAMP = re.compile(r"^\((?P<stamp>\d{4}-\d{2}-\d{2}[^)]*)\)\s*")
 _cache: dict = {}
@@ -217,6 +220,20 @@ def guide_view(rule: ModelRule) -> dict:
     }
 
 
+def desk_for_code(cfg, s, code: str) -> dict:
+    """What is on the desk for one model code: lots waiting, the last 30 days of decisions (undone ones are
+    already left out by the store) and the odometer margin in force. Read only."""
+    since = (datetime.now(timezone.utc) - timedelta(days=DESK_DAYS)).isoformat(timespec="seconds")
+    recent = s.decisions_with_facts(code, since=since)
+    return {
+        "waiting": len(s.list_triage(code)),
+        "approved": sum(1 for d in recent if d["action"] == "approve"),
+        "rejected": sum(1 for d in recent if d["action"] == "reject"),
+        "days": DESK_DAYS,
+        "margin_km": rulebook.current_answers(cfg).get("odo_margin_km", 0) or 0,
+    }
+
+
 # -- the routes ----------------------------------------------------------------------------------------
 
 def register(app, templates, cfg, store, page) -> None:
@@ -224,6 +241,7 @@ def register(app, templates, cfg, store, page) -> None:
     Called from `dashboard/routes.py::register`, so the same local-only middleware covers these."""
     templates.env.globals.setdefault("ago", st.ago)
     templates.env.globals.setdefault("local_time", st.local_time)
+    templates.env.globals.setdefault("command_icon", lambda name: st.COMMAND_ICONS.get(name, "terminal"))
 
     @app.get("/guides", response_class=HTMLResponse)
     def guides_index(request: Request):
@@ -252,8 +270,9 @@ def register(app, templates, cfg, store, page) -> None:
             decisions = s.decisions_with_facts(code)
             notes = s.manual_notes(code, limit=NOTES_SHOWN)
             model_counts = next((r for r in st.model_rows(cfg, s) if r["code"] == code), None) or zeros
+            desk = desk_for_code(cfg, s, code)
         finally:
             s.close()
         return page(request, "guide.html", "guides", code=code, guides=[guide_view(r) for r in rules],
                     playbook=playbook_lines(cfg, code), notes=notes, decisions=decisions[:DECISIONS_SHOWN],
-                    decisions_total=len(decisions), suggestions=propose_skip_lines(decisions), model_counts=model_counts)
+                    decisions_total=len(decisions), suggestions=propose_skip_lines(decisions), model_counts=model_counts, desk=desk)
