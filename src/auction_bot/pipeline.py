@@ -773,7 +773,8 @@ def reevaluate(cfg: Config, store: Store, model_codes: list[str] | None = None, 
     rules, snap_path = load_rules(cfg, snapshot, model_codes, answers=answers)
     by_guide = {r.guide_id: r for r in rules}
     by_code = {r.model_code: r for r in rules}
-    no_model = (cfg.sheet_check or "none").lower() == "none"
+    # A Rulebook preview (answers given) never asks a model, whatever sheet_check says: no paid call for a "what if".
+    no_model = answers is not None or (cfg.sheet_check or "none").lower() == "none"
     wanted = {c.upper() for c in model_codes} if model_codes else None
     st = ReplayStats()
     rows = store.list_proposals(decision="pending", model_code=None, limit=100_000)

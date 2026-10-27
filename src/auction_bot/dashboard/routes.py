@@ -116,7 +116,12 @@ def summary_pairs(run: dict) -> list[tuple[str, str]]:
              "cached": "From the cache", "disagreements": "Disagreements", "decision": "Decision"}
     if run.get("command") == "rulebook-preview":   # the lots that would change, counted (the list itself is long)
         s = dict(s)
-        s["lots"] = len(s["lots"]) if isinstance(s.get("lots"), list) else s.get("lots_total", 0)
+        if isinstance(s.get("lots"), list):
+            s["lots"] = len(s["lots"])
+        elif isinstance(s.get("lots_total"), int):
+            s["lots"] = s["lots_total"]
+        else:
+            s.pop("lots", None)   # a running or failed preview has no list to count
         names["lots"] = "Lots that would change"
     out = []
     if run.get("command") in ("place", "bid") and isinstance(s.get("lines"), list):
