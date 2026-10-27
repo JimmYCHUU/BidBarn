@@ -323,11 +323,11 @@ def evaluate_hard(facts: VehicleFacts, rule: ModelRule, final: bool = False) -> 
         # gap between bands) takes the closest band. The cap above was checked first.
         cell = variant.nearest_cell(facts.year, km)
         if cell is None:
-            return fail("odo", f"no odo band covers {km:,} km for {facts.year}")
-        checks.append(Check("odo", True, f"no band covers {km:,} km; the closest band {cell.band.label} is used"))
+            return fail("odo", f"no odo band covers {shown if margin else f'{km:,} km'}{f' ({km:,} km)' if margin else ''} for {facts.year}")
+        checks.append(Check("odo", True, f"no band covers {shown}{f' ({km:,} km)' if margin else ''}; the closest band {cell.band.label} is used"))
     res.band_label = cell.band.label
     if cell.no_bid or cell.bid_jpy_k is None:
-        return fail("cell", f"grid cell {facts.year} / {cell.band.label} is empty or switched off ({cell.reason or 'no value'})")
+        return fail("cell", f"grid cell {facts.year} / {cell.band.label}{f' ({shown})' if margin else ''} is empty or switched off ({cell.reason or 'no value'})")
     if margin:
         checks.append(Check("cell", True, f"{facts.km:,} + {margin:,} km margin -> {facts.year} / {cell.band.label} -> {cell.bid_jpy_k:,}K"))
     else:
@@ -415,7 +415,7 @@ def card_grid_check(facts: VehicleFacts, rule: ModelRule) -> Check | None:
                     and m.applies_to_year_odo(facts.year, facts.km))
         ceiling = max(ceiling or 0, cell.bid_jpy_k + extra)
     if ceiling is None:
-        return Check("cell", False, f"no variant has a bid cell for {facts.year} / {facts.km + rule.odo_margin_km:,} km")
+        return Check("cell", False, f"no variant has a bid cell for {facts.year} / {f'{facts.km:,} km + {rule.odo_margin_km:,} km margin' if rule.odo_margin_km else f'{facts.km:,} km'}")
     if facts.start_price_jpy and ceiling * 1000 < facts.start_price_jpy:
         return Check("start", False, f"start price {facts.start_price_jpy // 1000:,}K is above the highest possible bid {ceiling:,}K")
     return None

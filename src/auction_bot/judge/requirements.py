@@ -179,11 +179,14 @@ def odd_flags(rule: ModelRule, hard: HardResult, facts: VehicleFacts, ocr_hints:
     match = rule.resolve_variant(facts.chassis, facts.variant_text)
     variant = match.variant
     if variant is not None and facts.year is not None and facts.km is not None:
-        cell = variant.cell_for(facts.year, facts.km)
-        if cell is not None and facts.km == cell.band.odo_to:
-            flags.append(f"odometer exactly on the band boundary ({facts.km:,} km, band {cell.band.label}); the odometer rises before delivery")
-        elif variant.max_odo and facts.km >= 0.9 * variant.max_odo:
-            flags.append(f"odometer within 10 % of the guide's cap ({facts.km:,} of {variant.max_odo:,} km); the odometer rises before delivery")
+        margin = rule.odo_margin_km
+        km = facts.km + margin   # the km the hard rules priced (Rulebook margin)
+        shown = f"{facts.km:,} km + {margin:,} km margin" if margin else f"{facts.km:,} km"
+        cell = variant.cell_for(facts.year, km)
+        if cell is not None and km == cell.band.odo_to:
+            flags.append(f"odometer exactly on the band boundary ({shown}, band {cell.band.label}); the odometer rises before delivery")
+        elif variant.max_odo and km >= 0.9 * variant.max_odo:
+            flags.append(f"odometer within 10 % of the guide's cap ({shown} of {variant.max_odo:,} km); the odometer rises before delivery")
     for h in ocr_hints or []:
         if h.get("level") == "warn":
             flags.append(f"sheet disagrees with the listing: {h.get('message')}"[:200])

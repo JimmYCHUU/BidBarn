@@ -82,7 +82,10 @@ def test_a_gap_takes_the_closest_band_after_the_margin(base_rule):
     res = evaluate_hard(facts(km=28_500), r)               # 30,500 effective: in the gap
     assert res.status == PASS and res.band_label == "20K-30K"
     note = [c for c in res.checks if c.name == "odo" and c.ok]
-    assert note and "30,500" in note[0].detail and "closest band 20K-30K" in note[0].detail
+    assert note and note[0].detail == "no band covers 28,500 km + 2,000 km margin (30,500 km); the closest band 20K-30K is used"
+    # margin 0 keeps today's wording
+    r0 = evaluate_hard(facts(km=30_500), rule_with(base_rule, 0, drop_to=40_000))
+    assert [c.detail for c in r0.checks if c.name == "odo" and c.ok] == ["no band covers 30,500 km; the closest band 20K-30K is used"]
 
 
 @pytest.mark.parametrize("margin", [0, 2_000])
@@ -118,3 +121,64 @@ def test_load_rules_takes_the_given_answers(cfg):  # noqa: F811
     assert {r.odo_margin_km for r in load_rules(cfg, answers={"odo_margin_km": 2000})[0]} == {2000}
     assert {r.odo_margin_km for r in load_rules(cfg, answers={})[0]} == {0}
     assert {r.odo_margin_km for r in load_rules(cfg)[0]} == {0}   # nothing stored
+
+
+def test_cell_and_card_texts_name_the_margin(base_rule):
+    r = rule_with(base_rule, 1_000)
+    v = r.variants[0]
+    key = next(k for k, c in v.cells.items() if c.year == 2020 and c.band.odo_to == 60_000)
+    v.cells[key].no_bid = True
+    res = evaluate_hard(facts(km=50_000), r)
+    assert res.status == SKIP
+    assert [c.detail for c in res.checks if c.name == "cell"][0].startswith(
+        "grid cell 2020 / 50K-60K (50,000 km + 1,000 km margin) is empty or switched off")
+    r0 = rule_with(base_rule, 0)
+    r0.variants[0].cells[key].no_bid = True
+    res0 = evaluate_hard(facts(km=55_000), r0)
+    assert [c.detail for c in res0.checks if c.name == "cell"][0].startswith("grid cell 2020 / 50K-60K is empty or switched off")
+    # card_grid_check: no live cell anywhere
+    r2 = rule_with(base_rule, 1_000)
+    for c in r2.variants[0].cells.values():
+        if c.year == 2020:
+            c.no_bid = True
+    assert card_grid_check(facts(km=50_000), r2).detail == "no variant has a bid cell for 2020 / 50,000 km + 1,000 km margin"
+    r3 = rule_with(base_rule, 0)
+    for c in r3.variants[0].cells.values():
+        if c.year == 2020:
+            c.no_bid = True
+    assert card_grid_check(facts(km=50_000), r3).detail == "no variant has a bid cell for 2020 / 50,000 km"
+
+
+def test_the_judge_flags_and_candidates_read_the_effective_km(base_rule):
+    from auction_bot.judge.candidates import candidates_for
+    from auction_bot.judge.requirements import odd_flags
+
+    def flags(km, margin):
+        r = rule_with(base_rule, margin)
+        f = facts(km=km)
+        return odd_flags(r, evaluate_hard(f, r), f), candidates_for(r, f, evaluate_hard(f, r))
+
+    # margin 0: unchanged
+    fl, cands = flags(50_000, 0)
+    assert any("exactly on the band boundary (50,000 km, band 40K-50K)" in x for x in fl)
+    assert any(c.label == "next odometer band" for c in cands)
+    # margin 1,000 on 50,000: the lot is already in 50-60K; no "exactly on the boundary" flag, next band is not offered
+    fl, cands = flags(50_000, 1_000)
+    assert not any("exactly on the band boundary" in x for x in fl)
+    assert not any(c.label == "next odometer band" for c in cands)
+    # margin 1,000 on 49,000: effective 50,000 is the boundary of 40-50K
+    fl, cands = flags(49_000, 1_000)
+    assert any("exactly on the band boundary (49,000 km + 1,000 km margin, band 40K-50K)" in x for x in fl)
+    nxt = [c for c in cands if c.label == "next odometer band"]
+    assert nxt and nxt[0].amount_k == evaluate_hard(facts(km=50_001), rule_with(base_rule, 0)).bid_jpy_k
+    # cap proximity
+    r = rule_with(base_rule, 5_000)
+    f = facts(km=116_000)
+    fl = odd_flags(r, evaluate_hard(f, r), f)
+    assert any("within 10 % of the guide's cap (116,000 km + 5,000 km margin of 130,000 km)" in x for x in fl)
+
+
+def test_load_rules_reads_the_stored_answer_by_itself(cfg):  # noqa: F811
+    from auction_bot.store import Store
+    Store(cfg.db_path).add_rulebook_answer("odo_margin", 2000)
+    assert {r.odo_margin_km for r in load_rules(cfg)[0]} == {2000}

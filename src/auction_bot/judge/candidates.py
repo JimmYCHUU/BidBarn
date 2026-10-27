@@ -39,8 +39,9 @@ def candidates_for(rule: ModelRule, facts: VehicleFacts, hard: HardResult) -> li
                 if m.active and not m.stale and m.is_toggle and m.applies_to_year_odo(facts.year, facts.km) and m.amount_jpy_k:
                     add(f"grid {m.amount_jpy_k:+d}K ({m.note or 'chip'})", base + m.amount_jpy_k,
                         f"the dashboard chip '{m.note or 'chip'}' applies")
-        cell = variant.cell_for(facts.year, facts.km)
-        if cell is not None and (facts.km == cell.band.odo_to or (variant.max_odo and facts.km >= 0.9 * variant.max_odo)):
+        km = facts.km + rule.odo_margin_km   # the km the hard rules priced (Rulebook margin)
+        cell = variant.cell_for(facts.year, km)
+        if cell is not None and (km == cell.band.odo_to or (variant.max_odo and km >= 0.9 * variant.max_odo)):
             nxt = _bid_for_variant(variant, _with_km(facts, cell.band.odo_to + 1))
             if nxt:
                 add("next odometer band", nxt, f"the odometer rises before delivery; the band after {cell.band.label}")
