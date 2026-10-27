@@ -38,6 +38,10 @@ builds it: the review routes are defined there, the dashboard routes are registe
 | `GET /review`, `/list`, `/p/{id}` | The review pages |
 | `GET /desk`, `/desk/board`, `/desk/lot/{id}` | The desk: lots by auction session and lane. Reads only; its decisions go to `POST /p/{id}/decide`, `/delete` and `/event`. See `docs/desk.md` |
 | `GET /desk/scan` | The desk's scan bar as a fragment: the scan's state (idle, running, waiting for a sign-in, another job running, last scan stopped) and its button. Reads the status only; the page polls it. See `docs/desk.md` |
+| `GET /rulebook` | The Rulebook: what is decided, the open questions with the waiting lots each touches, and what is locked. Reads only. See `docs/rulebook.md` |
+| `POST /rulebook/{qid}/apply` | Apply a setting answer. Form fields `value` and `preview_run`. Refused (409, or 400 for a bad number or an answer the Rulebook does not offer) unless `preview_run` is a finished, error-free `rulebook-preview` run of that same value, made at the newest Rulebook version. On success it saves a new version and starts `replay --apply`; JSON `{"ok", "version", "run_id"}`, or `"busy"` words instead of `run_id` when another job is running (the answer is still saved) |
+| `POST /rulebook/{qid}/keep` | Keep a confirm question as it is: saves a version. Not a decision about any lot. 409 for a setting question |
+| `POST /rulebook/{qid}/request` | Save the text as a change request under the question. Nothing in the engine changes. 400 when the text is empty |
 | `GET /bids` | The bid sheet: the approved lots `bot place` will take, in its order, per auction, the next dry run's lots marked (a lot already placed as a dry run is done and skipped until reopened), exposure, the last day's placed lots, and a button that starts the dry-run `place` command |
 | `GET /api/status` | The state of the day, as the overview shows it |
 | `GET /api/commands` | The command table, for the forms |
@@ -89,6 +93,11 @@ the command line as text.
   contains that flag, whatever produced it. `Config.placement_mode` and `place_bid` remain the
   real locks; this is a second fence in front of them.
 - `judge` always runs as `--pending`.
+- `rulebook-preview` takes a question and a value (a whole number from 0) and runs `replay --answer <setting>=<value>`,
+  never with `--apply`. `build_argv` refuses a question that is not a Rulebook setting and a value the Rulebook does
+  not offer. `bot replay --answer` is a preview only: it refuses `--apply`, writes no file, stores nothing, and its
+  summary carries the lots it would change, the Rulebook version it read and how many other stored lots are out of
+  date. Applying is `POST /rulebook/{qid}/apply` and nothing else.
 - `bid` and `learn` are in the table with no options at all: `bid` runs as `bid --no-browser`
   (the review happens on this page, see Finish), `learn` as `learn`. `watch` is not in the
   table: Learn is watch plus the comparison.

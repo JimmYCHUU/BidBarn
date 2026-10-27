@@ -95,6 +95,10 @@ hard constraints. Do not weaken them, work around them, or "temporarily" disable
     negated Welcab note that names a failing seat system ("No ramp / slope type", "No wheelchair lift") is
     the Welcab seat requirement itself, not negated; any other negated Welcab note ("No welcab", "No swivel
     seat") gets no ladder topic and stays a plain text requirement the model judges, as before the ladders.
+- Rule answers on the Rulebook page are Jim's (Jim, 2026-10-26): the page offers only the catalogue's choices
+  (`rulebook.py`), today's behaviour is the default, Apply needs a finished preview of the same answer, and
+  replay applies it offline. Never add a setting, a choice or a default without Jim; a hard rule is never
+  answerable.
 - Anything not covered by a stored rule goes to the reviewer as NEEDS_REVIEW. Uncertainty is
   never resolved in favour of bidding.
 - Do not change how variants, modifiers or model matching are interpreted without asking Jim.

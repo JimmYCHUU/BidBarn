@@ -1,7 +1,7 @@
 # BidBarn 🚗
 
 ![Python 3.12](https://img.shields.io/badge/python-3.12-blue)
-![Tests](https://img.shields.io/badge/tests-746%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-802%20passing-brightgreen)
 ![Playwright](https://img.shields.io/badge/browser-Playwright%20Chromium-45ba4b)
 ![No paid AI](https://img.shields.io/badge/AI%20APIs-none%20required-lightgrey)
 ![Testing lock](https://img.shields.io/badge/placement-testing%20lock%20on-orange)
@@ -356,6 +356,11 @@ Nichibo for every active guide, then ends. It does not wait for your review and 
 **Stop** pauses it, and Scan now again carries on from the cache and the stored lots. If Nichibo signs
 out during the scan, a sign-in window opens once and the scan carries on after you sign in.
 
+Phase 4 added the **Rulebook** (`/rulebook`, nav item Rulebook): what is decided, the open questions
+you answer there, and what is locked. The odometer margin is a setting with a preview of every lot it
+would change, then Apply; the other questions take Keep it as it is or Ask for a change. Nothing there
+approves or places a bid. See [docs/rulebook.md](docs/rulebook.md).
+
 The parity table, the keys, what the desk leaves out, the check list and how to try it before the
 merge are in [docs/desk.md](docs/desk.md).
 
@@ -513,7 +518,7 @@ lists the rules your rejections suggest), when rejecting a lot on its page, with
 | `bot.cmd rules [CODE]` | Print the parsed grid of a model |
 | `bot.cmd scan [-m CODE] [--limit N] [--fresh] [--rescan] [--headless]` | Search, evaluate, write proposals |
 | `bot.cmd review` | Serve the same pages without opening the browser (triage at `/review`, table at `/list`) |
-| `bot.cmd replay [--apply]` | Re-apply current rules, skip lines and code to stored proposals, offline |
+| `bot.cmd replay [--apply] [--answer KEY=VALUE]` | Re-apply current rules, skip lines and code to stored proposals, offline. `--answer odo_margin_km=2000` only previews a Rulebook answer and stores nothing |
 | `bot.cmd place [--live]` | Place approved bids (dry run unless every lock is off) |
 | `bot.cmd judge [--pending] [-m CODE] [--limit N] [--no-browser]` | Ask the free vision model about stored lots still waiting for a judgement (rate-limited, resumable). `--no-browser` opens no lot page for photos; such lots stay pending |
 | `bot.cmd playbook [CODE]` | What the judgement model is told about how you decide: your principles, and your corrections and comments per model code. Without a code, lists every code with notes |
@@ -565,7 +570,7 @@ Everything the bot downloads stays on the office PC. Git never sees any of it.
 .venv\Scripts\python -m pytest -q
 ```
 
-746 tests: the golden cases from the manual walkthrough against the real GDH206 guide, variant
+802 tests: the golden cases from the manual walkthrough against the real GDH206 guide, variant
 resolution on captured Alphard and E-Class guides, the seat rule, OCR parsing on three real sheets
 plus the header-band crop and its fallback, an offline end-to-end scan against captured Nichibo
 pages, the card-and-sheet path that opens no page, the placeholder path that parks a lot
@@ -648,18 +653,21 @@ look at Insights once decisions exist.
 
 ### Open questions for Carbarn
 
-- Interior years of a build window count as inside it (registered 2020, window 07/2019 to
+Answer these on the Rulebook page (`/rulebook`, see [docs/rulebook.md](docs/rulebook.md)). Each item
+names its Rulebook id in brackets.
+
+- (`interior_years`) Interior years of a build window count as inside it (registered 2020, window 07/2019 to
   06/2023): confirm.
-- The selected pair decides the verdict even when another active pair would cover the lot:
+- (`selected_pair`) The selected pair decides the verdict even when another active pair would cover the lot:
   confirm.
-- With no selected pair the active pairs are alternatives, and the bot may only recommend
+- (`no_selected_pair`) With no selected pair the active pairs are alternatives, and the bot may only recommend
   against a lot when every pair fails it: confirm.
-- A model code that does not match the SEV text reads "confirm import"; one that cannot be
+- (`model_code_unmatched`) A model code that does not match the SEV text reads "confirm import"; one that cannot be
   parsed is not checked (the card says "eligible (model code not checked)"); neither reads
   "cannot import"; an unknown registration year reads confirm: confirm.
-- Chips with Welcab or seat words (for example "Slope type -180K") are still judged by the
+- (`welcab_chips`) Chips with Welcab or seat words (for example "Slope type -180K") are still judged by the
   model, not by the ladder. How should they read?
-- Two Welcab refinements made during the build on 2026-10-21, to confirm: (1) the maker's
+- (`welcab_refinements`) Two Welcab refinements made during the build on 2026-10-21, to confirm: (1) the maker's
   catalogue alone never makes a lot a Welcab. Its single seat system decides only for a lot the
   sheet or the photos call a Welcab; otherwise only a catalogue grade the model names that is a
   Welcab row decides, and with nothing named the lot fails for want of a seat statement (review
@@ -669,14 +677,15 @@ look at Insights once decisions exist.
   the model judges. "Wheelchair spec" (車いす仕様) is read as the slope type, so "Without
   wheelchair spec" is the seat requirement too and a plain car fails it. Confirm both, and whether
   "Without wheelchair spec" should instead mean "no conversion".
-- Guide 213271 has two selected pairs whose cells overwrite each other; not changed here.
-- Odometer margin (from the teaching session of 2026-09-15): the reviewer skips a lot that is
+- (`guide_213271`) Guide 213271 has two selected pairs whose cells overwrite each other; not changed here.
+- (`odo_margin`) Odometer margin (from the teaching session of 2026-09-15): the reviewer skips a lot that is
   already at the last band's cap ("already 80k") and, for a lot exactly on a band boundary
   ("50k on the mark"), uses the next band's value, because the odometer rises between the
   auction and the warehouse. Bands are upper-bound inclusive today, so the bot would price
   50,000 km in the 40-50K band and would bid on an 80,000 km lot with an 80K cap. With the
   judgement layer on, such a lot is flagged as an odd case and the next band's value is offered
   as a candidate amount, a pre-fill for the reviewer. What margin should the bot itself apply,
-  in km, and does it apply to every model?
-- The GDH206K variant is inactive on the guide although the walkthrough bids on it; the bot
+  in km, and does it apply to every model? The Rulebook offers none, 1,000, 2,000, 3,000 and 5,000
+  km for every model, with a preview before Apply; none is today.
+- (`gdh206k`) The GDH206K variant is inactive on the guide although the walkthrough bids on it; the bot
   treats every variant as biddable (the dot is the selected tab). Confirm.
