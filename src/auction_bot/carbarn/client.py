@@ -131,7 +131,12 @@ def append_override(cfg: Config, model_code: str, text: str, author: str = "revi
     return p
 
 
-def load_rules(cfg: Config, path: Path | None = None, model_codes: list[str] | None = None) -> tuple[list[ModelRule], Path]:
+def load_rules(cfg: Config, path: Path | None = None, model_codes: list[str] | None = None,
+               answers: dict | None = None) -> tuple[list[ModelRule], Path]:
+    from auction_bot.rulebook import current_answers   # lazy: avoids an import cycle
+    if answers is None:
+        answers = current_answers(cfg)
+    margin = int(answers.get("odo_margin_km", 0) or 0)
     path = path or latest_snapshot(cfg)
     if path is None:
         raise FileNotFoundError("No rules snapshot found. Run `bot fetch-rules` first.")
@@ -143,5 +148,6 @@ def load_rules(cfg: Config, path: Path | None = None, model_codes: list[str] | N
         if wanted and rule.model_code.upper() not in wanted:
             continue
         rule.override_text = load_override(cfg, rule.model_code)
+        rule.odo_margin_km = margin
         rules.append(rule)
     return rules, path

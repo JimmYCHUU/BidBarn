@@ -208,6 +208,7 @@ class ModelRule:
     updated_at: str | None
     eligibility_summary: str | None = None
     override_text: str = ""
+    odo_margin_km: int = 0   # Rulebook: price the lot as if it had this many more km (band choice and cap only)
 
     @property
     def active_variants(self) -> list[Variant]:

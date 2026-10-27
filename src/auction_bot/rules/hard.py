@@ -237,11 +237,13 @@ def allowed_seats(rule: ModelRule) -> set[int] | None:
     return allowed if found else None
 
 
-def _bid_for_variant(variant: Variant, facts: VehicleFacts) -> int | None:
-    """Grid bid for one candidate variant (used to show options when the variant is ambiguous)."""
+def _bid_for_variant(variant: Variant, facts: VehicleFacts, margin: int = 0) -> int | None:
+    """Grid bid for one candidate variant (used to show options when the variant is ambiguous).
+    `margin` is the Rulebook odometer margin: the band is chosen for km + margin."""
     if facts.year is None or facts.km is None:
         return None
-    cell = variant.cell_for(facts.year, facts.km) or variant.nearest_cell(facts.year, facts.km)
+    km = facts.km + margin
+    cell = variant.cell_for(facts.year, km) or variant.nearest_cell(facts.year, km)
     if cell is None or cell.no_bid or cell.bid_jpy_k is None:
         return None
     bid, _applied, _deferred, _checks = apply_modifiers(variant, facts, cell.bid_jpy_k, facts.year, facts.km)
@@ -272,7 +274,7 @@ def evaluate_hard(facts: VehicleFacts, rule: ModelRule, final: bool = False) -> 
     match = rule.resolve_variant(facts.chassis, facts.variant_text)
     res.variant_how = match.how
     if match.how == "ambiguous":
-        res.candidate_bids = {v.label: _bid_for_variant(v, facts) for v in match.candidates}
+        res.candidate_bids = {v.label: _bid_for_variant(v, facts, rule.odo_margin_km) for v in match.candidates}
         cands = "; ".join(f"{k}: {v:,}K" if v else f"{k}: no bid" for k, v in res.candidate_bids.items())
         return fail("variant", f"{match.note} ({cands})", review=True)
     variant = match.variant
@@ -310,20 +312,26 @@ def evaluate_hard(facts: VehicleFacts, rule: ModelRule, final: bool = False) -> 
     if facts.year not in variant.years:
         return fail("year", f"year {facts.year} has no bid row for {variant.name} (rows {variant.years[:1]}..{variant.years[-1:]})")
     res.year = facts.year
-    if facts.km > variant.max_odo:
-        return fail("odo", f"{facts.km:,} km exceeds {variant.name} cap of {variant.max_odo:,} km")
-    cell = variant.cell_for(facts.year, facts.km)
+    margin = rule.odo_margin_km
+    km = facts.km + margin   # Rulebook odometer margin: band choice and cap only; modifiers keep the listed km
+    shown = f"{facts.km:,} km + {margin:,} km margin" if margin else f"{facts.km:,} km"
+    if km > variant.max_odo:
+        return fail("odo", f"{shown} exceeds {variant.name} cap of {variant.max_odo:,} km")
+    cell = variant.cell_for(facts.year, km)
     if cell is None:
         # Jim, 2026-09-30: a km that no band covers (0 km under a grid that starts higher, or a
         # gap between bands) takes the closest band. The cap above was checked first.
-        cell = variant.nearest_cell(facts.year, facts.km)
+        cell = variant.nearest_cell(facts.year, km)
         if cell is None:
-            return fail("odo", f"no odo band covers {facts.km:,} km for {facts.year}")
-        checks.append(Check("odo", True, f"no band covers {facts.km:,} km; the closest band {cell.band.label} is used"))
+            return fail("odo", f"no odo band covers {km:,} km for {facts.year}")
+        checks.append(Check("odo", True, f"no band covers {km:,} km; the closest band {cell.band.label} is used"))
     res.band_label = cell.band.label
     if cell.no_bid or cell.bid_jpy_k is None:
         return fail("cell", f"grid cell {facts.year} / {cell.band.label} is empty or switched off ({cell.reason or 'no value'})")
-    checks.append(Check("cell", True, f"{facts.year} / {cell.band.label} -> {cell.bid_jpy_k:,}K"))
+    if margin:
+        checks.append(Check("cell", True, f"{facts.km:,} + {margin:,} km margin -> {facts.year} / {cell.band.label} -> {cell.bid_jpy_k:,}K"))
+    else:
+        checks.append(Check("cell", True, f"{facts.year} / {cell.band.label} -> {cell.bid_jpy_k:,}K"))
     res.base_jpy_k = cell.bid_jpy_k
 
     # Modifiers (a grade-4 bonus etc.).
@@ -379,8 +387,10 @@ def card_prefilter(facts: VehicleFacts, rule: ModelRule) -> Check | None:
     years = {y for v in rule.variants for y in v.years}
     if facts.year is not None and facts.year not in years:
         return Check("year", False, f"year {facts.year} has no bid row")
-    if facts.km is not None and facts.km > rule.search_max_odo:
-        return Check("odo", False, f"{facts.km:,} km above every variant cap")
+    margin = rule.odo_margin_km
+    if facts.km is not None and facts.km + margin > rule.search_max_odo:
+        shown = f"{facts.km:,} km + {margin:,} km margin" if margin else f"{facts.km:,} km"
+        return Check("odo", False, f"{shown} above every variant cap")
     return None
 
 
@@ -396,7 +406,8 @@ def card_grid_check(facts: VehicleFacts, rule: ModelRule) -> Check | None:
         return None
     ceiling: int | None = None
     for v in rule.variants:
-        cell = v.cell_for(facts.year, facts.km) or v.nearest_cell(facts.year, facts.km)
+        eff = facts.km + rule.odo_margin_km
+        cell = v.cell_for(facts.year, eff) or v.nearest_cell(facts.year, eff)
         if cell is None or cell.no_bid or cell.bid_jpy_k is None:
             continue
         extra = sum(m.amount_jpy_k for m in v.modifiers
@@ -404,7 +415,7 @@ def card_grid_check(facts: VehicleFacts, rule: ModelRule) -> Check | None:
                     and m.applies_to_year_odo(facts.year, facts.km))
         ceiling = max(ceiling or 0, cell.bid_jpy_k + extra)
     if ceiling is None:
-        return Check("cell", False, f"no variant has a bid cell for {facts.year} / {facts.km:,} km")
+        return Check("cell", False, f"no variant has a bid cell for {facts.year} / {facts.km + rule.odo_margin_km:,} km")
     if facts.start_price_jpy and ceiling * 1000 < facts.start_price_jpy:
         return Check("start", False, f"start price {facts.start_price_jpy // 1000:,}K is above the highest possible bid {ceiling:,}K")
     return None
