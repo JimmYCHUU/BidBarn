@@ -46,11 +46,11 @@ def test_a_bid_run_waiting_at_the_review_asks_for_it(cfg):
     store.close()
     rid = client.post("/api/runs", json={"command": "bid"}).json()["id"]
     jobs.progress_is({"stage": "scan", "step": 3, "steps": 5, "guides": 1, "guide": 1})
-    page = client.get("/").text
+    page = client.get("/overview").text
     assert "Running Bid mode" in page and "Watch the run" in page and 'data-stages' in page  # the stages line, only for a Bid run
     assert "Open the review" not in page and "Finish review and place approved bids" not in page
     jobs.progress_is({"stage": "review", "step": 4, "steps": 5, "pending": 2, "approved": 0, "waiting": True})
-    page = client.get("/").text
+    page = client.get("/overview").text
     assert "Review 2 lots, then finish" in page and "Open the review" in page
     assert "Finish review and place approved bids" in page  # the header button, on every page while the run waits
     run_page = client.get(f"/runs/{rid}").text
@@ -87,5 +87,5 @@ def test_a_learn_run_page_shows_the_session(cfg):
     assert 'action="/rules/ANH20W/skip"' in page and f'value="/runs/{rid}"' in page and "skip: grade &lt;= 3.5" in page
     assert 'href="/guides/ANH20W"' in page and "never click the stock cards" in page
     assert ">Outcome<" not in page  # the session card replaces it
-    overview = client.get("/").text
+    overview = client.get("/overview").text
     assert "Learn mode" in overview and re.search(r"Lots <b>2</b>", overview) and "Agree <b>1</b>" in overview

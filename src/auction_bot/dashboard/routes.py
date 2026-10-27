@@ -203,7 +203,7 @@ def register(app, templates, cfg, jobs, store, page) -> None:
         return run
 
     # -- pages ---------------------------------------------------------------------------------
-    @app.get("/", response_class=HTMLResponse)
+    @app.get("/overview", response_class=HTMLResponse)
     def overview(request: Request):
         s = store()
         try:

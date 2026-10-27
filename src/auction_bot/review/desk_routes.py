@@ -73,8 +73,10 @@ def register(app, templates, cfg, store, page, *, load, sort_key) -> None:
         key, current_lane = _choose(sessions, session, lane)
         return {"sessions": sessions, "current": key, "lane": current_lane, "lanes": LANES, "lane_names": LANE_NAMES}
 
+    @app.get("/", response_class=HTMLResponse)
     @app.get("/desk", response_class=HTMLResponse)
     def desk(request: Request, session: str | None = None, lane: str | None = None):
+        """The desk. `/` is home and `/desk` is the old address; both run this one handler."""
         ctx = context(request, session, lane)
         s = store()
         try:

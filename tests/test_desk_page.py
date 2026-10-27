@@ -49,7 +49,7 @@ def test_the_board_fragment_matches_the_page(cfg):
 def test_the_desk_and_the_bid_sheet_are_in_the_nav(cfg):
     client, _ = _client(cfg)
     r = client.get("/")
-    assert 'href="/desk"' in r.text and 'href="/bids"' in r.text
+    assert 'href="/"' in r.text and 'href="/bids"' in r.text
 
 
 def test_the_desk_is_local_only(cfg):
@@ -936,3 +936,60 @@ def test_desk_js_drops_a_board_answer_older_than_the_newest_request():
     # the newest answer paints as before: the queue's marks, the open lot and the lot view guard are untouched
     assert "board.innerHTML = html; readBoardState(); paintBoard(); autoOpen();" in body
     assert "state.lot" not in body
+
+
+# -- home and navigation (switch-over task 1) -------------------------------------------------
+
+def _nav(html):
+    return html.split('<nav class="nav"')[1].split("</nav>")[0]
+
+
+def test_home_is_the_desk(cfg):
+    _three(cfg)
+    client, _ = _client(cfg)
+    home, desk = client.get("/"), client.get("/desk")
+    assert home.status_code == 200 and "data-desk-scan" in home.text and 'id="desk-lot"' in home.text
+    lanes = lambda t: re.findall(r'data-lane="(\w+)"', t)
+    assert lanes(home.text) == lanes(desk.text)
+    assert 'href="/" aria-current="page"' in _nav(home.text)
+    assert "/static/desk.js" in home.text and "/static/desk_scan.js" in home.text
+
+
+def test_the_overview_has_its_own_address(cfg):
+    client, _ = _client(cfg)
+    r = client.get("/overview")
+    assert r.status_code == 200 and "Start Bid mode" in r.text and "Start Learn mode" in r.text and "data-overview" in r.text
+    nav = _nav(r.text)
+    assert '<details class="nav-system" open' in nav
+    assert 'href="/overview" aria-current="page"' in nav
+
+
+def test_the_nav_has_four_places_and_a_system_drawer(cfg):
+    client, _ = _client(cfg)
+    nav = _nav(client.get("/").text)
+    primary, drawer = nav.split('<details class="nav-system"')
+    assert re.findall(r'<a href="([^"]+)"', primary) == ["/", "/bids", "/guides", "/rulebook"]
+    assert "open" not in drawer.split(">")[0]
+    assert re.findall(r'<a href="([^"]+)"', drawer.split("</details>")[0]) == [
+        "/overview", "/review", "/list", "/runs", "/insights", "/config", "/sheet-trial"]
+    for words in ("System", "Overview and day log", "Old review", "All lots", "Runs", "Insights", "Settings", "Sheet trial"):
+        assert words in nav
+    assert '<details class="nav-system" open' in _nav(client.get("/runs").text)
+    assert 'aria-label="BidBarn desk"' in client.get("/").text
+
+
+def test_every_old_address_still_answers(cfg):
+    client, _ = _client(cfg)
+    for path in ("/desk", "/review", "/list", "/runs", "/insights", "/config", "/sheet-trial", "/guides", "/bids", "/rulebook", "/overview", "/"):
+        assert client.get(path).status_code == 200, path
+
+
+def test_nothing_sends_the_overview_to_the_desk():
+    from pathlib import Path
+    import auction_bot.review.app as app_module
+    root = Path(app_module.__file__).parent
+    js = (root / "static" / "dashboard.js").read_text(encoding="utf-8")
+    assert 'overview ? "/overview"' in js and 'overview ? "/"' not in js
+    for tpl in (root / "templates").glob("*.html"):
+        text = tpl.read_text(encoding="utf-8")
+        assert not re.search(r'href="/"[^>]*>[^<]*[Oo]verview', text), tpl.name

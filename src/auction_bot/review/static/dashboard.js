@@ -57,7 +57,7 @@
       return r.json().then(function (d) { return { status: r.status, d: d }; });
     }).then(function (x) {
       if (x.status === 201) {
-        window.location.href = overview ? "/" : "/runs/" + x.d.id;
+        window.location.href = overview ? "/overview" : "/runs/" + x.d.id;
         return;
       }
       if (button) button.disabled = false;
@@ -87,7 +87,7 @@
       fetch("/api/sessions/" + b.dataset.resume + "/resume", { method: "POST", headers: { Accept: "application/json" } })
         .then(function (r) { return r.json().then(function (d) { return { status: r.status, d: d }; }); })
         .then(function (x) {
-          if (x.status === 201) { window.location.href = overview ? "/" : "/runs/" + x.d.id; return; }
+          if (x.status === 201) { window.location.href = overview ? "/overview" : "/runs/" + x.d.id; return; }
           b.disabled = false;
           showError(box, (x.d && x.d.detail) || ("Bid mode could not be resumed (" + x.status + ")."), x.status === 409 ? x.d.run_id : null);
         }).catch(function (err) {

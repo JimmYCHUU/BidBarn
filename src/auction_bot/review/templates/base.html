@@ -12,7 +12,7 @@
 <body data-lock="{{ lock_state or '' }}">
 <header class="app-header">
   <div class="app-header-in">
-  <a class="brand" href="/" aria-label="BidBarn overview">
+  <a class="brand" href="/" aria-label="BidBarn desk">
     <img src="/static/carbarn-logo.svg?v={{ asset_v }}" alt="Carbarn" width="153" height="18">
     <span class="brand-name">BidBarn</span>
   </a>
@@ -30,16 +30,20 @@
 
 <div class="shell">
   <nav class="nav" aria-label="Sections">
-    <a href="/" {% if nav == 'overview' %}aria-current="page"{% endif %}>{{ icon('layout-dashboard') }} Overview</a>
-    <a href="/desk" {% if nav == 'desk' %}aria-current="page"{% endif %}>{{ icon('inbox') }} Desk</a>
-    <a href="/review" {% if nav == 'review' %}aria-current="page"{% endif %}>{{ icon('list-checks') }} Review{% if counts %} <span class="count {{ 'count--hot' if (counts.bid + counts.review) else '' }}">{{ counts.bid + counts.review }}</span>{% endif %}</a>
+    <a href="/" {% if nav == 'desk' %}aria-current="page"{% endif %}>{{ icon('inbox') }} Desk</a>
     <a href="/bids" {% if nav == 'bids' %}aria-current="page"{% endif %}>{{ icon('clipboard-list') }} Bid sheet</a>
-    <a href="/rulebook" {% if nav == 'rulebook' %}aria-current="page"{% endif %}>{{ icon('scale') }} Rulebook</a>
     <a href="/guides" {% if nav == 'guides' %}aria-current="page"{% endif %}>{{ icon('book-open') }} Guides</a>
-    <a href="/list" {% if nav == 'list' %}aria-current="page"{% endif %}>{{ icon('table-2') }} All lots</a>
-    <a href="/runs" {% if nav == 'runs' %}aria-current="page"{% endif %}>{{ icon('history') }} Runs</a>
-    <a href="/insights" {% if nav == 'insights' %}aria-current="page"{% endif %}>{{ icon('chart-column') }} Insights</a>
-    <a href="/config" {% if nav == 'config' %}aria-current="page"{% endif %}>{{ icon('settings') }} Settings</a>
+    <a href="/rulebook" {% if nav == 'rulebook' %}aria-current="page"{% endif %}>{{ icon('scale') }} Rulebook</a>
+    <details class="nav-system" {% if nav in ('overview', 'review', 'list', 'runs', 'insights', 'config', 'sheet-trial') %}open{% endif %}>
+      <summary>{{ icon('settings') }} System</summary>
+      <a href="/overview" {% if nav == 'overview' %}aria-current="page"{% endif %}>{{ icon('layout-dashboard') }} Overview and day log</a>
+      <a href="/review" {% if nav == 'review' %}aria-current="page"{% endif %}>{{ icon('list-checks') }} Old review{% if counts %} <span class="count {{ 'count--hot' if (counts.bid + counts.review) else '' }}">{{ counts.bid + counts.review }}</span>{% endif %}</a>
+      <a href="/list" {% if nav == 'list' %}aria-current="page"{% endif %}>{{ icon('table-2') }} All lots</a>
+      <a href="/runs" {% if nav == 'runs' %}aria-current="page"{% endif %}>{{ icon('history') }} Runs</a>
+      <a href="/insights" {% if nav == 'insights' %}aria-current="page"{% endif %}>{{ icon('chart-column') }} Insights</a>
+      <a href="/config" {% if nav == 'config' %}aria-current="page"{% endif %}>{{ icon('settings') }} Settings</a>
+      <a href="/sheet-trial" {% if nav == 'sheet-trial' %}aria-current="page"{% endif %}>{{ icon('file-text') }} Sheet trial</a>
+    </details>
     <div class="nav-foot">
       <b>{{ lock_label }}</b>
       {% if lock_label == 'LIVE PLACEMENT' %}Approved bids are submitted to Nichibo.{% elif lock_label == 'DRY RUN' %}Amounts are typed and screenshotted, never submitted.{% else %}Every run is a test. The lock is lifted by hand in config.yaml.{% endif %}

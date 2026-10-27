@@ -54,7 +54,7 @@
         <td><span class="pill {{ p.decision }}">{{ p.decision|capitalize }}</span>{% if p.placed_at %}<div class="faint">placed</div>{% endif %}</td>
       </tr>
     {% else %}
-      <tr><td colspan="6"><div class="empty">{{ icon('table-2') }}<h3>No lots match</h3><p>Change the filters, or run a scan from the <a href="/">overview</a>.</p></div></td></tr>
+      <tr><td colspan="6"><div class="empty">{{ icon('table-2') }}<h3>No lots match</h3><p>Change the filters, or run a scan from the <a href="/overview">overview</a>.</p></div></td></tr>
     {% endfor %}
     </tbody>
   </table>

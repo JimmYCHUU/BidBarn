@@ -111,7 +111,7 @@ def _run(cfg, command, args=None, status="ok", summary=None, error=None, progres
 
 def test_every_page_renders_on_an_empty_database(cfg):
     client, _ = _client(cfg)
-    r = client.get("/")
+    r = client.get("/overview")
     assert r.status_code == 200
     assert "Start Bid mode" in r.text and "Start Learn mode" in r.text  # the two things the page offers when nothing runs
     assert "Sign-in not checked" in r.text and "Start a single step" not in r.text  # the steps live on the Runs page
@@ -180,7 +180,7 @@ def test_a_stale_snapshot_asks_for_the_guides(cfg):
     s = client.get("/api/status").json()
     assert s["rules"]["stale"] is True
     assert [x["command"] for x in s["steps"] if x["next"]] == ["fetch-rules"]
-    assert "Guides stale" in client.get("/").text and "Fetch the guides" in client.get("/").text  # the chip carries its repair
+    assert "Guides stale" in client.get("/overview").text and "Fetch the guides" in client.get("/overview").text  # the chip carries its repair
 
 
 def test_starting_and_stopping_through_the_api(cfg):
@@ -210,7 +210,7 @@ def test_starting_and_stopping_through_the_api(cfg):
     assert client.post(f"/api/runs/{done}/cancel").status_code == 409
 
     # The overview shows the run that is going, first and open.
-    page = client.get("/").text
+    page = client.get("/overview").text
     assert f'data-run-id="{rid}"' in page and 'data-status="running"' in page and "Watch the run" in page
     assert "Scanning Nichibo" in page and "One run at a time" in page
     assert "No scan yet today" not in page  # what is true of the step at rest is not said while it runs
@@ -322,7 +322,7 @@ def test_the_review_inside_bot_bid_starts_nothing(cfg):
     client = TestClient(create_app(cfg, finish_event=threading.Event(), jobs=DisabledJobManager(cfg)))
     r = client.post("/api/runs", json={"command": "replay"})
     assert r.status_code == 409 and "started by bot bid" in r.json()["detail"]
-    assert client.get("/").status_code == 200 and "Finish review" in client.get("/review").text
+    assert client.get("/overview").status_code == 200 and "Finish review" in client.get("/review").text
 
 
 def test_the_log_is_read_without_the_progress_lines(cfg):
@@ -552,7 +552,7 @@ def test_the_day_log_groups_decisions_into_sessions(cfg):
     assert [e["run"]["id"] for e in log["live"]] == [live]
     assert [(e["kind"], e.get("count")) for e in log["today"]] == [("review", 1), ("run", None), ("review", 2)]
 
-    page = client.get("/").text
+    page = client.get("/overview").text
     assert "Reviewed 2 lots" in page and "Reviewed 1 lot<" in page and "1 approved" in page and "10 seats on the sheet" in page
     assert page.index("Reviewed 1 lot<") < page.index("Replay the rules") < page.index("Reviewed 2 lots")
 
@@ -587,12 +587,12 @@ def test_insights_and_settings_pages(cfg, monkeypatch):
                                           "has_key": True, "share": 0.0025, "level": "ok"}
     assert s["judge"]["providers"][1]["has_key"] is False
     assert '<td class="num">1</td><td class="num">10</td><td class="num">400</td>' in page  # calls today, per minute, per day
-    assert "Gemini:" not in client.get("/").text  # the quota is a chip on the overview only when it runs short
+    assert "Gemini:" not in client.get("/overview").text  # the quota is a chip on the overview only when it runs short
     store = Store(cfg.db_path)
     store.conn.execute("UPDATE model_calls SET calls=380")
     store.conn.commit()
     store.close()
-    assert "Gemini: 380 of 400 calls" in client.get("/").text
+    assert "Gemini: 380 of 400 calls" in client.get("/overview").text
 
 
 # -- pause, resume and the paused session ------------------------------------------------------------
@@ -603,7 +603,7 @@ def test_pause_and_resume_from_the_overview(cfg):
     assert client.post("/api/runs/1/pause").status_code == 404
     run = client.post("/api/runs", json={"command": "bid"}).json()
     jobs.progress_is({"stage": "scan", "guides": 46, "guide": 21, "code": "GDH206"})
-    page = client.get("/").text
+    page = client.get("/overview").text
     assert "data-pause" in page and f'data-delete-session="{run["id"]}"' in page and "data-stop" in page
     assert client.post(f"/api/runs/{run['id']}/pause").status_code == 202 and jobs.paused == [run["id"]]
     jobs.end("paused")  # what the real manager records once the run stopped at its check point
@@ -612,7 +612,7 @@ def test_pause_and_resume_from_the_overview(cfg):
         lot(s, "A", run["id"])
     finally:
         s.close()
-    page = client.get("/").text
+    page = client.get("/overview").text
     assert "Bid mode is paused" in page and "guide 21 of 46 (GDH206)" in page and "1 lot found so far waits in the review" in page
     assert f'data-resume="{run["id"]}"' in page and "Start Learn mode" in page and "Start Bid mode" not in page
     assert f'data-delete-session="{run["id"]}"' in page and "Paused at guide 21 of 46" in page  # the card and the day log
@@ -639,7 +639,7 @@ def test_the_run_page_of_a_paused_and_of_a_deleted_session(cfg):
     finally:
         s.close()
     client, _ = _client(cfg)
-    page = client.get("/").text
+    page = client.get("/overview").text
     assert "Paused at guide 3 of 46" in page and "Session deleted" in page
     run_page = client.get(f"/runs/{paused}").text
     assert "The session is paused" in run_page and f'data-resume="{paused}"' in run_page

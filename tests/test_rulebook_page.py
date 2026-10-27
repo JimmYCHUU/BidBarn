@@ -212,7 +212,7 @@ def test_the_rulebook_is_in_the_nav(cfg):
     client, _ = _client(cfg)
     page = client.get("/").text
     assert 'href="/rulebook"' in page
-    assert page.index('href="/bids"') < page.index('href="/rulebook"') < page.index('href="/guides"')
+    assert page.index('href="/bids"') < page.index('href="/guides"') < page.index('href="/rulebook"')
     assert 'href="/rulebook" aria-current="page"' in client.get("/rulebook").text
 
 

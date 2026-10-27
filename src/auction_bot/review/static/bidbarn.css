@@ -157,6 +157,20 @@ p { margin: 0; }
 .nav a[aria-current="page"] { background: var(--blue-soft); color: var(--blue-press); font-weight: 600; }
 .nav a[aria-current="page"] .icon { color: var(--blue-press); }
 .nav .count { margin-left: auto; }
+.nav-system { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; }
+.nav-system > summary {
+  display: flex; align-items: center; gap: 10px; padding: 11px 12px; border-radius: var(--r-sm);
+  font-size: 15px; font-weight: 500; color: var(--navy); cursor: pointer; list-style: none;
+}
+.nav-system > summary::-webkit-details-marker { display: none; }
+.nav-system > summary::after { content: ""; margin-left: auto; width: 7px; height: 7px; border-right: 2px solid var(--navy-2); border-bottom: 2px solid var(--navy-2); transform: rotate(45deg); transition: transform 150ms ease; }
+.nav-system[open] > summary::after { transform: rotate(-135deg); }
+.nav-system > summary .icon { width: 20px; height: 20px; color: var(--navy-2); }
+.nav-system > summary:focus-visible { outline: 2px solid var(--blue-press); outline-offset: -2px; }
+.nav-system a { padding-left: 24px; font-size: 14px; }
+@media (hover: hover) and (pointer: fine) {
+  .nav-system > summary:hover { background: var(--surface-2); }
+}
 .nav-foot { margin-top: auto; padding: 12px; border-top: 1px solid var(--line); font-size: 12px; color: var(--ink-3); }
 .nav-foot b { display: block; color: var(--ink-2); font-size: 13px; font-weight: 600; }
 @media (hover: hover) and (pointer: fine) {
@@ -772,6 +786,9 @@ a.pill:hover { text-decoration: none; border-color: var(--blue-line); }
   .nav { position: static; flex-direction: row; flex-wrap: wrap; min-height: 0; padding: 6px; }
   .nav a { padding: 8px 12px; font-size: 14px; }
   .nav-foot { display: none; }
+  .nav-system { flex-basis: 100%; margin-top: 0; padding-top: 0; border-top: 0; flex-direction: row; flex-wrap: wrap; }
+  .nav-system > summary { padding: 8px 12px; font-size: 14px; }
+  .nav-system a { padding: 8px 12px; }
 }
 @media (max-width: 860px) {
   .cols, .cols--wide-first, .cols--even { grid-template-columns: minmax(0, 1fr); }

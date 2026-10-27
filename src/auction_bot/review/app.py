@@ -727,7 +727,7 @@ def create_app(cfg: Config, finish_event=None, jobs=None) -> FastAPI:
         if stamp is not None and trial is None:
             raise HTTPException(404)
         marks = sheet_trial.load_marks(cfg, trial["stamp"]) if trial else {}
-        return page(request, "sheet_trial.html", "runs", trial=trial, marks=marks, stamps=sheet_trial.list_trials(cfg),
+        return page(request, "sheet_trial.html", "sheet-trial", trial=trial, marks=marks, stamps=sheet_trial.list_trials(cfg),
                     summary=sheet_trial.summarize(trial, cfg, marks) if trial else None, choices=sheet_trial.MARKS)
 
     @app.post("/sheet-trial/{stamp}/marks")
