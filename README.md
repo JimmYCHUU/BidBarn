@@ -1,7 +1,7 @@
 # BidBarn 🚗
 
 ![Python 3.12](https://img.shields.io/badge/python-3.12-blue)
-![Tests](https://img.shields.io/badge/tests-730%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-746%20passing-brightgreen)
 ![Playwright](https://img.shields.io/badge/browser-Playwright%20Chromium-45ba4b)
 ![No paid AI](https://img.shields.io/badge/AI%20APIs-none%20required-lightgrey)
 ![Testing lock](https://img.shields.io/badge/placement-testing%20lock%20on-orange)
@@ -565,7 +565,7 @@ Everything the bot downloads stays on the office PC. Git never sees any of it.
 .venv\Scripts\python -m pytest -q
 ```
 
-730 tests: the golden cases from the manual walkthrough against the real GDH206 guide, variant
+746 tests: the golden cases from the manual walkthrough against the real GDH206 guide, variant
 resolution on captured Alphard and E-Class guides, the seat rule, OCR parsing on three real sheets
 plus the header-band crop and its fallback, an offline end-to-end scan against captured Nichibo
 pages, the card-and-sheet path that opens no page, the placeholder path that parks a lot

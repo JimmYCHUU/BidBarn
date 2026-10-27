@@ -148,12 +148,17 @@ The scan bar is the row under the page heading, above the board. It says what th
 | The bar says | What it means | Button |
 |---|---|---|
 | No scan yet. | No scan has finished that the dashboard knows of. | Scan now |
-| Last scan 14:05, 12 new for the desk. | The newest finished scan (Scan now, Scan Nichibo or Bid mode) and how many lots it sent to the desk. | Scan now |
+| Last scan 14:05, 12 new for the desk. | The newest finished scan (Scan now, Scan Nichibo or Bid mode) and how many lots it sent to the desk. A scan from another day shows its day too: "Last scan Mon 26 Oct 14:05, ...". | Scan now |
 | Scanning: guide 3 of 12, 5 new for the desk so far. | A scan is running. Before the first guide it says it is checking the sign-in and the guides. | Stop |
-| Sign in to Nichibo in the bot's window. The scan carries on after that. | Nichibo was signed out at the start. The bot's window is open. The bar is amber. | Stop |
-| Nichibo signed out during the scan. Sign in in the bot's window; the scan carries on after that. | Nichibo signed out part way through. Same window, same wait. | Stop |
-| Bid mode is running. Scan now waits until it has finished. | Another job holds the browser (Bid mode, a placement, a scan from a console). Nothing is started. The name is the other job's. | none |
-| The last scan stopped at 14:20: and the reason | The newest scan failed or was stopped. | Scan now |
+| Sign in to Nichibo in the bot's window. The scan carries on after that. | A site was signed out at the start. The bot's window is open. The bar names the site: Nichibo, the Carbarn dashboard, or Nichibo and the Carbarn dashboard. The bar is amber. | Stop |
+| Nichibo signed out during the scan. Sign in in the bot's window; the scan carries on after that. | A site signed you out part way through, and the bar names it. Same window, same wait. | Stop |
+| Bid mode is running. Scan now is offered again when it has finished. | Another job holds the browser (Bid mode, a placement, a scan from a console). Nothing is started. The name is the other job's. | none |
+| The last scan stopped at 14:20: Nichibo signed you out. Press Scan now to sign in and scan again. | The newest scan ended because a site signed you out, and the bar names it. Scan now checks the sign-in first and opens the window. | Scan now |
+| The last scan stopped at 14:20: the reason. | The newest scan failed, or ended in another way (the dashboard was closed while it ran, say). With no reason stored it says "The last scan failed at 14:20." | Scan now |
+| The last scan was stopped at 14:20. | You pressed Stop. | Scan now |
+
+The times are this PC's local time. A time from an earlier day has its day in front, for example
+"The last scan was stopped at Mon 26 Oct 14:20."
 
 If you press Scan now while something else holds the browser, the refusal shows in the bar and
 stays until the state changes.
@@ -166,13 +171,18 @@ What Scan now does:
   Nothing is approved by it.
 - It fetches the guides every time, so a scan never runs on yesterday's guides.
 
-If Nichibo signs out during the scan, a sign-in window opens once, as `bot login --wait` does, and
-waits up to 15 minutes for you. When you have signed in, the scan carries on. A second sign-out in
-the same run stops the scan, and the bar says so.
+If Nichibo signs you out during the scan, the bot checks both sites again without a window. If one
+is signed out, a sign-in window opens, as `bot login --wait` does, and waits up to 15 minutes for
+you; the bar names the site to sign in to. When you have signed in, the scan starts again at the
+first guide, reusing the cached pages and the lots already stored. The run's counts add up both
+parts, and its run page says "Signed in again during the scan: yes". This happens once per run: a
+second sign-out stops the scan, and the bar says "Nichibo signed you out. Press Scan now to sign in
+and scan again."
 
 Stop is how you pause. Press Stop, and press Scan now again later: the second scan reuses the cached
 pages and the lots already stored, so it carries on from where the first one stopped, as far as the
-cache goes. Pages older than `cache_hours` are read again.
+cache goes. Pages older than `cache_hours` are read again. It also carries on the first one's
+session, so a lot you cleared stays out (see the choices below).
 
 The board refreshes while a scan runs (every 30 seconds, and once at the end). A refresh keeps a
 decision that is waiting in its 10-second undo window, and keeps the open lot open. The bar itself
@@ -199,6 +209,11 @@ The desk starts one command only, `scan-now`, and can stop it. It cannot start a
 - "Pause scanning" is Stop. A stopped scan is carried on by pressing Scan now again, from the cache and
   the stored lots. If this is wrong, a restarted scan reads again the search pages that are older than
   `cache_hours`.
+- A Scan now after one that was stopped or failed continues that scan's session, so a lot you cleared
+  on the desk stays out, as it does after Pause and Resume in Bid mode. After a scan that finished,
+  the next Scan now starts a new session, and the lots you cleared come back to be checked again.
+  Deleting the session on `/review` ends it too. If this is wrong, a cleared lot stays out until a
+  scan finishes and the next one starts, or comes back sooner than you expect.
 - Signing in mid-scan: the scan opens the sign-in window itself and carries on once, instead of ending
   and asking you to press a button. This is the one wait on a person. If this is wrong, a window opens
   on your screen while you are away, and the run ends after 15 minutes.
@@ -287,7 +302,7 @@ Do these on the copy (see below). Each line is one action and what you should se
 - [ ] Phase 2: on `/bids`, click Place as dry run twice (needs the sign-in, as above). The second run does not type the lot again, and the bid sheet says "Dry run done: not typed again. Reopen it to send it again."
 - [ ] Phase 3: on the copy, with the sign-in done in the bot's window, press Scan now in the scan bar. The bar changes to "Scanning: ..." with a Stop button, and lots start to appear on the board. Needs real Nichibo traffic; skip it otherwise.
 - [ ] Phase 3: watch the bar. The guide count goes up. A lot you have open stays open, and a decision waiting in its 10 seconds is not lost when the board refreshes.
-- [ ] Phase 3: press Stop. The bar says "The last scan stopped at ..." with Scan now.
+- [ ] Phase 3: press Stop. The bar says "The last scan was stopped at ..." with Scan now.
 - [ ] Phase 3: press Scan now again. The scan carries on from the cache and the lots already stored, and ends with "Last scan ..., n new for the desk."
 - [ ] Phase 3: nothing was approved or placed by the scan. `/bids` is the same as before.
 
