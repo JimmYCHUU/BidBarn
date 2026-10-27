@@ -27,6 +27,8 @@
       if (a.bid_jpy_k < b.bid_jpy_k) return "drop";
       if (a.bid_jpy_k > b.bid_jpy_k) return "rise";
     }
+    if (a.judge_pending === true && b.judge_pending !== true) return "fresh";
+    if (a.proposed_bid_jpy_k !== b.proposed_bid_jpy_k) return "proposed";
     return "other";
   }
 
@@ -35,12 +37,14 @@
     var lots = Array.isArray(summary.lots) ? summary.lots : [];
     var total = Math.max(lots.length, typeof summary.lots_total === "number" ? summary.lots_total : 0);
     if (!total) return "No stored lot would change.";
-    var n = { drop: 0, rise: 0, skip: 0, other: 0 };
+    var n = { drop: 0, rise: 0, skip: 0, fresh: 0, proposed: 0, other: 0 };
     lots.forEach(function (lot) { n[outcome(lot)] += 1; });
     var parts = [];
     if (n.drop) parts.push(n.drop === 1 ? "1 amount drops" : n.drop + " amounts drop");
     if (n.rise) parts.push(n.rise === 1 ? "1 amount rises" : n.rise + " amounts rise");
     if (n.skip) parts.push(n.skip === 1 ? "1 lot now skips" : n.skip + " lots now skip");
+    if (n.fresh) parts.push(n.fresh === 1 ? "1 lot needs a fresh judgement" : n.fresh + " lots need a fresh judgement");
+    if (n.proposed) parts.push(n.proposed === 1 ? "1 proposed amount changes" : n.proposed + " proposed amounts change");
     if (n.other) parts.push(n.other === 1 ? "1 lot changes in another way" : n.other + " lots change in another way");
     var head = total === 1 ? "1 lot changes" : total + " lots change";
     if (total > lots.length) {
@@ -58,7 +62,11 @@
 
   function state(s) {
     var word = STATUS_WORDS[s && s.status] || (s && s.status) || "";
-    return typeof (s && s.bid_jpy_k) === "number" ? word + " " + num(s.bid_jpy_k) + "K" : word;
+    s = s || {};
+    var out = typeof s.bid_jpy_k === "number" ? word + " " + num(s.bid_jpy_k) + "K" : word;
+    if (typeof s.proposed_bid_jpy_k === "number" && s.proposed_bid_jpy_k !== s.bid_jpy_k) out += ", proposed " + num(s.proposed_bid_jpy_k) + "K";
+    if (s.judge_pending === true) out += ", judgement pending";
+    return out;
   }
 
   function lotsTable(lots) {

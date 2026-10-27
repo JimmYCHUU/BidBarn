@@ -750,14 +750,31 @@ class ReplayStats:
     errors: list[str] = field(default_factory=list)  # rows that raised; each is also a line in `changes`
     lots: list[dict] = field(default_factory=list)   # one dict per changed lot, at most LOTS_CAP (the Rulebook preview)
     lots_total: int = 0   # a preview: every lot the answer changes, listed or not
-    drift: int = 0        # a preview: stored lots already out of date with today's rules, whatever the answer
+    drift: int = 0        # a preview: lots Apply would change that the answer itself does not (not listed)
+    last: tuple = ()      # the stored and the new outcome of the row just re-evaluated (see `_outcome`)
 
     def note_lot(self, row, before: tuple, after: tuple) -> None:
         if len(self.lots) < LOTS_CAP:
             self.lots.append({"pid": row["id"], "ref_no": row["ref_no"], "model_code": row["model_code"],
                               "summary": (row["summary"] or "")[:120],
-                              "before": {"status": before[0], "bid_jpy_k": before[1]},
-                              "after": {"status": after[0], "bid_jpy_k": after[1]}})
+                              "before": _outcome_view(before), "after": _outcome_view(after)})
+
+
+def _outcome(status, bid, soft: dict | None) -> tuple:
+    """What `replay` compares to decide that a lot changed (and so what Apply supersedes): the status, the amount,
+    the requirements and eligibility hashes, the recommendation, the proposed amount and whether a judgement is
+    pending. A judge row whose requirements changed needs a fresh judgement, which counts as a change too. The
+    Rulebook preview uses this same tuple, so it lists exactly the lots Apply would change."""
+    soft = soft or {}
+    return (status, bid, soft.get("requirements_hash"), (soft.get("eligibility") or {}).get("hash"),
+            soft.get("recommendation"), soft.get("proposed_bid_jpy_k"), bool(soft.get("judge_pending")))
+
+
+def _outcome_view(o: tuple) -> dict:
+    view = {"status": o[0], "bid_jpy_k": o[1]}
+    if len(o) >= 7:
+        view.update(recommendation=o[4], proposed_bid_jpy_k=o[5], judge_pending=o[6])
+    return view
 
 
 def reevaluate(cfg: Config, store: Store, model_codes: list[str] | None = None, apply: bool = False,
@@ -825,30 +842,28 @@ def reevaluate(cfg: Config, store: Store, model_codes: list[str] | None = None, 
 
 def _preview_row(cfg: Config, store: Store, st: ReplayStats, row, today_rule: ModelRule, answer_rule: ModelRule,
                  label: str, snap_path: Path, no_model: bool) -> None:
-    """One lot of a Rulebook preview: its result under today's answers against its result with the new answer.
-    Only a lot those two results differ for is listed (before = today's rules, after = with the answer). A lot whose
-    stored result already differs from today's rules is counted in `drift`, whatever the answer."""
+    """One lot of a Rulebook preview: its result under today's answers against its result with the new answer,
+    compared exactly as `replay --apply` compares (`_outcome`). Only a lot those two results differ for is listed
+    (before = today's rules, after = with the answer). `drift` counts the other lots Apply would change."""
     cur, new = ReplayStats(), ReplayStats()
     _replay_row(cfg, store, cur, row, today_rule, label, snap_path, no_model, False, write_files=False)
     _replay_row(cfg, store, new, row, answer_rule, label, snap_path, no_model, False, write_files=False)
     c = cur.lots[0] if cur.lots else None
     n = new.lots[0] if new.lots else None
-    if c:
-        st.drift += 1
-    if not (c or n):
+    if cur.last[1] == new.last[1]:       # the answer changes nothing for this lot
         st.unchanged += 1
+        if n:
+            st.drift += 1                # Apply still changes it: it was already out of date
         return
-    stored = (c or n)["before"]
+    stored = (c or n)["before"] if (c or n) else _outcome_view(cur.last[0])
     before = c["after"] if c else stored
     after = n["after"] if n else stored
-    if (before["status"], before["bid_jpy_k"]) == (after["status"], after["bid_jpy_k"]):
-        st.unchanged += 1
-        return
     st.changed += 1
     st.lots_total += 1
     st.changes.append(f"{label}: {before['status']} {before['bid_jpy_k']} -> {after['status']} {after['bid_jpy_k']}")
     if len(st.lots) < LOTS_CAP:
-        st.lots.append({**(c or n), "before": before, "after": after})
+        st.lots.append({**(c or n or {"pid": row["id"], "ref_no": row["ref_no"], "model_code": row["model_code"],
+                                       "summary": (row["summary"] or "")[:120]}), "before": before, "after": after})
 
 
 def _replay_row(cfg: Config, store: Store, st: ReplayStats, row, rule: ModelRule, label: str, snap_path: Path,
@@ -857,6 +872,7 @@ def _replay_row(cfg: Config, store: Store, st: ReplayStats, row, rule: ModelRule
     A preview (`write_files` False) writes no evidence file either."""
     facts = VehicleFacts.from_dict(json.loads(row["facts_json"] or "{}"))
     old = (row["status"], row["bid_jpy_k"])
+    st.last = (old, old)
     if row["stage"] == "card":
         if card_check(rule, facts, cfg) is not None:
             st.unchanged += 1
@@ -865,6 +881,7 @@ def _replay_row(cfg: Config, store: Store, st: ReplayStats, row, rule: ModelRule
         st.needs_fetch += 1
         st.changes.append(f"{label}: card SKIP -> needs the detail page (next scan opens it)")
         st.note_lot(row, old, (NEEDS_REVIEW, None))
+        st.last = (old, (NEEDS_REVIEW, None))
         if apply:
             store.supersede_pending(row["ref_no"], rule.guide_id)
             store.add_proposal(ref_no=row["ref_no"], guide_id=rule.guide_id, model_code=rule.model_code,
@@ -894,12 +911,10 @@ def _replay_row(cfg: Config, store: Store, st: ReplayStats, row, rule: ModelRule
     # A judge row whose requirements changed needs a fresh judgement: that counts as a change too.
     # So does a recommendation the stored observations now resolve differently (ladders, catalogue), and a
     # judgement sent back to the judge because photos arrived after it.
-    old = (*old, prev_soft.get("requirements_hash"), (prev_soft.get("eligibility") or {}).get("hash"),
-           prev_soft.get("recommendation"), prev_soft.get("proposed_bid_jpy_k"), bool(prev_soft.get("judge_pending")))
     new_soft = proposal.get("soft_json") or {}
-    new = (proposal["status"], proposal["bid_jpy_k"], new_soft.get("requirements_hash"),
-           (new_soft.get("eligibility") or {}).get("hash"), new_soft.get("recommendation"),
-           new_soft.get("proposed_bid_jpy_k"), bool(new_soft.get("judge_pending")))
+    old = _outcome(old[0], old[1], prev_soft)
+    new = _outcome(proposal["status"], proposal["bid_jpy_k"], new_soft)
+    st.last = (old, new)
     if new == old:
         st.unchanged += 1
         return

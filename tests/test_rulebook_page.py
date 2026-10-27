@@ -259,3 +259,67 @@ def test_decided_lists_the_rules_before_the_answers(cfg):
     assert decided.index("rb-decided") < decided.index("Your answers")
     src = (Path(rulebook.__file__).parent / "review" / "static" / "rulebook.js").read_text(encoding="utf-8")
     assert "odo_margin_km" not in src
+
+
+# -- a preview counts a lot changed exactly as Apply does ----------------------------------------------
+
+def _judged_at_49k(cfg, monkeypatch):
+    from auction_bot.pipeline import judge_pending, reevaluate
+    from tests.test_judge_pipeline import _stub
+    cfg.sheet_check = "judge"
+    cfg.judge = {"max_photos": 3, "inline": True}
+    calls = []
+    _stub(monkeypatch, calls)
+    store = Store(cfg.db_path)
+    scan(cfg, FakeBrowser(), store, ["GDH206"], limit_per_model=2)
+    for r in store.list_proposals(decision="pending", status="NEEDS_REVIEW"):
+        facts = json.loads(r["facts_json"])
+        facts["km"] = 49_000
+        store.conn.execute("UPDATE proposals SET facts_json=? WHERE id=?", (json.dumps(facts), r["id"]))
+    store.conn.commit()
+    reevaluate(cfg, store, ["GDH206"], apply=True)
+    judge_pending(cfg, store, ["GDH206"], browser=FakeBrowser())
+    assert reevaluate(cfg, store, ["GDH206"]).changed == 0
+    return store, calls
+
+
+def test_a_preview_lists_a_judged_lot_the_answer_sends_back_to_the_judge(cfg, monkeypatch):
+    from auction_bot.pipeline import ReplayStats, _replay_row, load_rules, reevaluate
+    store, calls = _judged_at_49k(cfg, monkeypatch)
+    asked = len(calls)
+    waiting = store.list_proposals(decision="pending", status="NEEDS_REVIEW")
+    st = reevaluate(cfg, store, ["GDH206"], answers={"odo_margin_km": 1000})
+    assert st.changed == len(waiting) == 2 and len(st.lots) == 2 and st.drift == 0
+    for lot in st.lots:
+        assert lot["before"]["judge_pending"] is False and lot["after"]["judge_pending"] is True
+        assert lot["before"]["bid_jpy_k"] == lot["after"]["bid_jpy_k"]
+        assert lot["after"]["recommendation"] == "review" and "proposed_bid_jpy_k" in lot["after"]
+    # exactly what Apply counts as changed
+    rules, snap = load_rules(cfg, None, ["GDH206"], answers={"odo_margin_km": 1000})
+    for r in waiting:
+        x = ReplayStats()
+        _replay_row(cfg, store, x, r, rules[0], "l", snap, False, False, write_files=False)
+        assert x.changed == 1
+    assert len(calls) == asked
+    store.close()
+
+
+def test_drift_and_the_listed_lots_never_overlap(cfg):
+    from auction_bot.pipeline import reevaluate
+    from tests.test_pipeline_offline import _settled_at_50k
+    store = _settled_at_50k(cfg)
+    a, b = store.list_proposals(decision="pending", status="NEEDS_REVIEW")[:2]
+    store.conn.execute("UPDATE proposals SET bid_jpy_k=1240 WHERE id=?", (a["id"],))   # stored 1240, today 1710, answer 1640
+    store.conn.execute("UPDATE proposals SET bid_jpy_k=1640 WHERE id=?", (b["id"],))   # stored 1640, today 1710, answer 1640
+    store.conn.commit()
+    st = reevaluate(cfg, store, ["GDH206"], answers={"odo_margin_km": 1000})
+    assert sorted(l["pid"] for l in st.lots) == sorted([a["id"], b["id"]]) and st.drift == 0
+    assert all(l["before"]["bid_jpy_k"] == 1710 and l["after"]["bid_jpy_k"] == 1640 or l["pid"] == b["id"] for l in st.lots)
+    lot_b = next(l for l in st.lots if l["pid"] == b["id"])
+    assert (lot_b["before"]["bid_jpy_k"], lot_b["after"]["bid_jpy_k"]) == (1710, 1640)
+    store.close()
+
+
+def test_rulebook_js_names_fresh_judgements():
+    src = (Path(rulebook.__file__).parent / "review" / "static" / "rulebook.js").read_text(encoding="utf-8")
+    assert "need a fresh judgement" in src and "proposed amount" in src and "judge_pending" in src
