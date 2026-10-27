@@ -509,7 +509,7 @@ def create_app(cfg: Config, finish_event=None, jobs=None) -> FastAPI:
                 s.log_event(pid, "open", "detail")
         finally:
             s.close()
-        return templates.TemplateResponse(request, "detail.html", {"p": p, "next_id": nxt, "counts": counts, "nav": "review",
+        return templates.TemplateResponse(request, "detail.html", {"p": p, "next_id": nxt, "counts": counts, "nav": "lot",
                                                                     "dry_run": cfg.dry_run, "lock_label": lock_label(),
                                                                     "lock_state": lock_state()})
 

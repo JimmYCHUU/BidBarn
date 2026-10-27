@@ -225,8 +225,8 @@ address it found and changes only the part after `#`.
 Jim found the first build complex (2026-09-30), so each thing has one home:
 
 - The two modes, Learn and Bid, start from the overview and nowhere else. The single steps
-  start from the fold on the Runs page and nowhere else, except the two repairs on the overview's
-  State card (Sign in, Fetch the guides) that appear only when something is wrong.
+  start from the fold on the Runs page and nowhere else, except the two repairs on the State card of the overview (`/overview`)
+  (Sign in, Fetch the guides) that appear only when something is wrong.
 - A suggested skip rule and the form to add one live on the guide page (`/guides/{code}`). The
   review page and the Insights page only link there.
 - The lock is stated in the header pill, the nav foot, Settings and the finish page, and in the

@@ -588,7 +588,7 @@ Everything the bot downloads stays on the office PC. Git never sees any of it.
 .venv\Scripts\python -m pytest -q
 ```
 
-830 tests: the golden cases from the manual walkthrough against the real GDH206 guide, variant
+834 tests: the golden cases from the manual walkthrough against a GDH206 guide captured from the dashboard, variant
 resolution on captured Alphard and E-Class guides, the seat rule, OCR parsing on three real sheets
 plus the header-band crop and its fallback, an offline end-to-end scan against captured Nichibo
 pages, the card-and-sheet path that opens no page, the placeholder path that parks a lot
@@ -663,7 +663,8 @@ it, and the OCR reads the sheet header first. The judgement layer is in (2026-09
 vision model pre-reads the lots that need a look, and photos are downloaded only for those. The
 dashboard is in (2026-09-29) and was simplified the day after: Learn mode and Bid mode start
 from the overview, the single steps sit in a fold on the Runs page, and every guide has its own
-page. The switch-over (2026-10-27) made the desk the home page and moved the overview under System. It has been exercised on stand-in commands and on a throwaway database; no run started
+page. The switch-over (2026-10-27) made the desk the home page and moved the overview under
+System. It has been exercised on stand-in commands and on a throwaway database; no run started
 from the page has gone through to the end on real data yet, and the points still to confirm on
 the office PC are listed under "Not verified yet" in `docs/dashboard.md`. Next: the first
 complete Bid run from the dashboard, the first review pass on the triage view, and the first

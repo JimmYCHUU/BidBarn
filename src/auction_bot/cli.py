@@ -234,7 +234,7 @@ def review() -> None:
 @app.command()
 @friendly
 def dashboard(no_browser: bool = typer.Option(False, "--no-browser", help="Do not open the page in your browser")) -> None:
-    """Serve the dashboard (overview, runs, review) and open it in your browser. One per PC: a second start opens a tab."""
+    """Serve the dashboard (it opens on the desk) and open it in your browser. One per PC: a second start opens a tab."""
     cfg = load_config()
     host, port = cfg.review.get("host", "127.0.0.1"), int(cfg.review.get("port", 8765))
     url = f"http://{host}:{port}/"

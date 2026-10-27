@@ -38,7 +38,7 @@
 
 <div class="shell">
   <nav class="nav" aria-label="Sections">
-    <a href="/" {% if nav == 'desk' %}aria-current="page"{% endif %}>{{ icon('inbox') }} Desk</a>
+    <a href="/" {% if nav == 'desk' %}aria-current="page"{% endif %}>{{ icon('inbox') }} Desk{% if counts %} <span class="count {{ 'count--hot' if (counts.bid + counts.review) else '' }}">{{ counts.bid + counts.review }}</span>{% endif %}</a>
     <a href="/bids" {% if nav == 'bids' %}aria-current="page"{% endif %}>{{ icon('clipboard-list') }} Bid sheet</a>
     <a href="/guides" {% if nav == 'guides' %}aria-current="page"{% endif %}>{{ icon('book-open') }} Guides</a>
     <a href="/rulebook" {% if nav == 'rulebook' %}aria-current="page"{% endif %}>{{ icon('scale') }} Rulebook</a>

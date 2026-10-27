@@ -322,7 +322,8 @@ def test_the_review_inside_bot_bid_starts_nothing(cfg):
     client = TestClient(create_app(cfg, finish_event=threading.Event(), jobs=DisabledJobManager(cfg)))
     r = client.post("/api/runs", json={"command": "replay"})
     assert r.status_code == 409 and "started by bot bid" in r.json()["detail"]
-    assert client.get("/overview").status_code == 200 and "Finish review" in client.get("/review").text
+    assert client.get("/").status_code == 200 and client.get("/overview").status_code == 200
+    assert "Finish review" in client.get("/review").text
 
 
 def test_the_log_is_read_without_the_progress_lines(cfg):

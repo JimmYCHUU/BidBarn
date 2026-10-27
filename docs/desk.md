@@ -2,7 +2,7 @@
 
 The desk is the home page. BidBarn opens on it at `/`, and `/desk` is the same page. Today's pages
 `/review`, `/list` and `/p/<n>` work as before, and the old overview is at `/overview`. The bid
-sheet is at `/bids` (nav item **Bid sheet**). Both read the store and the evidence files already on disk. They send no requests of
+sheet is at `/bids` (nav item **Bid sheet**). The desk and the bid sheet read the store and the evidence files already on disk. They send no requests of
 their own to Nichibo or Carbarn. A row thumbnail whose sheet is not on disk is loaded from Nichibo's
 sheet address by your own browser, as on `/review`.
 
@@ -230,7 +230,7 @@ The desk becomes the home page. Nothing about how a lot is decided changes.
 - **Ctrl+K** (Cmd+K on a Mac) opens "Find a page or a lot". Type a page name to jump to it. From 2 characters it also finds a lot by lot number, chassis or model code and opens that lot's own page, `/p/<n>`, decided lots included. Arrows move, Enter opens, Esc closes. It only links; it never changes anything. It asks `GET /api/find?q=`, which only reads.
 - A guide page (`/guides/<code>`) has an "On the desk" block: how many lots wait for you (a link to the desk), approved and rejected decisions in the last 30 days, and the odometer margin in force (a link to the Rulebook).
 - The guides page has a **Teach session** button. It starts today's Learn mode, as the button on the overview does.
-- Nothing in the menu, the drawer or Ctrl+K approves, places or starts a scan. The Teach session button starts Learn mode, which opens the browser for you and places no bid.
+- Nothing in the menu, its System fold, or Ctrl+K approves, places or starts a scan. The Teach session button starts Learn mode, which opens the browser for you and places no bid.
 
 ### Choices made in the switch-over, to confirm
 
@@ -262,6 +262,7 @@ The desk becomes the home page. Nothing about how a lot is decided changes.
 | `S` | Show the sheet |
 | `1` to `9` | Show that photo |
 | `Z` | Zoom the sheet or photo shown |
+| `Ctrl+K` | Find a page or a lot |
 | `?` | The key list |
 | `Esc` | Close a panel, or the lot at narrow widths; cancels a first `D` |
 
@@ -277,7 +278,7 @@ yen, say) waits out the 10 seconds, then the desk shows the route's refusal and 
 ## What phases 1 to 3 leave out
 
 - The Rulebook. Phase 4 added it: see [rulebook.md](rulebook.md).
-- A filter on the desk for a lot you cannot name. Ctrl+K covers lot number, chassis and model code (see the switch-over, below).
+- A filter on the desk for a lot you cannot name. Ctrl+K covers lot number, chassis and model code (see the switch-over, above).
 
 ## Parity with today's pages
 

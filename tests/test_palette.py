@@ -106,3 +106,39 @@ def test_palette_js_names_a_lots_state_in_plain_words():
                   "Replaced by a newer scan"):
         assert f'"{words}"' in src, words
     assert 'l.decision + ", " + l.status' not in src
+
+
+def test_a_click_in_the_palette_leaves_the_desk_lot_open():
+    desk = (STATIC / "desk.js").read_text(encoding="utf-8")
+    line = next(ln for ln in desk.splitlines() if "narrow.matches && state.lot && !lotPane.contains(t)" in ln)
+    assert "#palette" in line and line.rstrip().endswith("closeLot();")
+    guard = next(ln for ln in desk.splitlines() if '#palette[data-open="true"]' in ln)
+    assert guard.strip().startswith("if (document.querySelector(") and "return;" in guard
+    assert desk.index(guard) < desk.index(line)
+    pal = (STATIC / "palette.js").read_text(encoding="utf-8")
+    assert 'root.addEventListener("click"' in pal and "mousedown" not in pal
+    assert "e.stopPropagation(); close();" in pal
+
+
+def test_the_desk_key_help_names_ctrl_k():
+    assert "Ctrl+K find a page or a lot" in (STATIC / "desk.js").read_text(encoding="utf-8")
+
+
+def test_a_lot_page_marks_no_nav_item_and_leaves_the_drawer_closed(cfg):
+    s = Store(cfg.db_path)
+    pid = _lot(s, "LOT-7001", "GDH206")
+    client, _ = _client(cfg)
+    r = client.get(f"/p/{pid}")
+    assert r.status_code == 200
+    nav = r.text.split('<nav class="nav"')[1].split("</nav>")[0]
+    assert 'aria-current="page"' not in nav
+    assert '<details class="nav-system" open' not in nav
+
+
+def test_the_desk_nav_item_shows_the_to_review_count(cfg):
+    s = Store(cfg.db_path)
+    _lot(s, "LOT-7002", "GDH206")
+    client, _ = _client(cfg)
+    nav = client.get("/").text.split('<nav class="nav"')[1].split("</nav>")[0]
+    desk_item = nav.split("</a>")[0]
+    assert "Desk" in desk_item and '<span class="count count--hot">1</span>' in desk_item

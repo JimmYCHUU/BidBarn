@@ -487,7 +487,7 @@
   }
 
   // -- keys --------------------------------------------------------------------------------------------
-  var HELP = "J/K or arrows move · Enter opens · A approve · E amount · R reject · D D clear · U undo · O Nichibo · S sheet · 1-9 photo · Z zoom · Esc closes";
+  var HELP = "J/K or arrows move · Enter opens · A approve · E amount · R reject · D D clear · U undo · O Nichibo · S sheet · 1-9 photo · Z zoom · Ctrl+K find a page or a lot · Esc closes";
   function onKey(e) {
     if (e.ctrlKey || e.altKey || e.metaKey) return;
     var t = e.target;
@@ -595,7 +595,8 @@
     var t = e.target;
     if (!t.isConnected || (e.composedPath && e.composedPath().indexOf(toast) >= 0)) return;   // the toast's own buttons
     // The scan bar's Scan now and Stop (desk_scan.js) leave the open lot alone too.
-    if (narrow.matches && state.lot && !lotPane.contains(t) && !t.closest("#desk-toast, #desk-scan, .desk-row, .desk-pending, .desk-sess, .desk-lane")) closeLot();
+    if (document.querySelector('#palette[data-open="true"]')) return;   // a click in or behind the Ctrl+K box leaves the lot alone
+    if (narrow.matches && state.lot && !lotPane.contains(t) && !t.closest("#palette, #desk-toast, #desk-scan, .desk-row, .desk-pending, .desk-sess, .desk-lane")) closeLot();
   });
   window.addEventListener("pagehide", sendAllNow);
   // The scan bar (desk_scan.js) asks for a fresh board while a scan runs. refreshBoard keeps the open lot (state.lot

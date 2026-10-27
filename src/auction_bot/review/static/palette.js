@@ -127,5 +127,5 @@
   window.addEventListener("keyup", function (e) { if (isOpen()) e.stopPropagation(); }, true);
   window.addEventListener("keypress", function (e) { if (isOpen()) e.stopPropagation(); }, true);
   input.addEventListener("input", onInput);
-  root.addEventListener("mousedown", function (e) { if (e.target === root) close(); });
+  root.addEventListener("click", function (e) { if (e.target === root) { e.stopPropagation(); close(); } });
 })();

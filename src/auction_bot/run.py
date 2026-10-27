@@ -152,7 +152,7 @@ def scan_all(cfg: Config, echo: Callable[[str], None] = print, headless: bool = 
 
 # -- 4. review --------------------------------------------------------------------------------
 
-DASHBOARD_HAS_THE_PORT = ("The dashboard is running on that address. Start Bid mode from the dashboard, "
+DASHBOARD_HAS_THE_PORT = ("The dashboard is running on that address. Start Bid mode from the dashboard (System, then Overview and day log), "
                           "or close the dashboard window and run bidbarn.cmd again.")
 
 
