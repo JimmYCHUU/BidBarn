@@ -423,6 +423,20 @@ class Store:
         args.append(limit)
         return self.conn.execute(q, args).fetchall()
 
+    def find_lots(self, text: str, limit: int = 20) -> list[sqlite3.Row]:
+        """Proposals whose lot number, model code, summary or facts' chassis contain `text` (case-insensitive,
+        `%`, `_` and backslash match literally). Each vehicle and guide appears once, as its newest proposal; newest first."""
+        text = (text or "").strip()
+        if not text:
+            return []
+        pat = "%" + text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        return self.conn.execute(
+            "SELECT id, ref_no, summary, decision, status FROM proposals p "
+            "WHERE p.id = (SELECT MAX(q.id) FROM proposals q WHERE q.ref_no=p.ref_no AND q.guide_id IS p.guide_id) "
+            "AND (p.ref_no LIKE ?1 ESCAPE '\\' OR p.model_code LIKE ?1 ESCAPE '\\' OR p.summary LIKE ?1 ESCAPE '\\' "
+            "OR CASE WHEN json_valid(p.facts_json) THEN json_extract(p.facts_json, '$.chassis') END LIKE ?1 ESCAPE '\\') "
+            "ORDER BY p.id DESC LIMIT ?2", (pat, limit)).fetchall()
+
     def intent_for(self, ref_no: str) -> sqlite3.Row | None:
         """The claim on a vehicle: the proposal approved for it, if any."""
         return self.conn.execute("SELECT * FROM bid_intents WHERE ref_no=?", (ref_no,)).fetchone()

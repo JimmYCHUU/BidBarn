@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from fastapi import HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from auction_bot.dashboard import status as dashboard_status
 from auction_bot.dashboard.guides import rules_for_code, variant_view
@@ -85,6 +85,21 @@ def register(app, templates, cfg, store, page, *, load, sort_key) -> None:
             s.close()
         ctx["scan"] = scan_state(ctx["pulse"])
         return page(request, "desk.html", "desk", **ctx)
+
+    @app.get("/api/find")
+    def find(q: str = ""):
+        """The Ctrl+K palette's lot search. Reads only; under 2 characters it finds nothing."""
+        q = q.strip()[:40]
+        if len(q) < 2:
+            return JSONResponse({"lots": []})
+        s = store()
+        try:
+            rows = s.find_lots(q, 20)
+        finally:
+            s.close()
+        return JSONResponse({"lots": [{"pid": r["id"], "ref_no": r["ref_no"], "summary": r["summary"] or "",
+                                       "decision": r["decision"], "status": r["status"], "url": f"/p/{r['id']}"}
+                                      for r in rows]})
 
     @app.get("/desk/scan", response_class=HTMLResponse)
     def desk_scan(request: Request):

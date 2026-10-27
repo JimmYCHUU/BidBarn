@@ -10,6 +10,14 @@
 {% block head %}{% endblock %}
 </head>
 <body data-lock="{{ lock_state or '' }}">
+<div class="palette" id="palette" data-open="false" role="dialog" aria-modal="true" aria-label="Find a page or a lot">
+  <div class="palette-box">
+    <label class="palette-label" for="palette-input">Find a page or a lot</label>
+    <input id="palette-input" type="search" autocomplete="off" spellcheck="false" maxlength="40" placeholder="Page name, lot number, chassis or model code">
+    <ul id="palette-list" role="listbox" aria-label="Results"></ul>
+    <div class="palette-hint">Up and down move, Enter opens, Esc closes</div>
+  </div>
+</div>
 <header class="app-header">
   <div class="app-header-in">
   <a class="brand" href="/" aria-label="BidBarn desk">
@@ -54,6 +62,7 @@
 
 <div class="lightbox" id="lightbox" data-open="false" role="dialog" aria-label="Full size image"></div>
 <script src="/static/review.js?v={{ asset_v }}" defer></script>
+<script src="/static/palette.js?v={{ asset_v }}" defer></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>
