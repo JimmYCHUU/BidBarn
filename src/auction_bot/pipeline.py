@@ -751,6 +751,7 @@ class ReplayStats:
     lots: list[dict] = field(default_factory=list)   # one dict per changed lot, at most LOTS_CAP (the Rulebook preview)
     lots_total: int = 0   # a preview: every lot the answer changes, listed or not
     drift: int = 0        # a preview: lots Apply would change that the answer itself does not (not listed)
+    snapshot: str = ""    # the guide snapshot the rules came from (a preview's freshness key, with the waiting lots)
     last: tuple = ()      # the stored and the new outcome of the row just re-evaluated (see `_outcome`)
 
     def note_lot(self, row, before: tuple, after: tuple) -> None:
@@ -801,7 +802,7 @@ def reevaluate(cfg: Config, store: Store, model_codes: list[str] | None = None, 
     sheet = (cfg.sheet_check or "none").lower()
     no_model = sheet == "none" or (answers is not None and sheet == "openai")
     wanted = {c.upper() for c in model_codes} if model_codes else None
-    st = ReplayStats()
+    st = ReplayStats(snapshot=snap_path.name)
     rows = store.list_proposals(decision="pending", model_code=None, limit=100_000)
     todo = []  # the rows a current guide covers, in the stored order, so the total is known up front
     for row in rows:
@@ -879,6 +880,8 @@ def _replay_row(cfg: Config, store: Store, st: ReplayStats, row, rule: ModelRule
             return
         # Passes the card checks now, but the detail page was never opened.
         st.needs_fetch += 1
+        if _needs_the_page(row):
+            return  # already stored in that form by an earlier replay: the next scan opens it, nothing to store again
         st.changes.append(f"{label}: card SKIP -> needs the detail page (next scan opens it)")
         st.note_lot(row, old, (NEEDS_REVIEW, None))
         st.last = (old, (NEEDS_REVIEW, None))
@@ -898,7 +901,8 @@ def _replay_row(cfg: Config, store: Store, st: ReplayStats, row, rule: ModelRule
     except json.JSONDecodeError:
         parked = False
     if parked and not (saved and saved.get("sheet")):
-        st.unchanged += 1  # still waiting for Nichibo's images; the next scan re-checks it
+        # Still waiting for Nichibo's images (the next scan re-checks it), but re-priced from its card now.
+        _replay_parked(cfg, store, st, row, rule, facts, label, snap_path, apply)
         return
     out_dir = cfg.evidence_dir / _safe(row["ref_no"])
     missing = {"dir": str(out_dir), "sheet": None, "photos": [], "failed": [], "placeholders": 1, "images_pending": True}
@@ -932,6 +936,60 @@ def _replay_row(cfg: Config, store: Store, st: ReplayStats, row, rule: ModelRule
     st.changes.append(f"{label}: {old[0]} {old[1]} -> {new[0]} {new[1]}{why}")
     st.note_lot(row, old, new)
     if apply:
+        store.supersede_pending(row["ref_no"], rule.guide_id)
+        store.add_proposal(snapshot=snap_path.name, rule_updated_at=rule.updated_at, run_id=row["run_id"], **proposal)
+        st.applied += 1
+
+
+def _needs_the_page(row) -> bool:
+    """A card row a replay already turned into "needs the detail page": NEEDS_REVIEW with `images_pending`, the only
+    card-stage row of that form (a scan stores a card row only as a SKIP)."""
+    if row["status"] != NEEDS_REVIEW:
+        return False
+    try:
+        soft = json.loads(row["soft_json"] or "{}")
+    except json.JSONDecodeError:
+        return False
+    return isinstance(soft, dict) and bool(soft.get("images_pending"))
+
+
+def _replay_parked(cfg: Config, store: Store, st: ReplayStats, row, rule: ModelRule, card: VehicleFacts, label: str,
+                   snap_path: Path, apply: bool) -> None:
+    """A lot parked for unpublished images, priced again from its stored card facts the way the scan parks it: the
+    card checks first (a lot they reject is a card SKIP, as a scan would store it), then `pending_images_proposal`
+    (Jim, 2026-09-30: it keeps its grid amount from the card, so it can be approved). No page, no image, no model,
+    no file; the auction day and hall stay in the facts."""
+    try:
+        prev_soft = json.loads(row["soft_json"] or "{}")
+    except json.JSONDecodeError:
+        prev_soft = {}
+    try:
+        evidence = json.loads(row["evidence_json"] or "{}")
+    except json.JSONDecodeError:
+        evidence = {}
+    if not isinstance(evidence, dict) or not evidence:
+        evidence = {"dir": str(cfg.evidence_dir / _safe(row["ref_no"])), "sheet": None, "photos": [], "failed": [],
+                    "placeholders": 1, "images_pending": True}
+    pre = card_check(rule, card, cfg)
+    if pre is not None:
+        proposal = dict(ref_no=row["ref_no"], guide_id=rule.guide_id, model_code=rule.model_code, status=SKIP,
+                        stage="card", summary=summary_line(card), facts_json=card.to_dict(),
+                        hard_json={"checks": [pre.__dict__]}, bid_jpy_k=None)
+    else:
+        proposal = pending_images_proposal(rule, card, evidence, cfg)
+        proposal["ref_no"] = row["ref_no"]
+    old = _outcome(row["status"], row["bid_jpy_k"], prev_soft)
+    new = _outcome(proposal["status"], proposal["bid_jpy_k"], proposal.get("soft_json"))
+    st.last = (old, new)
+    if new == old:
+        st.unchanged += 1
+        return
+    st.changed += 1
+    why = " (images not published yet; priced from the card)" if proposal["status"] != SKIP else f" ({pre.detail})"
+    st.changes.append(f"{label}: {old[0]} {old[1]} -> {new[0]} {new[1]}{why}")
+    st.note_lot(row, old, new)
+    if apply:
+        _carry_day(store, proposal)  # a day another row of this vehicle holds; never a page (the next scan reads it)
         store.supersede_pending(row["ref_no"], rule.guide_id)
         store.add_proposal(snapshot=snap_path.name, rule_updated_at=rule.updated_at, run_id=row["run_id"], **proposal)
         st.applied += 1

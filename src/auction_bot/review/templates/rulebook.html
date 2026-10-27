@@ -35,7 +35,7 @@
       {% else %}
         <p class="rb-today">Today: {{ q.today }}</p>
       {% endif %}
-      <p class="rb-affects">{% if item.lots is none %}Affects an unknown number of waiting lots (no guide snapshot).{% else %}Affects {{ item.lots }} waiting {{ 'lot' if item.lots == 1 else 'lots' }}.{% endif %} <a href="/desk">Open the desk</a></p>
+      <p class="rb-affects">{% if item.lots is none %}Affects an unknown number of waiting lots (no guide snapshot).{% elif item.near_km %}{{ item.lots }} waiting {{ 'lot is' if item.lots == 1 else 'lots are' }} within {{ '{:,}'.format(item.near_km) }} km of a band's upper bound or the cap.{% else %}Affects {{ item.lots }} waiting {{ 'lot' if item.lots == 1 else 'lots' }}.{% endif %} <a href="/desk">Open the desk</a></p>
 
       {% if q.kind == 'setting' %}
       <fieldset class="rb-choices" data-setting="{{ q.setting }}">

@@ -94,10 +94,20 @@ from tests.test_pipeline_offline import cfg   # noqa: E402,F401  (fixture)
 JSON = {"accept": "application/json"}
 
 
+def seen_now(cfg) -> dict:
+    """What a preview made now records of the guides and the waiting lots (the freshness key Apply checks)."""
+    from auction_bot.carbarn.client import latest_snapshot
+    s = Store(cfg.db_path)
+    try:
+        return {"snapshot": latest_snapshot(cfg).name, "waiting": s.waiting_fingerprint()}
+    finally:
+        s.close()
+
+
 def _preview(cfg, value=2000, version=0, status="ok", command="rulebook-preview", answer=None):
     return _run(cfg, command, status=status, summary={
         "rulebook_version": version, "answer": answer if answer is not None else {"odo_margin_km": value},
-        "lots": [], "checked": 0, "changed": 0})
+        "lots": [], "checked": 0, "changed": 0, **seen_now(cfg)})
 
 
 def _versions(cfg):
@@ -202,6 +212,65 @@ def test_apply_refuses_a_preview_that_could_not_check_every_lot(cfg):
     r = client.post("/rulebook/odo_margin/apply", data={"value": "2000", "preview_run": str(run)}, headers=JSON)
     assert r.status_code == 409 and r.json()["detail"] == (
         "The preview could not check 3 lots; look at its run page before applying.")
+    assert _versions(cfg) == 0 and jobs.live is None
+
+
+CHANGED = "The lots or the guides changed since this preview; run the preview again."
+
+
+def test_apply_refuses_a_preview_of_other_guides_or_other_lots(cfg):
+    client, jobs = _client(cfg)
+    url = "/rulebook/odo_margin/apply"
+
+    def refused(run, name):
+        r = client.post(url, data={"value": "2000", "preview_run": str(run)}, headers=JSON)
+        assert r.status_code == 409 and r.json()["detail"] == CHANGED, name
+
+    # a newer guide snapshot since the preview
+    run = _preview(cfg, 2000)
+    newer = cfg.snapshot_dir / "rules_zz_newer.json"
+    newer.write_text((cfg.snapshot_dir / "rules_test.json").read_text(encoding="utf-8"), encoding="utf-8")
+    refused(run, "newer snapshot")
+    newer.unlink()
+    # a lot stored since the preview
+    run = _preview(cfg, 2000)
+    s = Store(cfg.db_path)
+    pid = s.add_proposal(ref_no="A1", guide_id=223, model_code="GDH206", snapshot="rules_test.json",
+                         status="NEEDS_REVIEW", stage="manual")
+    s.close()
+    refused(run, "new lot")
+    # a judgement stored in place since the preview
+    run = _preview(cfg, 2000)
+    s = Store(cfg.db_path)
+    s.update_soft(pid, {"mode": "judge"})
+    s.close()
+    refused(run, "new judgement")
+    # a lot decided since the preview
+    run = _preview(cfg, 2000)
+    s = Store(cfg.db_path)
+    s.conn.execute("UPDATE proposals SET decision='rejected' WHERE id=?", (pid,))
+    s.conn.commit()
+    s.close()
+    refused(run, "decided")
+    # a preview that records neither
+    for gone in ("snapshot", "waiting"):
+        summary = {"rulebook_version": 0, "answer": {"odo_margin_km": 2000}, "lots": [], **seen_now(cfg)}
+        del summary[gone]
+        refused(_run(cfg, "rulebook-preview", summary=summary), f"no {gone}")
+    assert _versions(cfg) == 0 and jobs.live is None
+    # unchanged since the preview: applied
+    r = client.post(url, data={"value": "2000", "preview_run": str(_preview(cfg, 2000))}, headers=JSON)
+    assert r.status_code == 200 and r.json()["version"] == 1
+
+
+def test_apply_refuses_a_preview_that_is_still_running(cfg):
+    client, jobs = _client(cfg)
+    s = Store(cfg.db_path)
+    run = s.start_run("rulebook-preview", ["replay", "--answer", "odo_margin_km=2000"])
+    s.close()
+    assert jobs.get(run)["status"] == "running"
+    r = client.post("/rulebook/odo_margin/apply", data={"value": "2000", "preview_run": str(run)}, headers=JSON)
+    assert r.status_code == 409 and r.json()["detail"] == "That preview did not finish. Preview this answer again."
     assert _versions(cfg) == 0 and jobs.live is None
 
 

@@ -178,6 +178,22 @@ def test_the_judge_flags_and_candidates_read_the_effective_km(base_rule):
     assert any("within 10 % of the guide's cap (116,000 km + 5,000 km margin of 130,000 km)" in x for x in fl)
 
 
+def test_the_grid_candidate_names_the_margin(base_rule):
+    from auction_bot.judge.candidates import candidates_for
+
+    def grid(km, margin):
+        r, f = rule_with(base_rule, margin), facts(km=km)
+        hard = evaluate_hard(f, r)
+        return next(c for c in candidates_for(r, f, hard) if c.label == "grid"), hard
+
+    cand, hard = grid(49_500, 1_000)
+    mods = ", ".join(hard.modifiers_applied) if hard.modifiers_applied else "no modifier"
+    assert cand.why == f"grid cell 2020 / 50K-60K (49,500 km + 1,000 km margin), {mods}"
+    cand0, hard0 = grid(49_500, 0)
+    mods0 = ", ".join(hard0.modifiers_applied) if hard0.modifiers_applied else "no modifier"
+    assert cand0.why == f"grid cell 2020 / 40K-50K ({mods0})"                # no margin: as before
+
+
 def test_load_rules_reads_the_stored_answer_by_itself(cfg):  # noqa: F811
     from auction_bot.store import Store
     Store(cfg.db_path).add_rulebook_answer("odo_margin", 2000)

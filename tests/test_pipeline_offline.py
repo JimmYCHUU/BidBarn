@@ -732,3 +732,169 @@ def test_replay_answer_summary_carries_the_preview(cfg, monkeypatch, capsys):
     summary = json.loads(line[len("SUMMARY "):])
     assert summary["rulebook_version"] == 1 and summary["answer"] == {"odo_margin_km": 1000}
     assert len(summary["lots"]) == 2 and summary["lots"][0]["after"]["bid_jpy_k"] == 1640
+
+
+def test_replay_answer_summary_names_the_snapshot_and_the_waiting_lots(cfg, monkeypatch):
+    from typer.testing import CliRunner
+    import auction_bot.cli as cli
+    monkeypatch.setattr(cli, "load_config", lambda: cfg)
+    monkeypatch.setenv("BIDBARN_PROGRESS", "1")
+    store = _settled_at_50k(cfg)
+    seen = store.waiting_fingerprint()
+    store.close()
+    res = CliRunner().invoke(cli.app, ["replay", "-m", "GDH206", "--answer", "odo_margin_km=1000"])
+    assert res.exit_code == 0, res.output
+    summary = json.loads(next(l for l in res.output.splitlines() if l.startswith("SUMMARY "))[len("SUMMARY "):])
+    assert summary["snapshot"] == "rules_test.json" and summary["waiting"] == seen
+    assert seen["waiting"] > 0 and seen["max_id"] > 0
+
+
+def test_the_waiting_fingerprint_moves_with_a_new_row_a_decision_or_a_judgement(tmp_path):
+    s = Store(tmp_path / "t.sqlite")
+    assert s.waiting_fingerprint() == {"max_id": 0, "waiting": 0, "rev": 0}
+    row = dict(ref_no="A1", guide_id=1, model_code="GDH206", snapshot="s.json", status="NEEDS_REVIEW", stage="manual")
+    pid = s.add_proposal(**row)
+    one = s.waiting_fingerprint()
+    assert one == {"max_id": pid, "waiting": 1, "rev": 0}
+    s.update_soft(pid, {"mode": "judge"})                      # a judgement stored in place
+    two = s.waiting_fingerprint()
+    assert two != one and two["rev"] == 1
+    s.conn.execute("UPDATE proposals SET decision='rejected' WHERE id=?", (pid,))
+    s.conn.commit()
+    assert s.waiting_fingerprint()["waiting"] == 0
+    s.close()
+
+
+def _parked_at_50k(cfg):
+    """Two lots parked for unpublished images, listed at 50,000 km, holding the card amount the rules in force give.
+    The guide has one default variant, so the card alone prices them (Jim, 2026-09-30)."""
+    from auction_bot.carbarn.client import load_rules
+    from auction_bot.pipeline import card_facts
+    from auction_bot.rules.hard import evaluate_hard
+    snap = cfg.snapshot_dir / "rules_test.json"
+    data = json.loads(snap.read_text(encoding="utf-8"))
+    tree = data["guides"][0]["tree"]
+    tree["variants"] = tree["variants"][:1]
+    tree["variants"][0]["name"] = ""
+    snap.write_text(json.dumps(data), encoding="utf-8")
+    store = Store(cfg.db_path)
+    scan(cfg, FakeBrowser(PLACEHOLDER_GIF), store, ["GDH206"], limit_per_model=2)
+    rule = load_rules(cfg, answers={})[0][0]
+    for r in store.list_proposals(decision="pending", status="NEEDS_REVIEW"):
+        facts = json.loads(r["facts_json"])
+        facts.update(km=50_000, auction_date="20991231", auction_place="USS Tokyo", auction_day_read=True)
+        hard = evaluate_hard(card_facts(VehicleFacts.from_dict(facts), rule), rule)
+        store.conn.execute("UPDATE proposals SET facts_json=?, bid_jpy_k=?, base_jpy_k=?, hard_json=? WHERE id=?",
+                           (json.dumps(facts), hard.bid_jpy_k, hard.base_jpy_k, json.dumps(hard.to_dict()), r["id"]))
+    store.conn.commit()
+    return store
+
+
+def _no_fetch(monkeypatch):
+    import auction_bot.pipeline as pl
+
+    def boom(*a, **k):
+        raise AssertionError("replay asked Nichibo, Carbarn or the catalogue for something")
+    for name in ("download_evidence", "fetch_facts", "auction_day", "search_rule", "CatalogClient"):
+        monkeypatch.setattr(pl, name, boom)
+
+
+def test_a_parked_lot_is_re_priced_from_its_card_by_the_preview_and_apply(cfg, monkeypatch):
+    from auction_bot import pipeline as pl
+    store = _parked_at_50k(cfg)
+    _no_fetch(monkeypatch)
+    parked = store.list_proposals(decision="pending", status="NEEDS_REVIEW")
+    assert len(parked) == 2 and {r["bid_jpy_k"] for r in parked} == {1600}
+    assert all(json.loads(r["soft_json"])["images_pending"] for r in parked)
+    rows = lambda: [tuple(r) for r in store.conn.execute(
+        "SELECT id, status, bid_jpy_k, decision, facts_json, hard_json, soft_json FROM proposals ORDER BY id").fetchall()]
+    before_rows, before_disk = rows(), _disk(cfg)
+    # The preview lists both parked lots with the amount the margin gives, and writes nothing.
+    pv = pl.reevaluate(cfg, store, ["GDH206"], answers={"odo_margin_km": 1000})
+    assert sorted(lot["pid"] for lot in pv.lots) == sorted(r["id"] for r in parked)
+    assert pv.changed == 2 and pv.lots_total == 2 and pv.drift == 0
+    assert all(lot["before"]["bid_jpy_k"] == 1600 and lot["after"]["bid_jpy_k"] == 1540 for lot in pv.lots)
+    assert rows() == before_rows and _disk(cfg) == before_disk
+    # Apply re-prices them: still parked, the auction day and hall carried, approvable at the new card amount.
+    store.add_rulebook_answer("odo_margin", 1000)
+    ap = pl.reevaluate(cfg, store, ["GDH206"], apply=True)
+    assert ap.changed == 2 and ap.applied == 2
+    now = store.list_proposals(decision="pending", status="NEEDS_REVIEW")
+    assert len(now) == 2 and {r["bid_jpy_k"] for r in now} == {1540}
+    assert not {r["id"] for r in now} & {r["id"] for r in parked}
+    for r in now:
+        soft, facts = json.loads(r["soft_json"]), json.loads(r["facts_json"])
+        assert r["stage"] == "manual" and soft["images_pending"] is True and facts["km"] == 50_000
+        assert (facts["auction_date"], facts["auction_place"], facts["auction_day_read"]) == ("20991231", "USS Tokyo", True)
+        assert r["run_id"] == parked[0]["run_id"]
+    assert {r["decision"] for r in store.conn.execute(
+        "SELECT decision FROM proposals WHERE id IN (?, ?)", [r["id"] for r in parked])} == {"superseded"}
+    assert _disk(cfg) == before_disk
+    again = pl.reevaluate(cfg, store, ["GDH206"], apply=True)
+    assert again.changed == 0 and again.applied == 0                   # settled: a second Apply stores nothing
+    store.close()
+
+
+def test_a_parked_lot_under_no_change_is_untouched(cfg, monkeypatch):
+    from auction_bot import pipeline as pl
+    store = _parked_at_50k(cfg)
+    _no_fetch(monkeypatch)
+    rows = lambda: [tuple(r) for r in store.conn.execute("SELECT * FROM proposals ORDER BY id").fetchall()]
+    before = rows()
+    st = pl.reevaluate(cfg, store, ["GDH206"], apply=True)
+    assert st.changed == 0 and st.applied == 0 and st.unchanged == st.checked
+    pv = pl.reevaluate(cfg, store, ["GDH206"], answers={"odo_margin_km": 0})
+    assert pv.changed == 0 and pv.lots == [] and pv.drift == 0
+    assert rows() == before
+    store.close()
+
+
+def test_a_parked_lot_the_margin_takes_over_the_cap_is_skipped_at_the_card(cfg, monkeypatch):
+    """As a scan would: the card check comes before a lot is parked."""
+    from auction_bot import pipeline as pl
+    store = _parked_at_50k(cfg)
+    _no_fetch(monkeypatch)
+    first = store.list_proposals(decision="pending", status="NEEDS_REVIEW")[0]
+    rule = pl.load_rules(cfg, answers={})[0][0]
+    facts = json.loads(first["facts_json"])
+    facts["km"] = rule.search_max_odo
+    hard = pl.evaluate_hard(pl.card_facts(VehicleFacts.from_dict(facts), rule), rule)
+    store.conn.execute("UPDATE proposals SET facts_json=?, bid_jpy_k=?, hard_json=? WHERE id=?",
+                       (json.dumps(facts), hard.bid_jpy_k, json.dumps(hard.to_dict()), first["id"]))
+    store.conn.commit()
+    assert pl.reevaluate(cfg, store, ["GDH206"]).changed == 0          # at the cap, no margin: still parked
+    store.add_rulebook_answer("odo_margin", 1000)
+    ap = pl.reevaluate(cfg, store, ["GDH206"], apply=True)
+    assert ap.applied == 2
+    skipped = [r for r in store.list_proposals(decision="pending", status="SKIP", limit=1000) if r["ref_no"] == first["ref_no"]]
+    assert len(skipped) == 1 and skipped[0]["stage"] == "card" and skipped[0]["bid_jpy_k"] is None
+    assert "margin" in json.loads(skipped[0]["hard_json"])["checks"][0]["detail"]
+    assert pl.reevaluate(cfg, store, ["GDH206"], apply=True).applied == 0
+    store.close()
+
+
+def _min_grade(cfg, grade):
+    snap = cfg.snapshot_dir / "rules_test.json"
+    data = json.loads(snap.read_text(encoding="utf-8"))
+    data["guides"][0]["tree"]["minGrade"] = grade
+    snap.write_text(json.dumps(data), encoding="utf-8")
+
+
+def test_a_card_row_that_needs_the_page_is_stored_once(cfg, monkeypatch):
+    from auction_bot import pipeline as pl
+    _min_grade(cfg, 4.5)
+    store = Store(cfg.db_path)
+    scan(cfg, FakeBrowser(), store, ["GDH206"], limit_per_model=2)
+    assert [r for r in store.list_proposals(decision="pending", status="SKIP", limit=1000) if r["stage"] == "card"]
+    _min_grade(cfg, 3.5)
+    _no_fetch(monkeypatch)
+    superseded = lambda: store.conn.execute("SELECT COUNT(*) FROM proposals WHERE decision='superseded'").fetchone()[0]
+    first = pl.reevaluate(cfg, store, ["GDH206"], apply=True)
+    assert first.needs_fetch > 0 and first.applied >= first.needs_fetch
+    kept = superseded()
+    second = pl.reevaluate(cfg, store, ["GDH206"], apply=True)
+    assert second.applied == 0 and second.changed == 0 and second.needs_fetch == first.needs_fetch
+    assert second.changes == [] and superseded() == kept
+    pv = pl.reevaluate(cfg, store, ["GDH206"], answers={"odo_margin_km": 0})
+    assert pv.drift == 0 and pv.changed == 0 and pv.lots == []
+    store.close()

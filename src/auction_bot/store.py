@@ -239,6 +239,15 @@ class Store:
         row = self.conn.execute("SELECT MAX(version) AS v FROM rulebook_versions").fetchone()
         return row["v"] or 0
 
+    def waiting_fingerprint(self) -> dict:
+        """What a Rulebook preview saw of the stored lots: the newest proposal, how many wait, and their judgement
+        revisions. A new row, a decision, a Reopen or a judgement stored in place moves it; Apply refuses a preview
+        whose fingerprint is not the one of now."""
+        row = self.conn.execute(
+            "SELECT MAX(id) AS m, SUM(decision='pending') AS w, SUM(CASE WHEN decision='pending' THEN rev ELSE 0 END) AS r "
+            "FROM proposals").fetchone()
+        return {"max_id": row["m"] or 0, "waiting": row["w"] or 0, "rev": row["r"] or 0}
+
     def rulebook_answers(self) -> dict:
         """Every answer as of the newest version."""
         row = self.conn.execute("SELECT answers_json FROM rulebook_versions ORDER BY version DESC LIMIT 1").fetchone()

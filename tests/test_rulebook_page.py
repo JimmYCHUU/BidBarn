@@ -15,8 +15,9 @@ JSON = {"accept": "application/json"}
 
 
 def _preview(cfg, value=2000, version=0):
+    from tests.test_rulebook import seen_now
     return _run(cfg, "rulebook-preview", summary={"rulebook_version": version, "answer": {"odo_margin_km": value},
-                                                 "lots": [], "checked": 0, "changed": 0})
+                                                 "lots": [], "checked": 0, "changed": 0, **seen_now(cfg)})
 
 
 # -- the three additions carried from Task 3 -----------------------------------------------------------
@@ -143,12 +144,22 @@ def test_an_open_question_says_how_many_lots_it_affects(cfg):
     client, _ = _client(cfg)
     page = client.get("/rulebook").text
     odo = _question(page, "odo_margin")
-    assert "Affects 1 waiting lot" in odo and 'href="/desk"' in odo and "Open the desk" in odo
+    assert "1 waiting lot is within 5,000 km of a band's upper bound or the cap." in h.unescape(odo)
+    assert "Affects" not in odo and 'href="/desk"' in odo and "Open the desk" in odo
     assert "Affects 0 waiting lots" in _question(page, "interior_years")
     assert odo.count('type="radio"') == 5 and "checked" in odo
     assert 'data-act="preview"' in odo and 'data-act="apply"' in odo
     assert "disabled" in odo.split('data-act="apply"')[1][:40]
     assert 'data-act="preview"' not in _question(page, "gdh206k")
+    store = Store(cfg.db_path)
+    for r in store.list_proposals(decision="pending", status="NEEDS_REVIEW"):
+        near = json.loads(r["facts_json"])
+        near["km"] = 49_000
+        store.conn.execute("UPDATE proposals SET facts_json=? WHERE id=?", (json.dumps(near), r["id"]))
+    store.conn.commit()
+    store.close()
+    odo = h.unescape(_question(client.get("/rulebook").text, "odo_margin"))
+    assert "2 waiting lots are within 5,000 km of a band's upper bound or the cap." in odo
 
 
 def test_a_kept_question_moves_to_decided(cfg):

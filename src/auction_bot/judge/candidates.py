@@ -30,7 +30,11 @@ def candidates_for(rule: ModelRule, facts: VehicleFacts, hard: HardResult) -> li
     base = hard.bid_jpy_k
     if base:
         mods = ", ".join(hard.modifiers_applied) if hard.modifiers_applied else "no modifier"
-        add("grid", base, f"grid cell {hard.year} / {hard.band_label} ({mods})")
+        margin = rule.odo_margin_km
+        if margin and facts.km is not None:   # the band was chosen for the listed km + the Rulebook margin
+            add("grid", base, f"grid cell {hard.year} / {hard.band_label} ({facts.km:,} km + {margin:,} km margin), {mods}")
+        else:
+            add("grid", base, f"grid cell {hard.year} / {hard.band_label} ({mods})")
     match = rule.resolve_variant(facts.chassis, facts.variant_text)
     variant = match.variant
     if variant is not None and facts.year is not None and facts.km is not None:

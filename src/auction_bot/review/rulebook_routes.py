@@ -2,7 +2,8 @@
 
 Only the catalogue's open questions and their listed answers are accepted (`rulebook.py`); a locked rule has
 no route. Applying an answer needs a finished, ok `rulebook-preview` run of that very answer, made at the
-Rulebook version that is current now. It writes a version and starts `replay --apply`, which supersedes
+Rulebook version that is current now, against the guide snapshot and the waiting lots of now (the preview records
+both). It writes a version and starts `replay --apply`, which supersedes
 waiting proposals only. Nothing here approves, decides or places anything.
 """
 from __future__ import annotations
@@ -14,6 +15,7 @@ from fastapi import Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from auction_bot import rulebook
+from auction_bot.carbarn.client import latest_snapshot
 
 _APPLY = threading.Lock()  # the check of the preview and the write of the version happen as one step
 
@@ -83,7 +85,8 @@ def register(app, templates, cfg, store, page) -> None:
             lots = rulebook.affected(q, rows, rules)
             unknown = q.id == "odo_margin" and not rules
             current = answers.get(q.setting, q.today) if q.kind == "setting" else None
-            open_questions.append({"q": q, "lots": None if unknown else len(lots), "current": current, "requests": requests.get(q.id, [])})
+            open_questions.append({"q": q, "lots": None if unknown else len(lots), "current": current, "requests": requests.get(q.id, []),
+                                   "near_km": rulebook._MARGIN_REACH_KM if q.id == "odo_margin" else None})
         return page(request, "rulebook.html", "rulebook", decided=rulebook.DECIDED, history=history,
                     open_questions=open_questions, locked=rulebook.LOCKED, version=version)
 
@@ -120,6 +123,10 @@ def register(app, templates, cfg, store, page) -> None:
                 _refuse("That preview was for a different answer. Preview this one first.")
             s = store()
             try:
+                newest = latest_snapshot(cfg)
+                seen = (summary.get("snapshot"), summary.get("waiting"))
+                if newest is None or seen != (newest.name, s.waiting_fingerprint()):
+                    _refuse("The lots or the guides changed since this preview; run the preview again.")
                 try:
                     version = s.add_rulebook_answer(qid, number, preview_run=run_id,
                                                     expect_version=version_seen)
