@@ -136,6 +136,21 @@ CREATE TABLE IF NOT EXISTS runs (
   deleted_at TEXT                  -- Delete session took the session's waiting lots out of the review
 );
 CREATE INDEX IF NOT EXISTS ix_runs_command ON runs(command, id);
+CREATE TABLE IF NOT EXISTS rulebook_versions (  -- Jim's answers on the Rulebook page; a version is never edited
+  version INTEGER PRIMARY KEY AUTOINCREMENT,
+  question_id TEXT NOT NULL,
+  value_json TEXT NOT NULL,
+  answers_json TEXT NOT NULL,      -- every answer as of this version
+  note TEXT,
+  preview_run INTEGER,
+  created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS rule_requests (  -- "I want it different" notes for Jim's own follow-up
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  question_id TEXT NOT NULL,
+  text TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
 """
 
 # A run started from the dashboard: running until its process ends, then one of the others. `paused` is a
@@ -218,6 +233,47 @@ class Store:
 
     def close(self) -> None:
         self.conn.close()
+
+    # -- rulebook ---------------------------------------------------------
+    def rulebook_version(self) -> int:
+        row = self.conn.execute("SELECT MAX(version) AS v FROM rulebook_versions").fetchone()
+        return row["v"] or 0
+
+    def rulebook_answers(self) -> dict:
+        """Every answer as of the newest version."""
+        row = self.conn.execute("SELECT answers_json FROM rulebook_versions ORDER BY version DESC LIMIT 1").fetchone()
+        return json.loads(row["answers_json"]) if row else {}
+
+    def add_rulebook_answer(self, question_id: str, value, note: str | None = None,
+                            preview_run: int | None = None) -> int:
+        """A new version: the previous answers plus this one. A setting is kept under its setting key, a confirm
+        question under its id. Earlier versions are never touched."""
+        from . import rulebook
+        q = rulebook.question(question_id)
+        answers = self.rulebook_answers()
+        answers[q.setting or q.id] = value
+        cur = self.conn.execute(
+            "INSERT INTO rulebook_versions(question_id, value_json, answers_json, note, preview_run, created_at) "
+            "VALUES(?,?,?,?,?,?)",
+            (question_id, json.dumps(value, ensure_ascii=False), json.dumps(answers, ensure_ascii=False),
+             note, preview_run, now()))
+        self.conn.commit()
+        return int(cur.lastrowid)
+
+    def rulebook_history(self) -> list[sqlite3.Row]:
+        return self.conn.execute("SELECT * FROM rulebook_versions ORDER BY version DESC").fetchall()
+
+    def add_rule_request(self, question_id: str, text: str) -> int:
+        text = (text or "").strip()
+        if not text:
+            raise ValueError("A change request needs some words.")
+        cur = self.conn.execute("INSERT INTO rule_requests(question_id, text, created_at) VALUES(?,?,?)",
+                                (question_id, text, now()))
+        self.conn.commit()
+        return int(cur.lastrowid)
+
+    def rule_requests(self) -> list[sqlite3.Row]:
+        return self.conn.execute("SELECT * FROM rule_requests ORDER BY id").fetchall()
 
     # -- vehicles ---------------------------------------------------------
     def upsert_vehicle(self, ref_no: str, model_code: str, facts: dict) -> None:
