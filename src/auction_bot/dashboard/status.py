@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 
 from auction_bot import lock
 from auction_bot.carbarn.client import latest_snapshot, load_rules
-from auction_bot.dashboard.jobs import COMMANDS, run_dict
+from auction_bot.dashboard.jobs import COMMANDS, run_dict, slim
 from auction_bot.judge.client import providers_for
 
 SIGNIN_FRESH_HOURS = 12.0  # a sign-in check older than this is asked for again
@@ -230,13 +230,15 @@ def placements_between(store, started: str | None, finished: str | None) -> list
 
 
 COMMAND_ICONS = {"bid": "route", "learn": "graduation-cap", "scan": "scan-search", "scan-now": "scan-search", "fetch-rules": "book-open", "judge": "eye",
-                 "replay": "rotate-ccw", "sheet-trial": "file-text", "place": "gavel", "insights": "chart-column",
+                 "replay": "rotate-ccw", "rulebook-preview": "rotate-ccw", "sheet-trial": "file-text", "place": "gavel", "insights": "chart-column",
                  "login": "log-in", "check-login": "shield-check"}
 COMMAND_SHORT = {"bid": "Bid", "learn": "Learn", "scan": "Scan", "scan-now": "Scan now", "fetch-rules": "Guides", "judge": "Judge", "replay": "Replay",
+                 "rulebook-preview": "Rulebook preview",
                  "sheet-trial": "Sheet trial", "place": "Place", "insights": "Insights", "login": "Sign in",
                  "check-login": "Sign-in check"}
 DOING = {"bid": "Running Bid mode", "learn": "Recording your session", "scan": "Scanning Nichibo", "scan-now": "Scanning Nichibo",
          "fetch-rules": "Fetching the bidding guides", "judge": "Judging pending lots", "replay": "Replaying the rules",
+         "rulebook-preview": "Previewing a Rulebook answer",
          "sheet-trial": "Reading sheets with Carbarn's reader",
          "place": "Placing the approved bids as a dry run", "insights": "Working out the insights",
          "login": "Waiting for the sign-in", "check-login": "Checking the sign-in"}
@@ -384,7 +386,7 @@ def gather_status(cfg, store, jobs) -> dict:
         "judge": judge_state(cfg, store),
         "counts": counts_state(store),
         "last_runs": {command: {k: d[k] for k in ("id", "command", "status", "started_at", "finished_at", "summary", "error")}
-                      for command, d in ((c, run_dict(r)) for c, r in store.last_runs_by_command().items())},
+                      for command, d in ((c, slim(run_dict(r))) for c, r in store.last_runs_by_command().items())},
         "current": current,
         "paused": paused_state(store),
         "profile_lock": lock.holder(cfg),

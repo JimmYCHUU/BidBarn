@@ -570,19 +570,27 @@ def manual_soft(rule: ModelRule, hard, facts: VehicleFacts, ocr, ocr_hints: list
             "eligibility": eligibility.to_dict() if eligibility else None}
 
 
-def guide_dir(out_dir: Path, guide_id: int | None) -> Path:
+def guide_dir(out_dir: Path, guide_id: int | None, create: bool = True) -> Path:
     """A guide's own evaluation files, so a lot proposed under two guides keeps both sets."""
     if guide_id is None:
         return out_dir
     d = out_dir / f"guide_{guide_id}"
-    d.mkdir(parents=True, exist_ok=True)
+    if create:
+        d.mkdir(parents=True, exist_ok=True)
     return d
+
+
+def _put(write: bool, path: Path, text: str) -> None:
+    """Write an evaluation file, unless this is a preview (`write` False), which leaves the disk alone."""
+    if write:
+        path.write_text(text, encoding="utf-8")
 
 
 def evaluate_vehicle(cfg: Config, rule: ModelRule, facts: VehicleFacts, no_model: bool,
                      evidence_loader: Callable[[], dict], past_decisions: list[dict] | None = None,
                      stats: ScanStats | None = None, judge_client=None, store=None, photo_loader=None,
-                     previous_soft: dict | None = None, catalog_client: CatalogClient | None = None) -> dict:
+                     previous_soft: dict | None = None, catalog_client: CatalogClient | None = None,
+                     write_files: bool = True) -> dict:
     """Decide one vehicle. Returns the proposal row fields (without snapshot/rule_updated_at).
 
     Judge mode (`sheet_check: judge`): after the hard rules and the OCR, the guide's requirements
@@ -603,10 +611,11 @@ def evaluate_vehicle(cfg: Config, rule: ModelRule, facts: VehicleFacts, no_model
 
     evidence = evidence_loader()
     out_dir = Path(evidence["dir"])
-    out_dir.mkdir(parents=True, exist_ok=True)
-    gdir = guide_dir(out_dir, rule.guide_id)
-    (gdir / "rule.json").write_text(json.dumps(rule_to_summary(rule), indent=1, ensure_ascii=False), encoding="utf-8")
-    (out_dir / "facts.json").write_text(json.dumps(facts.to_dict(), indent=1, ensure_ascii=False), encoding="utf-8")
+    if write_files:
+        out_dir.mkdir(parents=True, exist_ok=True)
+    gdir = guide_dir(out_dir, rule.guide_id, create=write_files)
+    _put(write_files, gdir / "rule.json", json.dumps(rule_to_summary(rule), indent=1, ensure_ascii=False))
+    _put(write_files, out_dir / "facts.json", json.dumps(facts.to_dict(), indent=1, ensure_ascii=False))
 
     # Read the printed fields of the sheet locally (seats, model code, km, grade, 4WD).
     ocr = None
@@ -614,7 +623,7 @@ def evaluate_vehicle(cfg: Config, rule: ModelRule, facts: VehicleFacts, no_model
     if evidence.get("sheet"):
         ocr = read_sheet(Path(evidence["sheet"]))
         facts.sheet_ocr = ocr.to_dict()
-        (out_dir / "ocr.json").write_text(json.dumps(ocr.to_dict(), indent=1, ensure_ascii=False), encoding="utf-8")
+        _put(write_files, out_dir / "ocr.json", json.dumps(ocr.to_dict(), indent=1, ensure_ascii=False))
         if ocr.available:
             if ocr.seats is not None:
                 facts.seats = ocr.seats
@@ -632,7 +641,7 @@ def evaluate_vehicle(cfg: Config, rule: ModelRule, facts: VehicleFacts, no_model
     if no_model:
         # Route 1: the reviewer judges the sheet. Give them the checklist and keyword hints.
         soft = manual_soft(rule, hard, facts, ocr, ocr_hints, evidence, eligibility=elig)
-        (gdir / "hard.json").write_text(json.dumps(hard.to_dict(), indent=1), encoding="utf-8")
+        _put(write_files, gdir / "hard.json", json.dumps(hard.to_dict(), indent=1))
         return dict(base, status=NEEDS_REVIEW, stage="manual", bid_jpy_k=hard.bid_jpy_k, base_jpy_k=hard.base_jpy_k,
                     facts_json=facts.to_dict(), hard_json=hard.to_dict(), evidence_json=evidence, soft_json=soft)
 
@@ -653,12 +662,12 @@ def evaluate_vehicle(cfg: Config, rule: ModelRule, facts: VehicleFacts, no_model
             reqs = requirements_for(rule, hard, elig if judge_text_on(cfg) else None)
             soft = manual_soft(rule, hard, facts, ocr, ocr_hints, evidence, mode="judge", eligibility=elig)
             flags = odd_flags(rule, hard, facts, ocr_hints, soft["hints"], eligibility=elig)
-            (out_dir / "facts.json").write_text(json.dumps(facts.to_dict(), indent=1, ensure_ascii=False), encoding="utf-8")
+            _put(write_files, out_dir / "facts.json", json.dumps(facts.to_dict(), indent=1, ensure_ascii=False))
         rhash = requirements_hash(reqs, flags)
         complete = photos_complete(evidence, judge_photos(cfg, reqs))
         catalog, maker = _catalog_for(cfg, facts, rule, reqs, previous_soft, catalog_client)
         if catalog is not None:
-            (out_dir / "catalog.json").write_text(json.dumps(catalog, indent=1, ensure_ascii=False), encoding="utf-8")
+            _put(write_files, out_dir / "catalog.json", json.dumps(catalog, indent=1, ensure_ascii=False))
         soft.update(requirements=[r.to_dict() for r in reqs], flags=flags, requirements_hash=rhash,
                     proposed_bid_jpy_k=hard.bid_jpy_k, judgement=None, recommendation="review", judge_notes=[],
                     judge_pending=False, candidates=[], provider=None, usage=None, unavailable=None, images_used=[],
@@ -688,14 +697,14 @@ def evaluate_vehicle(cfg: Config, rule: ModelRule, facts: VehicleFacts, no_model
             if stats is not None and res.provider:
                 stats.model_calls += 1
             soft.update(**_judge_fields(res))
-            (gdir / "judge.json").write_text(json.dumps(res.to_dict(), indent=1, ensure_ascii=False), encoding="utf-8")
+            _put(write_files, gdir / "judge.json", json.dumps(res.to_dict(), indent=1, ensure_ascii=False))
             log.info("   judge %s -> %s, proposed %s (%s)", res.provider or "unavailable", res.recommendation,
                      res.proposed_bid_jpy_k, "; ".join(res.notes)[:120])
         elif new_photos:
             soft.update(judge_pending=True, judge_notes=["photos arrived after the judgement; run `bot judge --pending`"])
         else:
             soft.update(judge_pending=True, judge_notes=["judge pending: run `bot judge --pending`"])
-        (gdir / "hard.json").write_text(json.dumps(hard.to_dict(), indent=1), encoding="utf-8")
+        _put(write_files, gdir / "hard.json", json.dumps(hard.to_dict(), indent=1))
         return dict(base, status=NEEDS_REVIEW, stage="judge", bid_jpy_k=hard.bid_jpy_k, base_jpy_k=hard.base_jpy_k,
                     facts_json=facts.to_dict(), hard_json=hard.to_dict(), evidence_json=evidence, soft_json=soft)
 
@@ -712,8 +721,8 @@ def evaluate_vehicle(cfg: Config, rule: ModelRule, facts: VehicleFacts, no_model
     else:
         status = NEEDS_REVIEW
     log.info("   soft %s %s -> %s bid %s", soft.status, "; ".join(soft.reasons)[:160], status, final_hard.bid_jpy_k)
-    (gdir / "hard.json").write_text(json.dumps(final_hard.to_dict(), indent=1), encoding="utf-8")
-    (gdir / "soft.json").write_text(json.dumps(soft.to_dict(), indent=1, ensure_ascii=False), encoding="utf-8")
+    _put(write_files, gdir / "hard.json", json.dumps(final_hard.to_dict(), indent=1))
+    _put(write_files, gdir / "soft.json", json.dumps(soft.to_dict(), indent=1, ensure_ascii=False))
     return dict(base, status=status, stage="soft", bid_jpy_k=final_hard.bid_jpy_k, base_jpy_k=final_hard.base_jpy_k,
                 facts_json=facts.to_dict(), hard_json=final_hard.to_dict(), soft_json=soft.to_dict(), evidence_json=evidence)
 
@@ -752,13 +761,15 @@ class ReplayStats:
 def reevaluate(cfg: Config, store: Store, model_codes: list[str] | None = None, apply: bool = False,
                snapshot: Path | None = None, answers: dict | None = None) -> ReplayStats:
     """Re-run the current rules over stored pending proposals without touching Nichibo.
-    `answers` stands in for the stored Rulebook answers (a preview); None reads the stored ones.
+    `answers` stands in for the stored Rulebook answers (a preview, which writes no file); None reads the stored ones.
 
     Uses the facts saved with each proposal and the evidence already on disk (sheet OCR is
     re-run from the saved image). A proposal whose outcome changes is superseded by a new
     one when `apply` is True. A vehicle that now needs pages or images we never downloaded
     is marked so the next scan fetches it.
     """
+    if answers is not None and apply:
+        raise ValueError("A preview cannot be applied.")
     rules, snap_path = load_rules(cfg, snapshot, model_codes, answers=answers)
     by_guide = {r.guide_id: r for r in rules}
     by_code = {r.model_code: r for r in rules}
@@ -788,7 +799,7 @@ def reevaluate(cfg: Config, store: Store, model_codes: list[str] | None = None, 
         st.checked += 1
         label = f"#{row['id']} {row['model_code']} {(row['summary'] or '')[:60]}"
         try:
-            _replay_row(cfg, store, st, row, rule, label, snap_path, no_model, apply)
+            _replay_row(cfg, store, st, row, rule, label, snap_path, no_model, apply, write_files=answers is None)
         except Cancelled:
             raise
         except Exception as exc:  # one bad row must not stop the replay of the others (as in `scan`)
@@ -800,8 +811,9 @@ def reevaluate(cfg: Config, store: Store, model_codes: list[str] | None = None, 
 
 
 def _replay_row(cfg: Config, store: Store, st: ReplayStats, row, rule: ModelRule, label: str, snap_path: Path,
-                no_model: bool, apply: bool) -> None:
-    """Re-evaluate one stored proposal and count the outcome in `st` (superseding it when `apply`)."""
+                no_model: bool, apply: bool, write_files: bool = True) -> None:
+    """Re-evaluate one stored proposal and count the outcome in `st` (superseding it when `apply`).
+    A preview (`write_files` False) writes no evidence file either."""
     facts = VehicleFacts.from_dict(json.loads(row["facts_json"] or "{}"))
     old = (row["status"], row["bid_jpy_k"])
     if row["stage"] == "card":
@@ -837,7 +849,7 @@ def _replay_row(cfg: Config, store: Store, st: ReplayStats, row, rule: ModelRule
     except json.JSONDecodeError:
         prev_soft = {}
     proposal = evaluate_vehicle(cfg, rule, facts, no_model, evidence_loader=lambda s=saved, m=missing: s or m,
-                                previous_soft=prev_soft)
+                                previous_soft=prev_soft, write_files=write_files)
     # A judge row whose requirements changed needs a fresh judgement: that counts as a change too.
     # So does a recommendation the stored observations now resolve differently (ladders, catalogue), and a
     # judgement sent back to the judge because photos arrived after it.

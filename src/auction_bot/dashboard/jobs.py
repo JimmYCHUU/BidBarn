@@ -293,6 +293,15 @@ def _loads(text, kind: type):
     return value if isinstance(value, kind) else None
 
 
+def slim(run: dict) -> dict:
+    """The run for a list or a poll: a Rulebook preview's `lots` (up to 500) become `lots_total`. The run's own
+    page and `get` still carry the list."""
+    s = run.get("summary")
+    if isinstance(s, dict) and isinstance(s.get("lots"), list) and run.get("command") == "rulebook-preview":
+        run = dict(run, summary={**{k: v for k, v in s.items() if k != "lots"}, "lots_total": len(s["lots"])})
+    return run
+
+
 def run_dict(row) -> dict:
     """A `runs` row as plain data: `args`, `progress` and `summary` parsed, no JSON text."""
     d = dict(row)
@@ -382,7 +391,7 @@ class _Runs:
             rows = s.list_runs(limit=limit, command=command)
         finally:
             s.close()
-        return [self._overlay(run_dict(r)) for r in rows]
+        return [slim(self._overlay(run_dict(r))) for r in rows]
 
     def _overlay(self, run: dict) -> dict:
         return run

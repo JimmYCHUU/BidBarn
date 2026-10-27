@@ -114,6 +114,10 @@ def summary_pairs(run: dict) -> list[tuple[str, str]]:
              "dry_run": "Dry run",
              "lots": "Sheets", "ok": "Read", "failed": "Failed", "low_confidence": "Hard to read", "calls": "Paid reads",
              "cached": "From the cache", "disagreements": "Disagreements", "decision": "Decision"}
+    if run.get("command") == "rulebook-preview":   # the lots that would change, counted (the list itself is long)
+        s = dict(s)
+        s["lots"] = len(s["lots"]) if isinstance(s.get("lots"), list) else s.get("lots_total", 0)
+        names["lots"] = "Lots that would change"
     out = []
     if run.get("command") in ("place", "bid") and isinstance(s.get("lines"), list):
         out.append(("Bids", str(len(s["lines"]))))

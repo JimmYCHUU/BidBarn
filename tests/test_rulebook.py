@@ -1,4 +1,5 @@
 """The rulebook's catalogue and the answers kept as versions."""
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -184,3 +185,68 @@ def test_keep_and_request(cfg):
     s = Store(cfg.db_path)
     assert [r["text"] for r in s.rule_requests()] == ["Treat it as skip"] and s.rulebook_version() == 1
     s.close()
+
+
+def test_apply_refuses_a_huge_or_bad_preview_run(cfg):
+    client, _ = _client(cfg)
+    for bad in ("9" * 25, "0", "-3", "abc", ""):
+        r = client.post("/rulebook/odo_margin/apply", data={"value": "2000", "preview_run": bad}, headers=JSON)
+        assert r.status_code == 400 and r.json()["detail"] == "preview_run must be a run number", bad
+    assert _versions(cfg) == 0
+
+
+def test_apply_refuses_a_preview_that_could_not_check_every_lot(cfg):
+    client, jobs = _client(cfg)
+    run = _run(cfg, "rulebook-preview", summary={"rulebook_version": 0, "answer": {"odo_margin_km": 2000}, "lots": [],
+                                                "errors": ["#4: boom"], "errors_total": 3})
+    r = client.post("/rulebook/odo_margin/apply", data={"value": "2000", "preview_run": str(run)}, headers=JSON)
+    assert r.status_code == 409 and r.json()["detail"] == (
+        "The preview could not check 3 lots; look at its run page before applying.")
+    assert _versions(cfg) == 0 and jobs.live is None
+
+
+def test_two_writers_never_lose_an_answer(tmp_path):
+    import threading
+    path = tmp_path / "t.sqlite"
+    Store(path).close()
+    gate = threading.Barrier(2)
+
+    def writer(qid, value):
+        s = Store(path)
+        gate.wait()
+        for _ in range(25):
+            s.add_rulebook_answer(qid, value)
+        s.close()
+
+    threads = [threading.Thread(target=writer, args=("odo_margin", 1000)), threading.Thread(target=writer, args=("gdh206k", "keep"))]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    s = Store(path)
+    assert s.rulebook_version() == 50 and s.rulebook_answers() == {"odo_margin_km": 1000, "gdh206k": "keep"}
+    # every version holds everything answered before it: the history never skips an earlier answer
+    seen = set()
+    for row in reversed(s.rulebook_history()):
+        seen |= set(json.loads(row["answers_json"]))
+        assert set(json.loads(row["answers_json"])) >= seen
+    with pytest.raises(ValueError):
+        s.add_rulebook_answer("odo_margin", 2000, expect_version=3)
+    assert s.rulebook_version() == 50
+    s.close()
+
+
+def test_a_preview_run_is_labelled_and_its_lots_stay_off_the_polled_lists(cfg):
+    from auction_bot.dashboard import status as st
+    from auction_bot.dashboard.routes import summary_pairs
+    assert st.DOING["rulebook-preview"] == "Previewing a Rulebook answer"
+    assert st.COMMAND_SHORT["rulebook-preview"] == "Rulebook preview" and st.COMMAND_ICONS["rulebook-preview"]
+    lots = [{"pid": i} for i in range(7)]
+    run = _run(cfg, "rulebook-preview", summary={"rulebook_version": 0, "answer": {"odo_margin_km": 2000}, "lots": lots,
+                                                "checked": 9, "changed": 7})
+    client, _ = _client(cfg)
+    assert ("Lots that would change", "7") in summary_pairs({"command": "rulebook-preview", "summary": {"lots": lots}})
+    assert not any(label == "Sheets" for label, _v in summary_pairs({"command": "rulebook-preview", "summary": {"lots": lots}}))
+    listed = next(r for r in client.get("/api/runs").json() if r["id"] == run)
+    assert "lots" not in listed["summary"] and listed["summary"]["lots_total"] == 7
+    assert ("Lots that would change", "7") in summary_pairs(listed)
+    assert client.get("/api/status").json()["last_runs"]["rulebook-preview"]["summary"].get("lots") is None
+    assert client.get(f"/api/runs/{run}").json()["summary"]["lots"] == lots     # the run's own page keeps them

@@ -336,7 +336,8 @@ def replay(model: list[str] = typer.Option(None, "--model", "-m", help="Only the
         typer.echo("  " + line)
     typer.echo(f"checked {st.checked}: unchanged {st.unchanged}, changed {st.changed}, need a fetch {st.needs_fetch}"
                + (f", errors {len(st.errors)}" if st.errors else "")
-               + (f", applied {st.applied}" if apply else "  (dry: add --apply to store the new outcomes)"))
+               + (f", applied {st.applied}" if apply else ("  (preview only: answer it on the Rulebook page to apply)" if hypothetical
+                                                         else "  (dry: add --apply to store the new outcomes)")))
     progress.summary({"checked": st.checked, "unchanged": st.unchanged, "changed": st.changed, "needs_fetch": st.needs_fetch,
                       "applied": st.applied, "apply": bool(apply), "changes": [str(c)[:300] for c in st.changes[:20]],
                       "changes_total": len(st.changes),

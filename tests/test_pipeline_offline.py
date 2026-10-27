@@ -1,4 +1,4 @@
-﻿"""End-to-end scan in route-1 mode (no model) against the captured Nichibo pages.
+"""End-to-end scan in route-1 mode (no model) against the captured Nichibo pages.
 
 A fake browser serves the search-results fixture for every search URL, the
 detail fixture for every detail URL, a fake translator JSON and fake JPEG bytes.
@@ -647,25 +647,43 @@ def test_openai_route_still_downloads_max_photos_to_model_at_card_stage(cfg, mon
     assert seen and seen[0] == 4
 
 
-def test_a_preview_lists_the_lots_that_change_and_writes_nothing(cfg):
+def _settled_at_50k(cfg):
+    """Two stored lots at 50,000 km with their outcome settled under the stored rules (no answers)."""
     from auction_bot.pipeline import reevaluate
     store = Store(cfg.db_path)
     scan(cfg, FakeBrowser(), store, ["GDH206"], limit_per_model=2)
-    for r in store.list_proposals(decision="pending", status="NEEDS_REVIEW"):  # two lots stored at 50,000 km
+    for r in store.list_proposals(decision="pending", status="NEEDS_REVIEW"):
         facts = json.loads(r["facts_json"])
         facts["km"] = 50_000
         store.conn.execute("UPDATE proposals SET facts_json=? WHERE id=?", (json.dumps(facts), r["id"]))
     store.conn.commit()
-    snapshot = lambda: store.conn.execute("SELECT id, status, bid_jpy_k, decision FROM proposals ORDER BY id").fetchall()
-    before = [tuple(r) for r in snapshot()]
+    assert reevaluate(cfg, store, ["GDH206"], apply=True).applied == 2
+    return store
+
+
+def _disk(cfg):
+    return {str(p.relative_to(cfg.evidence_dir)): p.read_bytes() for p in sorted(cfg.evidence_dir.rglob("*")) if p.is_file()}
+
+
+def test_a_preview_lists_the_lots_that_change_and_writes_nothing(cfg):
+    from auction_bot.pipeline import reevaluate
+    store = _settled_at_50k(cfg)
+    rows = lambda: [tuple(r) for r in store.conn.execute(
+        "SELECT id, status, bid_jpy_k, decision, hard_json, soft_json FROM proposals ORDER BY id").fetchall()]
+    before_rows, before_disk = rows(), _disk(cfg)
+    assert before_disk
+    assert reevaluate(cfg, store, ["GDH206"]).changed == 0           # settled: the stored rules change nothing
     st = reevaluate(cfg, store, ["GDH206"], answers={"odo_margin_km": 1000})
-    assert st.changed == 2 and st.applied == 0 and len(st.lots) == 2
+    assert st.changed == 2 and st.applied == 0 and len(st.lots) == 2     # the margin alone moves both lots
     lot = st.lots[0]
     assert set(lot) == {"pid", "ref_no", "model_code", "summary", "before", "after"}
-    assert lot["model_code"] == "GDH206" and lot["before"] == {"status": "NEEDS_REVIEW", "bid_jpy_k": 1240}
-    assert lot["after"]["bid_jpy_k"] != 1240
-    assert [tuple(r) for r in snapshot()] == before and store.rulebook_version() == 0
-    assert len(reevaluate(cfg, store, ["GDH206"]).lots) == 2   # no answers given: the stored (none) apply, same two lots
+    assert lot["model_code"] == "GDH206" and lot["before"]["status"] == lot["after"]["status"] == "NEEDS_REVIEW"
+    assert lot["before"]["bid_jpy_k"] == 1710 and lot["after"]["bid_jpy_k"] == 1640
+    assert rows() == before_rows and store.rulebook_version() == 0
+    assert _disk(cfg) == before_disk                                       # not one evidence file touched
+    assert reevaluate(cfg, store, ["GDH206"]).changed == 0
+    with pytest.raises(ValueError):
+        reevaluate(cfg, store, ["GDH206"], apply=True, answers={"odo_margin_km": 1000})
     store.close()
 
 
@@ -696,3 +714,21 @@ def test_replay_answer_refuses_apply(cfg, monkeypatch):
         assert res.exit_code != 0 and "is not a Rulebook answer" in res.output
     res = runner.invoke(cli.app, ["replay", "-m", "GDH206", "--answer", "odo_margin_km=1000"])
     assert res.exit_code == 0 and "checked" in res.output
+
+
+def test_replay_answer_summary_carries_the_preview(cfg, monkeypatch, capsys):
+    from typer.testing import CliRunner
+    import auction_bot.cli as cli
+    monkeypatch.setattr(cli, "load_config", lambda: cfg)
+    monkeypatch.setenv("BIDBARN_PROGRESS", "1")
+    store = _settled_at_50k(cfg)
+    store.add_rulebook_answer("gdh206k", "keep")
+    store.close()
+    capsys.readouterr()
+    res = CliRunner().invoke(cli.app, ["replay", "-m", "GDH206", "--answer", "odo_margin_km=1000"])
+    assert res.exit_code == 0, res.output
+    assert "preview only: answer it on the Rulebook page to apply" in res.output
+    line = next(l for l in res.output.splitlines() if l.startswith("SUMMARY "))
+    summary = json.loads(line[len("SUMMARY "):])
+    assert summary["rulebook_version"] == 1 and summary["answer"] == {"odo_margin_km": 1000}
+    assert len(summary["lots"]) == 2 and summary["lots"][0]["after"]["bid_jpy_k"] == 1640

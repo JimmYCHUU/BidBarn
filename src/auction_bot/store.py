@@ -245,21 +245,31 @@ class Store:
         return json.loads(row["answers_json"]) if row else {}
 
     def add_rulebook_answer(self, question_id: str, value, note: str | None = None,
-                            preview_run: int | None = None) -> int:
+                            preview_run: int | None = None, expect_version: int | None = None) -> int:
         """A new version: the previous answers plus this one. A setting is kept under its setting key, a confirm
-        question under its id. Earlier versions are never touched."""
+        question under its id. Earlier versions are never touched. The read of the previous answers and the insert
+        are one transaction that takes the write lock first, so two answers at the same moment both stay;
+        `expect_version` (the version a preview was made at) must still be the newest, else ValueError."""
         from . import rulebook
         q = rulebook.question(question_id)
         if not rulebook.valid_value(q, value):
             raise ValueError(f"{value!r} is not an answer the Rulebook offers for {question_id}.")
-        answers =self.rulebook_answers()
-        answers[q.setting or q.id] = value
-        cur = self.conn.execute(
-            "INSERT INTO rulebook_versions(question_id, value_json, answers_json, note, preview_run, created_at) "
-            "VALUES(?,?,?,?,?,?)",
-            (question_id, json.dumps(value, ensure_ascii=False), json.dumps(answers, ensure_ascii=False),
-             note, preview_run, now()))
         self.conn.commit()
+        self.conn.execute("BEGIN IMMEDIATE")
+        try:
+            if expect_version is not None and self.rulebook_version() != expect_version:
+                raise ValueError("The Rulebook changed after that preview. Preview this answer again.")
+            answers = self.rulebook_answers()
+            answers[q.setting or q.id] = value
+            cur = self.conn.execute(
+                "INSERT INTO rulebook_versions(question_id, value_json, answers_json, note, preview_run, created_at) "
+                "VALUES(?,?,?,?,?,?)",
+                (question_id, json.dumps(value, ensure_ascii=False), json.dumps(answers, ensure_ascii=False),
+                 note, preview_run, now()))
+            self.conn.commit()
+        except BaseException:
+            self.conn.rollback()
+            raise
         return int(cur.lastrowid)
 
     def rulebook_history(self) -> list[sqlite3.Row]:

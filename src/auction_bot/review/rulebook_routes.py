@@ -52,7 +52,12 @@ def register(app, templates, cfg, store, page) -> None:
         number = _whole_number(value, "The answer")
         if not rulebook.valid_value(q, number):
             _refuse("That is not one of the answers the Rulebook offers.", 400)
-        run_id = _whole_number(preview_run, "The preview run")
+        try:
+            run_id = int(preview_run.strip())
+        except ValueError:
+            run_id = 0
+        if not 0 < run_id < 2**62:
+            _refuse("preview_run must be a run number", 400)
         jobs = request.app.state.jobs
         with _APPLY:
             run = jobs.get(run_id)
@@ -61,13 +66,19 @@ def register(app, templates, cfg, store, page) -> None:
             if run.get("status") != "ok":
                 _refuse("That preview did not finish. Preview this answer again.")
             summary = run.get("summary") or {}
+            bad = summary.get("errors_total") or summary.get("errors")
+            if bad:
+                n = bad if isinstance(bad, int) else len(bad)
+                _refuse(f"The preview could not check {n} lots; look at its run page before applying.")
             if summary.get("answer") != {q.setting: number}:
                 _refuse("That preview was for a different answer. Preview this one first.")
             s = store()
             try:
-                if summary.get("rulebook_version") != s.rulebook_version():
-                    _refuse("The Rulebook changed after that preview. Preview this answer again.")
-                version = s.add_rulebook_answer(qid, number, preview_run=run_id)
+                try:
+                    version = s.add_rulebook_answer(qid, number, preview_run=run_id,
+                                                    expect_version=summary.get("rulebook_version"))
+                except ValueError as exc:
+                    _refuse(str(exc))
             finally:
                 s.close()
         body: dict = {"ok": True, "version": version}
