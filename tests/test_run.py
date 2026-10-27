@@ -54,9 +54,11 @@ def test_run_calls_the_steps_in_order(cfg):
     assert [n for n, _ in order] == ["login", "guides", "review"] and out.placed == [] and len(out.steps) == 3
 
 
-def _scan_now_steps(calls, scan_result=None, scan_raises=None, guides_raises=None):
-    def signin(c, echo):
+def _scan_now_steps(calls, scan_result=None, scan_raises=None, guides_raises=None, signin_kw=None):
+    def signin(c, echo, **kw):
         calls.append("signin")
+        if signin_kw is not None:
+            signin_kw.append(kw)
 
     def guides(c, echo):
         calls.append("guides")
@@ -119,6 +121,111 @@ def test_scan_now_gives_the_profile_back_when_a_step_fails(cfg):
     with pytest.raises(RuntimeError):
         scan_now(cfg, echo=lambda s: None, steps=_scan_now_steps([], guides_raises=RuntimeError("x")))
     assert lock.holder(cfg) is None
+
+
+def test_scan_now_keeps_saying_the_sign_out_through_the_sign_in_wait(cfg, monkeypatch):
+    from auction_bot import progress
+
+    emitted = []
+    monkeypatch.setattr(progress, "emit", lambda **f: emitted.append(f))
+    calls, kws = [], []
+    steps = _scan_now_steps(calls, scan_raises=lambda c: c.count("scan") == 1, signin_kw=kws)
+    scan_now(cfg, echo=lambda s: None, steps=steps)
+    assert kws == [{}, {"expired": True}]  # only the sign-in after the sign-out says so
+    assert emitted == [{"stage": "signin", "step": 1, "steps": 3}, {"stage": "guides", "step": 2, "steps": 3},
+                       {"stage": "scan", "step": 3, "steps": 3}, {"stage": "signin", "expired": True, "waiting": True},
+                       {"stage": "scan", "step": 3, "steps": 3}]
+
+
+def test_the_sign_in_step_carries_the_sign_out_in_its_own_messages(cfg, monkeypatch, capsys):
+    import auction_bot.nichibo.browser as browser_mod
+    import auction_bot.run as runmod
+
+    class Page(_Tab):
+        url = "https://autosearch.nichibojapan.com/login"
+
+        def goto(self, url, **kw):
+            self.url = url
+
+        def on(self, event, fn):
+            pass
+
+        def wait_for_timeout(self, ms):
+            self.url = self.url.replace("/login", "/auction")  # Jim signs in
+
+    class Window:
+        def __init__(self, c, headless=False):
+            self.page, self.context = Page([]), self
+
+        def new_page(self):
+            return Page([])
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return None
+
+    monkeypatch.setattr(browser_mod, "Browser", Window)
+    monkeypatch.setattr(runmod, "nichibo_signed_in", lambda b, c: False)
+    monkeypatch.setattr(runmod, "carbarn_signed_in", lambda b, c: True)
+    monkeypatch.setenv("BIDBARN_PROGRESS", "1")
+    capsys.readouterr()
+    runmod.ensure_signed_in(cfg, echo=lambda s: None, expired=True)
+    assert _events(capsys.readouterr().out) == [
+        {"stage": "signin", "nichibo": False, "carbarn": True, "waiting": True, "expired": True},
+        {"stage": "signin", "nichibo": True, "carbarn": True, "waiting": False, "expired": True}]
+
+
+def test_scan_now_adds_up_both_passes_when_it_signs_in_again(cfg, monkeypatch):
+    from auction_bot import progress
+
+    summaries = []
+    monkeypatch.setattr(progress, "summary", summaries.append)
+    passes = iter([{"cards": 5, "opened": 2, "review": 2, "bid": 1, "day_pages": 1, "errors": ["GDH206: a"]},
+                   {"cards": 7, "opened": 1, "review": 1, "bid": 0, "day_pages": 2, "errors": ["ZWR80: b"]}])
+
+    def scan_stub(c, echo, **kw):
+        first = next(passes)
+        if first["errors"] == ["GDH206: a"]:
+            exc = NotLoggedIn("Nichibo redirected to the login page. Run `bot login`.")
+            exc.scan = first  # what scan_all keeps of the pass the sign-out ended
+            raise exc
+        return first
+
+    steps = dict(_scan_now_steps([]), scan_all=scan_stub)
+    out = scan_now(cfg, echo=lambda s: None, steps=steps)
+    assert out.scan == {"cards": 12, "opened": 3, "review": 3, "bid": 1, "day_pages": 3, "errors": ["GDH206: a", "ZWR80: b"]}
+    d = summaries[0]
+    assert (d["cards"], d["review"], d["bid"], d["day_pages"], d["errors_total"]) == (12, 3, 1, 3, 2)
+    assert d["errors"] == ["GDH206: a", "ZWR80: b"] and d["signed_in_again"] is True
+
+
+def test_scan_all_keeps_the_counts_of_a_pass_a_sign_out_ended(cfg, monkeypatch):
+    import auction_bot.nichibo.browser as browser_mod
+    import auction_bot.pipeline as pipeline_mod
+    from auction_bot.run import scan_all
+
+    class Quiet:
+        def __init__(self, c, headless=True):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return None
+
+    def signed_out(c, b, store, codes, no_model=None, stats=None, **kw):
+        stats.cards, stats.review = 4, 2
+        stats.errors.append("GDH206: x")
+        raise NotLoggedIn("Nichibo redirected to the login page. Run `bot login`.")
+
+    monkeypatch.setattr(browser_mod, "Browser", Quiet)
+    monkeypatch.setattr(pipeline_mod, "scan", signed_out)
+    with pytest.raises(NotLoggedIn) as caught:
+        scan_all(cfg, echo=lambda s: None)
+    assert caught.value.scan["cards"] == 4 and caught.value.scan["review"] == 2 and caught.value.scan["errors"] == ["GDH206: x"]
 
 
 def test_place_approved_uses_place_bid_and_records(cfg):

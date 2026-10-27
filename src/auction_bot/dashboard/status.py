@@ -110,10 +110,10 @@ def rules_state(cfg) -> dict:
 
 
 def signin_state(store) -> dict:
-    """The result of the newest sign-in check (`check-login`, `login --wait`, or a Bid run, whose first
-    step is that check), and how old it is."""
+    """The result of the newest sign-in check (`check-login`, `login --wait`, or a Bid or Scan now run, whose
+    first step is that check), and how old it is."""
     newest = None
-    for command in ("check-login", "login", "bid"):
+    for command in ("check-login", "login", "bid", "scan-now"):
         for row in store.list_runs(limit=5, command=command):
             d = run_dict(row)
             if d["status"] == "ok" and d["summary"] and "nichibo" in d["summary"]:

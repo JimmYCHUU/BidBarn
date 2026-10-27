@@ -245,7 +245,8 @@ def _deleted_soft(store: Store, ref_no: str, guide_id: int | None) -> dict | Non
 
 def scan(cfg: Config, browser: Browser, store: Store, model_codes: list[str] | None = None,
          snapshot: Path | None = None, no_model: bool | None = None, rescan: bool = False,
-         limit_per_model: int | None = None, fresh: bool = False) -> ScanStats:
+         limit_per_model: int | None = None, fresh: bool = False, stats: ScanStats | None = None) -> ScanStats:
+    """`stats`: the counters to fill, so a caller keeps what a scan counted when it is cut short (a sign-out)."""
     if no_model is None:
         no_model = (cfg.sheet_check or "none").lower() == "none"
     judge_client = None
@@ -258,7 +259,7 @@ def scan(cfg: Config, browser: Browser, store: Store, model_codes: list[str] | N
     if age > cfg.max_rules_age_hours:
         raise RuntimeError(f"Rules snapshot {snap_path.name} is {age:.1f}h old (limit {cfg.max_rules_age_hours}h). Run `bot fetch-rules`.")
     cache = NoCache() if fresh else PageCache(cache_dir(cfg), cfg.cache_hours)
-    stats = ScanStats()
+    stats = stats if stats is not None else ScanStats()
     guides = [r for r in rules if r.active and r.active_variants]  # the ones that are actually searched
     codes = [r.model_code for r in guides]
     marks: list[str] = []  # one letter per finished guide: f lots for review, e nothing new, x an error

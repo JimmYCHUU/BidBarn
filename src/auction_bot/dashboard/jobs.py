@@ -14,7 +14,8 @@ the next dashboard adopts what is still going and closes what is not.
 Three files beside the log carry the page's buttons to the run: `<id>.cancel` (Stop), `<id>.pause`
 (Pause, while a Bid run signs in, fetches the guides, scans or judges; `pause`) and `<id>.finish`
 (Finish, while a Bid run waits at the review; `review_waiting`, `finish_review`). Every run has a
-session (`runs.session_id`): a Bid run started while a session is paused joins it, which is Resume.
+session (`runs.session_id`): a Bid run started while a session is paused joins it, which is Resume. A Scan
+now started after one that was stopped or failed joins that one's session (Stop is how a Scan now pauses).
 
 This module imports the store, the config, the progress protocol and the profile lock, and
 nothing that loads Playwright: the dashboard can never hold the browser profile itself.
@@ -519,8 +520,13 @@ class JobManager(_Runs):
             runs_dir = self.cfg.runs_dir
             s = self._store()
             try:
-                paused = s.paused_session() if command == "bid" else None  # Resume: a Bid run joins the paused session
-                run_id = s.start_run(command, argv, session_id=paused["session_id"] if paused else None)
+                if command == "bid":
+                    joined = s.paused_session()  # Resume: a Bid run joins the paused session
+                elif command == "scan-now":
+                    joined = s.interrupted_scan_session()  # after a stopped or failed Scan now: carry on its session
+                else:
+                    joined = None
+                run_id = s.start_run(command, argv, session_id=joined["session_id"] if joined else None)
                 log_path, cancel_path = runs_dir / f"{run_id}.log", runs_dir / f"{run_id}.cancel"
                 finish_path = runs_dir / f"{run_id}.finish"
                 s.set_run_log(run_id, log_path)

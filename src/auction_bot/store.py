@@ -792,6 +792,16 @@ class Store:
             "SELECT * FROM runs r WHERE status='paused' AND deleted_at IS NULL AND session_id IS NOT NULL "
             "AND id=(SELECT MAX(id) FROM runs WHERE session_id=r.session_id) ORDER BY id DESC LIMIT 1").fetchone()
 
+    def interrupted_scan_session(self) -> sqlite3.Row | None:
+        """The newest Scan now run when it ended stopped or failed and its session was not deleted, else None.
+        A Scan now started after it joins its `session_id`, so a lot cleared on the desk stays out (Stop is the
+        pause of Scan now); after a Scan now that ended ok the next one starts a new session."""
+        row = self.conn.execute("SELECT * FROM runs WHERE command='scan-now' ORDER BY id DESC LIMIT 1").fetchone()
+        if row is None or row["status"] not in ("stopped", "failed") or row["deleted_at"] is not None \
+                or row["session_id"] is None:
+            return None
+        return row
+
     def session_info(self, session_id: int) -> dict | None:
         """A session as the pages name it: its first run (command, start) and its newest (id, status, progress,
         deleted). None when no run has that session."""

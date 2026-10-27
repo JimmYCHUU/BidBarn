@@ -103,14 +103,15 @@ def summary_pairs(run: dict) -> list[tuple[str, str]]:
         return [(label, f"{int(counts[key]):,}") for key, label in LEARN_COUNTS if isinstance(counts.get(key), int)]
     order = ["guides", "cards", "opened", "day_pages", "sheet_only", "pages", "review", "bid", "skip", "reused", "pending", "model_calls",
              "checked", "changed", "applied", "unchanged", "needs_fetch", "judged", "unavailable", "decisions",
-             "approved", "snapshot", "nichibo", "carbarn", "dry_run",
+             "approved", "snapshot", "nichibo", "carbarn", "signed_in_again", "dry_run",
              "lots", "ok", "failed", "low_confidence", "calls", "cached", "disagreements", "decision"]
     names = {"guides": "Guides", "cards": "Cards read", "opened": "Lots opened", "day_pages": "Lot pages read for the auction day", "sheet_only": "Judged from the sheet",
              "pages": "Pages opened", "review": "For review", "bid": "Bid", "skip": "Skipped", "reused": "Reused",
              "pending": "Images pending", "model_calls": "Model calls", "checked": "Checked", "changed": "Changed",
              "applied": "Stored", "unchanged": "Unchanged", "needs_fetch": "Need a page", "judged": "Judged",
              "unavailable": "Model unavailable", "decisions": "Decisions", "approved": "Approved", "snapshot": "Snapshot",
-             "nichibo": "Nichibo", "carbarn": "Carbarn dashboard", "dry_run": "Dry run",
+             "nichibo": "Nichibo", "carbarn": "Carbarn dashboard", "signed_in_again": "Signed in again during the scan",
+             "dry_run": "Dry run",
              "lots": "Sheets", "ok": "Read", "failed": "Failed", "low_confidence": "Hard to read", "calls": "Paid reads",
              "cached": "From the cache", "disagreements": "Disagreements", "decision": "Decision"}
     out = []

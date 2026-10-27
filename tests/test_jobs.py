@@ -510,6 +510,58 @@ def test_pause_ends_a_bid_run_as_paused_and_the_next_bid_resumes_its_session(cfg
     finished(m, fresh["id"])
 
 
+def scan_now_with(script: str) -> dict[str, Cmd]:
+    """The stand-in table with `scan-now` running `script`."""
+    return dict(bid_with(script), **{"scan-now": Cmd("Scan now", False, {}, lambda v, s=script: ["-c", s])})
+
+
+def test_a_scan_now_after_a_stopped_one_carries_on_its_session(cfg, make):
+    m = make(commands=scan_now_with(SCANNING))
+    first = m.start("scan-now")
+    assert first["session_id"] == first["id"]  # a new session
+    seen(m, first["id"], "scanning")
+    m.cancel(first["id"])
+    assert finished(m, first["id"])["status"] == "stopped"
+    again = m.start("scan-now")  # after Stop: the same session, so a lot cleared on the desk stays out
+    assert again["session_id"] == first["id"] and again["id"] != first["id"]
+    seen(m, again["id"], "scanning")
+    m.cancel(again["id"])
+    finished(m, again["id"])
+    bid = m.start("bid")  # Bid mode keeps its own rule: no paused session, so a new one
+    assert bid["session_id"] == bid["id"]
+    m.cancel(bid["id"])
+    finished(m, bid["id"])
+
+
+def test_a_scan_now_after_a_finished_or_deleted_one_starts_a_new_session(cfg, make):
+    s = Store(cfg.db_path)
+    try:
+        failed = s.start_run("scan-now", ["scan-now"])
+        s.finish_run(failed, "failed", error="Nichibo redirected to the login page. Run `bot login`.")
+    finally:
+        s.close()
+    m = make(commands=scan_now_with(SCANNING))
+    after_failed = m.start("scan-now")  # a failed scan is carried on too
+    assert after_failed["session_id"] == failed
+    seen(m, after_failed["id"], "scanning")
+    m.cancel(after_failed["id"], delete=True)  # Stop and Delete session
+    assert finished(m, after_failed["id"])["deleted_at"]
+    after_deleted = m.start("scan-now")
+    assert after_deleted["session_id"] == after_deleted["id"]  # a deleted session is not joined
+    seen(m, after_deleted["id"], "scanning")
+    m.cancel(after_deleted["id"])
+    finished(m, after_deleted["id"])
+    s = Store(cfg.db_path)
+    try:
+        ok = s.start_run("scan-now", ["scan-now"])
+        s.finish_run(ok, "ok", summary={"review": 1})
+    finally:
+        s.close()
+    after_ok = m.start("scan-now")
+    assert after_ok["session_id"] == after_ok["id"]  # it finished: cleared lots come back at the next Scan now
+    m.cancel(after_ok["id"])
+    finished(m, after_ok["id"])
+
 def test_pause_is_only_for_a_bid_run_before_its_review(cfg, make):
     m = make()
     with pytest.raises(NotRunning):

@@ -67,6 +67,31 @@ def test_the_paused_session_is_the_one_whose_newest_run_paused(cfg):
         s.close()
 
 
+def test_a_scan_now_that_was_stopped_or_failed_is_the_session_the_next_one_joins(cfg):
+    s = Store(cfg.db_path)
+    try:
+        assert s.interrupted_scan_session() is None
+        first = s.start_run("scan-now", ["scan-now"])
+        assert s.interrupted_scan_session() is None  # still running
+        s.finish_run(first, "stopped")
+        assert s.interrupted_scan_session()["session_id"] == first
+        again = s.start_run("scan-now", ["scan-now"], session_id=first)
+        s.finish_run(again, "failed", error="Nichibo redirected to the login page. Run `bot login`.")
+        assert s.interrupted_scan_session()["id"] == again and s.interrupted_scan_session()["session_id"] == first
+        done = s.start_run("scan-now", ["scan-now"], session_id=first)
+        s.finish_run(done, "ok", summary={"review": 1})
+        assert s.interrupted_scan_session() is None  # it finished: the next Scan now starts a new session
+        other = s.start_run("bid", ["bid"])
+        s.finish_run(other, "stopped")
+        assert s.interrupted_scan_session() is None  # only a Scan now run counts
+        cut = s.start_run("scan-now", ["scan-now"])
+        s.finish_run(cut, "stopped")
+        assert s.interrupted_scan_session()["session_id"] == cut
+        s.delete_session(cut)
+        assert s.interrupted_scan_session() is None  # a deleted session is not carried on
+    finally:
+        s.close()
+
 def test_delete_takes_only_waiting_lots_and_writes_no_decision(cfg):
     s = Store(cfg.db_path)
     try:

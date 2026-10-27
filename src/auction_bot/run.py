@@ -56,14 +56,18 @@ def carbarn_signed_in(browser, cfg: Config, timeout_ms: int = 20_000) -> bool:
         return False
 
 
-def ensure_signed_in(cfg: Config, echo: Callable[[str], None] = print) -> None:
-    """Check both sessions headlessly; if one is missing, open a window and wait for the sign-in."""
+def ensure_signed_in(cfg: Config, echo: Callable[[str], None] = print, expired: bool = False) -> None:
+    """Check both sessions headlessly; if one is missing, open a window and wait for the sign-in.
+
+    `expired`: a site signed out during a scan (`scan_now`). Every progress line says so, because the
+    dashboard keeps only the newest one and the desk words the wait from it."""
     from auction_bot.nichibo.browser import Browser
 
+    said = {"expired": True} if expired else {}
     with Browser(cfg, headless=True) as b:
         nichibo_ok = nichibo_signed_in(b, cfg)
         carbarn_ok = carbarn_signed_in(b, cfg)
-    progress.emit(stage="signin", nichibo=nichibo_ok, carbarn=carbarn_ok, waiting=not (nichibo_ok and carbarn_ok))
+    progress.emit(stage="signin", nichibo=nichibo_ok, carbarn=carbarn_ok, waiting=not (nichibo_ok and carbarn_ok), **said)
     if nichibo_ok and carbarn_ok:
         echo("Signed in to Nichibo and the Carbarn dashboard.")
         return
@@ -89,7 +93,7 @@ def ensure_signed_in(cfg: Config, echo: Callable[[str], None] = print) -> None:
             n_ok = nichibo_ok or ("/login" not in nichibo_page.url and "nichibojapan" in nichibo_page.url)
             if n_ok and guides_seen.is_set():
                 echo("Signed in. Continuing.")
-                progress.emit(stage="signin", nichibo=True, carbarn=True, waiting=False)
+                progress.emit(stage="signin", nichibo=True, carbarn=True, waiting=False, **said)
                 nichibo_page.wait_for_timeout(1000)  # let the cookies settle in the profile
                 return
         raise RuntimeError("Still not signed in after 15 minutes. Double-click bidbarn.cmd again when you are ready.")
@@ -112,23 +116,29 @@ def fetch_guides(cfg: Config, echo: Callable[[str], None] = print) -> tuple[int,
 # -- 3. scan --------------------------------------------------------------------------------
 
 def scan_all(cfg: Config, echo: Callable[[str], None] = print, headless: bool = True) -> dict:
-    from auction_bot.nichibo.browser import Browser
-    from auction_bot.pipeline import scan
+    """Scan every active guide. A sign-out (`NotLoggedIn`) propagates with what was counted before it as
+    `exc.scan`, so a run that signs in again can add both parts up (`scan_now`)."""
+    from auction_bot.nichibo.browser import Browser, NotLoggedIn
+    from auction_bot.pipeline import ScanStats, scan
     from auction_bot.store import Store
 
     mode = (cfg.sheet_check or "none").lower()
     if mode == "openai" and not cfg.openai_api_key:
         mode = "none"
+    stats = ScanStats()
     store = Store(cfg.db_path)
     try:
         with Browser(cfg, headless=headless) as b:
-            stats = scan(cfg, b, store, None, no_model=(mode == "none"))
+            stats = scan(cfg, b, store, None, no_model=(mode == "none"), stats=stats)
             if mode == "judge":
                 from auction_bot.pipeline import judge_pending
 
                 js = judge_pending(cfg, store, browser=b)
                 echo(f"Judge: {js.judged} lots judged by the model, {js.unavailable} left unjudged (model unavailable), "
                      f"{js.pages} pages opened for photos")
+    except NotLoggedIn as exc:
+        exc.scan = dict(stats.__dict__, errors=list(stats.errors))
+        raise
     finally:
         store.close()
     d = dict(stats.__dict__)
@@ -366,6 +376,21 @@ def run(cfg: Config, echo: Callable[[str], None] = print, skip_scan: bool = Fals
     return out
 
 
+def add_scans(first: dict, second: dict) -> dict:
+    """The two parts of one scan (before a sign-out and after signing in again) as one: the counts added up and the
+    errors of both kept. Anything else is the second part's."""
+    out = dict(second)
+    for key, value in first.items():
+        if key == "errors":
+            out[key] = list(value or []) + list(second.get(key) or [])
+        elif isinstance(value, int) and not isinstance(value, bool):
+            other = second.get(key, 0)
+            out[key] = value + other if isinstance(other, int) and not isinstance(other, bool) else other
+        elif key not in out:
+            out[key] = value
+    return out
+
+
 def scan_now_summary(cfg: Config, out: RunSummary, signed_in_again: bool) -> dict:
     """The closing numbers of a Scan now run: a Bid run's without the review and placement keys."""
     d = bid_summary(cfg, out)
@@ -380,7 +405,8 @@ def scan_now(cfg: Config, echo: Callable[[str], None] = print, headed: bool = Fa
     """Sign in if needed, fetch the guides and scan: no review wait and no placement, so nothing waits on a person.
 
     If Nichibo signs out during the scan, the sign-in step runs once more (it opens a window for Jim) and the scan
-    carries on; a second sign-out stops the run. `steps` lets tests swap the step functions, as `run()` does."""
+    carries on; a second sign-out stops the run. The counts of both parts are added up. `steps` lets tests swap the
+    step functions, as `run()` does."""
     from auction_bot.nichibo.browser import NotLoggedIn
 
     s = steps or {}
@@ -409,13 +435,14 @@ def scan_now(cfg: Config, echo: Callable[[str], None] = print, headed: bool = Fa
         step("Scanning Nichibo", "scan")
         try:
             out.scan = scan(cfg, echo, headless=not headed)
-        except NotLoggedIn:
+        except NotLoggedIn as exc:
             again = True
+            first = getattr(exc, "scan", None) or {}  # what the part before the sign-out counted (scan_all keeps it)
             progress.emit(stage="signin", expired=True, waiting=True)
             echo("Nichibo signed out during the scan. A browser window is opening: sign in there and the scan carries on.")
-            sign_in(cfg, echo)
+            sign_in(cfg, echo, expired=True)
             progress.emit(stage="scan", step=n, steps=total)
-            out.scan = scan(cfg, echo, headless=not headed)
+            out.scan = add_scans(first, scan(cfg, echo, headless=not headed))
     finally:
         lock.release(cfg)
     echo("")

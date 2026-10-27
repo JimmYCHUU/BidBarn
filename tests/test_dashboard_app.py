@@ -707,3 +707,32 @@ def test_a_running_scan_now_does_not_unmark_an_earlier_scan(cfg):
     going = day_steps({**base, "current": {"command": "scan-now", "progress": {}}, "last_runs": {"scan": ok, "scan-now": running}}, 12)
     step = next(x for x in going if x["key"] == "scan")
     assert step["state"] == "running" and step["next"]
+
+
+# -- final review fixes ------------------------------------------------------------------------------------
+
+def test_an_ok_scan_now_confirms_the_sign_in_and_clears_a_doubt(cfg):
+    def signin():
+        s = Store(cfg.db_path)
+        try:
+            return st.signin_state(s)
+        finally:
+            s.close()
+
+    _run(cfg, "scan-now", summary={"nichibo": True, "carbarn": True, "review": 1})
+    sign = signin()
+    assert sign["known"] and sign["ok"] and sign["fresh"] and sign["doubt"] is None
+    _run(cfg, "scan-now", status="failed", error="Nichibo redirected to the login page. Run `bot login`.")
+    sign = signin()
+    assert sign["ok"] is False and "redirected to the login page" in sign["doubt"]
+    later = _run(cfg, "scan-now", summary={"nichibo": True, "carbarn": True, "review": 0})
+    sign = signin()
+    assert sign["ok"] and sign["fresh"] and sign["doubt"] is None and sign["run_id"] == later
+
+
+def test_the_run_page_says_when_scan_now_signed_in_again(cfg):
+    assert ("Signed in again during the scan", "yes") in summary_pairs(
+        {"command": "scan-now", "summary": {"review": 2, "signed_in_again": True}})
+    rid = _run(cfg, "scan-now", summary={"guides": 3, "review": 2, "signed_in_again": True})
+    client, _ = _client(cfg)
+    assert re.search(r"<dt>Signed in again during the scan</dt><dd>yes</dd>", client.get(f"/runs/{rid}").text)
